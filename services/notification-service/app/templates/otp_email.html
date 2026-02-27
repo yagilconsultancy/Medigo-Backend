@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        .logo { text-align: center; color: #3B5998; font-size: 24px; font-weight: bold; margin-bottom: 30px; }
+        .otp-code { text-align: center; font-size: 36px; font-weight: bold; color: #3B5998; letter-spacing: 8px; margin: 30px 0; padding: 20px; background: #f0f4ff; border-radius: 8px; }
+        .message { color: #555; line-height: 1.6; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">MediRide</div>
+        <h2 style="text-align: center; color: #333;">Verify Your Account</h2>
+        <p class="message">Enter the following code to verify your account:</p>
+        <div class="otp-code">{{ otp_code }}</div>
+        <p class="message">This code expires in <strong>5 minutes</strong>.</p>
+        <p class="message">If you didn't request this code, please ignore this email.</p>
+        <div class="footer">
+            <p>&copy; 2026 MediRide. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>
