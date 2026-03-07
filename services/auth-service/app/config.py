@@ -10,6 +10,7 @@ class AuthSettings(BaseServiceSettings):
     LOCKOUT_DURATION_MINUTES: int = 15
     SERVICE_NAME: str = "auth-service"
     PORT: int = 8001
+    USER_SERVICE_URL: str = "http://user-service:8002"
 
 
 settings = AuthSettings()

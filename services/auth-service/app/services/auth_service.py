@@ -1,11 +1,14 @@
 import logging
+import secrets
 from datetime import timedelta
 from uuid import UUID
 
 from app.config import settings
+from app.models.password_reset import PasswordResetToken
 from app.models.refresh_token import RefreshToken
 from app.models.user_credential import UserCredential
 from app.repositories.credential_repo import CredentialRepository
+from app.repositories.password_reset_repo import PasswordResetRepository
 from app.repositories.token_repo import TokenRepository
 from app.services.otp_service import OTPService
 from app.services.password_service import (
@@ -18,7 +21,11 @@ from mediride_common.auth.jwt_handler import JWTHandler
 from mediride_common.auth.models import TokenPair
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
-from mediride_common.events.schemas import UserRegisteredPayload, UserVerifiedPayload
+from mediride_common.events.schemas import (
+    PasswordResetRequestedPayload,
+    UserRegisteredPayload,
+    UserVerifiedPayload,
+)
 from mediride_common.exceptions import (
     AuthenticationError,
     ConflictError,
@@ -30,6 +37,8 @@ from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
 
+PASSWORD_RESET_EXPIRE_MINUTES = 30
+
 
 class AuthService:
     def __init__(
@@ -39,12 +48,16 @@ class AuthService:
         otp_service: OTPService,
         jwt_handler: JWTHandler,
         publisher: EventPublisher,
+        password_reset_repo: PasswordResetRepository | None = None,
+        user_service_client=None,
     ):
         self.credential_repo = credential_repo
         self.token_repo = token_repo
         self.otp_service = otp_service
         self.jwt_handler = jwt_handler
         self.publisher = publisher
+        self.password_reset_repo = password_reset_repo
+        self.user_service_client = user_service_client
 
     async def register(
         self,
@@ -255,3 +268,133 @@ class AuthService:
 
         channel = "email" if credential.email else "sms"
         return await self.otp_service.generate_otp(user_id, purpose, channel)
+
+    async def forgot_password(
+        self, email: str | None, phone: str | None
+    ) -> str | None:
+        """Request a password reset. Returns token in dev mode."""
+        credential = await self.credential_repo.get_by_email_or_phone(email, phone)
+        if not credential:
+            # Return silently to prevent user enumeration
+            logger.info("Password reset requested for non-existent account")
+            return None
+
+        if not credential.is_active:
+            return None
+
+        # Invalidate any existing reset tokens
+        await self.password_reset_repo.invalidate_all_for_user(credential.id)
+
+        # Generate reset token
+        raw_token = secrets.token_urlsafe(32)
+        reset_record = PasswordResetToken(
+            user_id=credential.id,
+            token_hash=hash_token(raw_token),
+            expires_at=utc_now() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES),
+        )
+        await self.password_reset_repo.create(reset_record)
+
+        # Publish event for notification
+        if credential.email:
+            await self.publisher.publish(
+                Exchanges.AUTH,
+                RoutingKeys.PASSWORD_RESET_REQUESTED,
+                PasswordResetRequestedPayload(
+                    user_id=credential.id,
+                    email=credential.email,
+                    reset_token=raw_token,
+                ).model_dump(mode="json"),
+            )
+
+        logger.info(f"Password reset requested for user {credential.id}")
+        return raw_token if settings.ENVIRONMENT == "development" else None
+
+    async def reset_password(self, token: str, new_password: str) -> None:
+        """Reset password using a valid reset token."""
+        validate_password_strength(new_password)
+
+        token_hash = hash_token(token)
+        reset_record = await self.password_reset_repo.get_by_hash(token_hash)
+        if not reset_record:
+            raise AuthenticationError("Invalid or expired reset token")
+
+        if reset_record.expires_at < utc_now():
+            raise AuthenticationError("Reset token has expired")
+
+        # Update password
+        await self.credential_repo.update_password(
+            reset_record.user_id, hash_password(new_password)
+        )
+
+        # Invalidate all reset tokens for this user
+        await self.password_reset_repo.invalidate_all_for_user(reset_record.user_id)
+
+        # Revoke all refresh tokens (force re-login)
+        await self.token_repo.revoke_all_for_user(reset_record.user_id)
+
+        logger.info(f"Password reset completed for user {reset_record.user_id}")
+
+    async def verify_driver_invite(self, invite_token: str) -> dict:
+        """Verify a driver invitation token via user-service."""
+        if not self.user_service_client:
+            raise ValidationError("Driver registration is not configured")
+
+        result = await self.user_service_client.verify_invite_token(invite_token)
+        return result
+
+    async def register_driver(
+        self, invite_token: str, password: str
+    ) -> tuple[UUID, str]:
+        """Register a driver using an invitation token."""
+        if not self.user_service_client:
+            raise ValidationError("Driver registration is not configured")
+
+        # Verify and get invite details
+        invite_data = await self.user_service_client.verify_invite_token(invite_token)
+        email = invite_data["email"]
+        business_id = UUID(invite_data["business_id"])
+
+        # Check if user already exists
+        existing = await self.credential_repo.get_by_email_or_phone(email, None)
+        if existing:
+            raise ConflictError("An account with this email already exists")
+
+        validate_password_strength(password)
+
+        # Create credential
+        credential = UserCredential(
+            email=email,
+            password_hash=hash_password(password),
+            role=UserRole.DRIVER,
+            business_id=business_id,
+            is_verified=False,
+        )
+        await self.credential_repo.create(credential)
+
+        # Generate OTP
+        otp_code = await self.otp_service.generate_otp(
+            credential.id, "registration", "email"
+        )
+
+        # Accept the invitation in user-service
+        await self.user_service_client.accept_invitation(
+            invite_token, str(credential.id)
+        )
+
+        # Publish registration event
+        await self.publisher.publish(
+            Exchanges.AUTH,
+            RoutingKeys.USER_REGISTERED,
+            UserRegisteredPayload(
+                user_id=credential.id,
+                email=email,
+                phone=None,
+                role=UserRole.DRIVER,
+                business_id=business_id,
+            ).model_dump(mode="json"),
+        )
+
+        logger.info(
+            f"Driver registered: {credential.id}, business={business_id}"
+        )
+        return credential.id, otp_code

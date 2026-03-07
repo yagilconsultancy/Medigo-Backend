@@ -6,8 +6,11 @@ from app.repositories.user_repo import UserRepository
 from app.repositories.emergency_contact_repo import EmergencyContactRepository
 from app.models.emergency_contact import EmergencyContact
 from app.schemas.user import (
+    ConsentResponse,
     EmergencyContactCreate,
     EmergencyContactResponse,
+    OnboardingStatusResponse,
+    UpdateConsentRequest,
     UpdateProfileRequest,
     UserProfileResponse,
 )
@@ -101,3 +104,64 @@ async def delete_emergency_contact(
         raise AuthorizationError("Contact not found or access denied")
     await repo.delete(UUID(contact_id))
     return StandardResponse(message="Emergency contact deleted")
+
+
+# Consent Management
+@router.get("/me/consent", response_model=StandardResponse[ConsentResponse])
+async def get_my_consent(
+    user: UserClaims = Depends(get_current_user),
+    service: UserService = Depends(_get_user_service),
+):
+    """Get current consent/agreement status."""
+    profile = await service.get_profile(user.id)
+    return StandardResponse(data=ConsentResponse.model_validate(profile))
+
+
+@router.put("/me/consent", response_model=StandardResponse[ConsentResponse])
+async def update_my_consent(
+    request: UpdateConsentRequest,
+    user: UserClaims = Depends(get_current_user),
+    service: UserService = Depends(_get_user_service),
+):
+    """Accept or update consent agreements (911 Emergency, Privacy Policy, Terms of Service, Data & Location)."""
+    profile = await service.update_consent(
+        user.id,
+        consent_emergency_services=request.consent_emergency_services,
+        consent_privacy_policy=request.consent_privacy_policy,
+        consent_terms_of_service=request.consent_terms_of_service,
+        consent_data_location=request.consent_data_location,
+    )
+    return StandardResponse(
+        data=ConsentResponse.model_validate(profile),
+        message="Consent updated",
+    )
+
+
+# Onboarding Progress
+@router.get("/me/onboarding", response_model=StandardResponse[OnboardingStatusResponse])
+async def get_onboarding_status(
+    user: UserClaims = Depends(get_current_user),
+    service: UserService = Depends(_get_user_service),
+):
+    """Get onboarding progress (step tracking)."""
+    profile = await service.get_profile(user.id)
+    status = service.get_onboarding_status(profile)
+    return StandardResponse(data=OnboardingStatusResponse(**status))
+
+
+@router.put("/me/onboarding/{step}", response_model=StandardResponse[OnboardingStatusResponse])
+async def advance_onboarding(
+    step: int,
+    user: UserClaims = Depends(get_current_user),
+    service: UserService = Depends(_get_user_service),
+):
+    """Mark an onboarding step as reached (steps 1-5)."""
+    if step < 1 or step > 6:
+        from mediride_common.exceptions import ValidationError
+        raise ValidationError("Step must be between 1 and 6")
+    profile = await service.update_onboarding_step(user.id, step)
+    status = service.get_onboarding_status(profile)
+    return StandardResponse(
+        data=OnboardingStatusResponse(**status),
+        message="Onboarding progress updated",
+    )

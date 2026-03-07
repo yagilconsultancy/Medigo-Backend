@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class UserProfileResponse(BaseModel):
@@ -13,9 +13,18 @@ class UserProfileResponse(BaseModel):
     date_of_birth: date | None = None
     gender: str | None = None
     avatar_url: str | None = None
+    home_address: str | None = None
+    medical_notes: str | None = None
     role: str
     business_id: UUID | None = None
     is_active: bool
+    consent_emergency_services: bool = False
+    consent_privacy_policy: bool = False
+    consent_terms_of_service: bool = False
+    consent_data_location: bool = False
+    consent_accepted_at: datetime | None = None
+    onboarding_step: int = 1
+    onboarding_completed: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -26,6 +35,34 @@ class UpdateProfileRequest(BaseModel):
     date_of_birth: date | None = None
     gender: str | None = Field(None, max_length=20)
     avatar_url: str | None = Field(None, max_length=500)
+    home_address: str | None = Field(None, max_length=500)
+    medical_notes: str | None = None
+
+
+class UpdateConsentRequest(BaseModel):
+    consent_emergency_services: bool = False
+    consent_privacy_policy: bool = False
+    consent_terms_of_service: bool = False
+    consent_data_location: bool = False
+
+
+class ConsentResponse(BaseModel):
+    consent_emergency_services: bool
+    consent_privacy_policy: bool
+    consent_terms_of_service: bool
+    consent_data_location: bool
+    consent_accepted_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class OnboardingStatusResponse(BaseModel):
+    current_step: int
+    total_steps: int = 5
+    completed: bool
+    steps: list[dict]
+
+    model_config = {"from_attributes": True}
 
 
 class EmergencyContactCreate(BaseModel):

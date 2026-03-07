@@ -90,3 +90,23 @@ async def send_driver_invite_email(
         </html>
         """
     return await send_email(to, f"MediRide - Driver Invitation from {business_name}", html)
+
+
+async def send_password_reset_email(to: str, reset_token: str) -> bool:
+    """Send password reset email."""
+    try:
+        template = _template_env.get_template("password_reset.html")
+        html = template.render(reset_token=reset_token)
+    except Exception:
+        html = f"""
+        <html>
+        <body>
+            <h2>MediRide - Reset Your Password</h2>
+            <p>Use the following code to reset your password:</p>
+            <h3 style="color: #3B5998;">{reset_token}</h3>
+            <p>This code expires in 30 minutes.</p>
+            <p>If you didn't request this, please ignore this email.</p>
+        </body>
+        </html>
+        """
+    return await send_email(to, "MediRide - Password Reset", html)

@@ -24,6 +24,10 @@ class DriverProfile(Base):
     vehicle_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     vehicle_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vehicle_plate: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    vehicle_color: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    vehicle_vin: Mapped[str | None] = mapped_column(String(17), nullable=True)
+    vehicle_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    vehicle_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     background_check_status: Mapped[str] = mapped_column(
         String(20), default="pending"
     )

@@ -13,10 +13,12 @@ COPY services/notification-service/pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
 COPY services/notification-service/app ./app
+COPY services/notification-service/alembic.ini .
+COPY services/notification-service/alembic ./alembic
 
 RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 8007
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8007", "--workers", "1"]
+CMD ["uvicorn", "app.main:socket_app", "--host", "0.0.0.0", "--port", "8007", "--workers", "1"]

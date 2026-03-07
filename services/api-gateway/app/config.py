@@ -16,6 +16,7 @@ class GatewaySettings(BaseSettings):
     LOCATION_SERVICE_URL: str = "http://location-service:8004"
     PAYMENT_SERVICE_URL: str = "http://payment-service:8005"
     TRACKING_SERVICE_URL: str = "http://tracking-service:8006"
+    NOTIFICATION_SERVICE_URL: str = "http://notification-service:8007"
 
     # Rate limiting
     REDIS_URL: str = "redis://redis:6379/0"

@@ -31,6 +31,12 @@ class UserVerifiedPayload(BaseModel):
     phone: str | None = None
 
 
+class PasswordResetRequestedPayload(BaseModel):
+    user_id: UUID
+    email: str
+    reset_token: str
+
+
 class DriverInviteSentPayload(BaseModel):
     invitation_id: UUID
     business_id: UUID
@@ -65,6 +71,13 @@ class BusinessCreatedPayload(BaseModel):
     created_by: UUID
 
 
+class DriverDocumentUploadedPayload(BaseModel):
+    user_id: UUID
+    document_id: UUID
+    document_type: str
+    business_id: UUID
+
+
 # Ride event payloads
 class RideCreatedPayload(BaseModel):
     ride_id: UUID
@@ -85,6 +98,29 @@ class RideStatusChangedPayload(BaseModel):
     changed_by: UUID | None = None
 
 
+# Ride request payload
+class RideRequestPayload(BaseModel):
+    ride_id: UUID
+    rider_id: UUID
+    driver_id: UUID
+    pickup_address: str
+    destination_address: str
+    ride_type: str
+    estimated_fare: float
+    estimated_distance: float
+    rider_name: str
+    rider_rating: float
+
+
+# Rating event payload
+class RideRatingSubmittedPayload(BaseModel):
+    ride_id: UUID
+    rated_user_id: UUID
+    rated_by_user_id: UUID
+    rating: int
+    rating_type: str
+
+
 # Payment event payloads
 class PaymentCompletedPayload(BaseModel):
     transaction_id: UUID
@@ -92,3 +128,40 @@ class PaymentCompletedPayload(BaseModel):
     user_id: UUID
     amount: float
     status: str
+
+
+class WithdrawalPayload(BaseModel):
+    withdrawal_id: UUID
+    driver_id: UUID
+    amount: float
+    status: str
+
+
+# Tracking event payloads
+class DriverLocationUpdatedPayload(BaseModel):
+    driver_id: UUID
+    ride_id: UUID | None = None
+    latitude: float
+    longitude: float
+    heading: float | None = None
+    speed: float | None = None
+    timestamp: datetime = Field(default_factory=utc_now)
+
+
+class RideETAUpdatedPayload(BaseModel):
+    ride_id: UUID
+    rider_id: UUID
+    driver_id: UUID
+    eta_minutes: float
+    distance_miles: float
+
+
+# Chat event payloads
+class ChatMessageSentPayload(BaseModel):
+    conversation_id: UUID
+    message_id: UUID
+    sender_id: UUID
+    recipient_id: UUID
+    ride_id: UUID
+    content: str
+    message_type: str = "text"

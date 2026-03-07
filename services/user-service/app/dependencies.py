@@ -6,11 +6,13 @@ from app.config import settings
 from mediride_common.database.base import get_async_engine, get_async_session_factory
 from mediride_common.events.broker import RabbitMQBroker
 from mediride_common.events.publisher import EventPublisher
+from mediride_common.storage.s3_client import S3StorageClient
 
 _engine = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 _broker: RabbitMQBroker | None = None
 _publisher: EventPublisher | None = None
+_s3_client: S3StorageClient | None = None
 
 
 async def init_db() -> None:
@@ -46,3 +48,20 @@ def get_publisher() -> EventPublisher:
     if not _publisher:
         raise RuntimeError("Event publisher not initialized")
     return _publisher
+
+
+async def init_s3() -> None:
+    global _s3_client
+    _s3_client = S3StorageClient(
+        endpoint_url=settings.S3_ENDPOINT_URL,
+        access_key=settings.S3_ACCESS_KEY,
+        secret_key=settings.S3_SECRET_KEY,
+        region=settings.S3_REGION,
+    )
+    await _s3_client.ensure_bucket_exists(settings.S3_BUCKET_DOCUMENTS)
+
+
+def get_s3_client() -> S3StorageClient:
+    if not _s3_client:
+        raise RuntimeError("S3 client not initialized")
+    return _s3_client

@@ -16,4 +16,5 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "pydantic-settings>=2.5.0",
     "structlog>=24.4.0",
+    "websockets>=12.0",
 ]
