@@ -18,7 +18,7 @@ jobs:
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.STAGING_HOST }}
-          username: deploy
+          username: ec2-user
           key: ${{ secrets.STAGING_SSH_KEY }}
           script_stop: true
           script: |

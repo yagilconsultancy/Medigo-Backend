@@ -4,86 +4,69 @@ set -euo pipefail
 # ===========================================
 # MediRide Staging Server Setup Script
 # ===========================================
-# Run this on a fresh Ubuntu 22.04/24.04 EC2 instance
+# Run this on a fresh Amazon Linux 2023 EC2 instance
 # Usage: sudo bash setup-server.sh
 #
 # Prerequisites:
 #   - EC2 instance (t3.large recommended, 8GB RAM)
 #   - Security group: ports 22, 80, 443 open
 #   - DNS: staging.getmedigo.com -> instance public IP
+#   - SSH key (.pem) for ec2-user
 
 DOMAIN="staging.getmedigo.com"
 APP_DIR="/opt/mediride"
-DEPLOY_USER="deploy"
 
 echo "=========================================="
 echo "  MediRide Staging Server Setup"
+echo "  (Amazon Linux 2023)"
 echo "=========================================="
 
 # --- 1. System updates ---
-echo "[1/8] Updating system packages..."
-apt-get update -y
-apt-get upgrade -y
-apt-get install -y \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release \
+echo "[1/7] Updating system packages..."
+dnf update -y
+dnf install -y \
     git \
-    ufw \
-    fail2ban \
-    unzip
+    curl \
+    unzip \
+    nginx \
+    firewalld
 
-# --- 2. Create deploy user ---
-echo "[2/8] Creating deploy user..."
-if ! id "$DEPLOY_USER" &>/dev/null; then
-    useradd -m -s /bin/bash "$DEPLOY_USER"
-    usermod -aG sudo "$DEPLOY_USER"
-    echo "$DEPLOY_USER ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$DEPLOY_USER
-fi
-
-# --- 3. Install Docker ---
-echo "[3/8] Installing Docker..."
+# --- 2. Install Docker ---
+echo "[2/7] Installing Docker..."
 if ! command -v docker &>/dev/null; then
-    curl -fsSL https://get.docker.com | sh
-    usermod -aG docker "$DEPLOY_USER"
+    dnf install -y docker
+    systemctl enable docker
+    systemctl start docker
+    usermod -aG docker ec2-user
 fi
 
 # Install Docker Compose plugin
 echo "Installing Docker Compose plugin..."
-apt-get install -y docker-compose-plugin 2>/dev/null || true
+DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -SL "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-# Start and enable Docker
-systemctl enable docker
-systemctl start docker
+# Verify
+docker compose version
 
-# --- 4. Install Nginx ---
-echo "[4/8] Installing Nginx..."
-apt-get install -y nginx
-systemctl enable nginx
+# --- 3. Install Certbot ---
+echo "[3/7] Installing Certbot..."
+dnf install -y certbot python3-certbot-nginx
 
-# --- 5. Install Certbot ---
-echo "[5/8] Installing Certbot..."
-apt-get install -y certbot python3-certbot-nginx
+# --- 4. Configure firewall ---
+echo "[4/7] Configuring firewall..."
+systemctl enable firewalld
+systemctl start firewalld
+firewall-cmd --permanent --add-service=http
+firewall-cmd --permanent --add-service=https
+firewall-cmd --permanent --add-service=ssh
+firewall-cmd --reload
 
-# --- 6. Configure firewall ---
-echo "[6/8] Configuring firewall..."
-ufw --force reset
-ufw default deny incoming
-ufw default allow outgoing
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw --force enable
+# --- 5. Setup Nginx ---
+echo "[5/7] Configuring Nginx..."
 
-# --- 7. Setup application directory ---
-echo "[7/8] Setting up application directory..."
-mkdir -p "$APP_DIR"
-chown "$DEPLOY_USER":"$DEPLOY_USER" "$APP_DIR"
-
-# Create Nginx config (HTTP only initially, Certbot adds HTTPS)
-cat > /etc/nginx/sites-available/staging.getmedigo.com << 'NGINX_CONF'
+cat > /etc/nginx/conf.d/staging.getmedigo.com.conf << 'NGINX_CONF'
 upstream mediride_api {
     server 127.0.0.1:8080;
 }
@@ -151,16 +134,21 @@ server {
 }
 NGINX_CONF
 
-# Enable the site
-ln -sf /etc/nginx/sites-available/staging.getmedigo.com /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
+# Remove default nginx page
+rm -f /etc/nginx/conf.d/default.conf
 
-# Test and reload Nginx
+# Test and start Nginx
 nginx -t
-systemctl reload nginx
+systemctl enable nginx
+systemctl start nginx
 
-# --- 8. SSL Certificate ---
-echo "[8/8] Obtaining SSL certificate..."
+# --- 6. Setup application directory ---
+echo "[6/7] Setting up application directory..."
+mkdir -p "$APP_DIR"
+chown ec2-user:ec2-user "$APP_DIR"
+
+# --- 7. SSL Certificate ---
+echo "[7/7] SSL certificate..."
 echo ""
 echo "  IMPORTANT: Make sure DNS for ${DOMAIN} points to this server's IP first!"
 echo ""
@@ -168,14 +156,13 @@ read -p "  DNS is configured? (y/n): " dns_ready
 
 if [ "$dns_ready" = "y" ]; then
     certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email admin@getmedigo.com --redirect
+    # Setup auto-renewal
+    systemctl enable certbot-renew.timer 2>/dev/null || echo "certbot timer setup skipped"
     echo "SSL certificate installed!"
 else
     echo "Skipping SSL. Run this later:"
     echo "  sudo certbot --nginx -d ${DOMAIN} --agree-tos --email admin@getmedigo.com --redirect"
 fi
-
-# Setup certbot auto-renewal
-systemctl enable certbot.timer
 
 echo ""
 echo "=========================================="
@@ -183,12 +170,12 @@ echo "  Server setup complete!"
 echo "=========================================="
 echo ""
 echo "Next steps:"
-echo "  1. Switch to deploy user:  sudo su - deploy"
-echo "  2. Clone the repo:         cd /opt/mediride && git clone <your-repo-url> ."
-echo "  3. Copy env file:          cp deploy/env.staging.example .env"
-echo "  4. Edit .env with real passwords"
-echo "  5. Start services:         docker compose -f deploy/docker-compose.staging.yml up -d"
-echo "  6. Run migrations:         ./deploy/run-migrations.sh"
+echo "  1. Log out and back in (for docker group):  exit && ssh ec2-user@<ip>"
+echo "  2. Clone the repo:  cd /opt/mediride && git clone <your-repo-url> ."
+echo "  3. Create .env:     cp deploy/env.staging.example .env"
+echo "  4. Edit .env:       nano .env  (fill in real passwords)"
+echo "  5. Start services:  docker compose -f deploy/docker-compose.staging.yml up -d"
+echo "  6. Run migrations:  bash deploy/run-migrations.sh"
 echo ""
-echo "Or just push to main and let GitHub Actions handle it!"
+echo "After that, push to main and GitHub Actions handles deployments."
 echo ""
