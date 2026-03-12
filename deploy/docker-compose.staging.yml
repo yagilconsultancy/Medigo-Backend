@@ -90,7 +90,7 @@ services:
   api-gateway:
     <<: *service-defaults
     build:
-      context: .
+      context: ..
       dockerfile: services/api-gateway/Dockerfile
     ports:
       - "127.0.0.1:8080:8000"
@@ -113,7 +113,7 @@ services:
   auth-service:
     <<: *service-defaults
     build:
-      context: .
+      context: ..
       dockerfile: services/auth-service/Dockerfile
     environment:
       <<: *service-env
@@ -132,7 +132,7 @@ services:
   user-service:
     <<: *service-defaults
     build:
-      context: .
+      context: ..
       dockerfile: services/user-service/Dockerfile
     environment:
       <<: *service-env
@@ -153,7 +153,7 @@ services:
   ride-service:
     <<: *service-defaults
     build:
-      context: .
+      context: ..
       dockerfile: services/ride-service/Dockerfile
     environment:
       <<: *service-env
@@ -170,7 +170,7 @@ services:
   location-service:
     <<: *service-defaults
     build:
-      context: .
+      context: ..
       dockerfile: services/location-service/Dockerfile
     environment:
       <<: *service-env
@@ -186,7 +186,7 @@ services:
   payment-service:
     <<: *service-defaults
     build:
-      context: .
+      context: ..
       dockerfile: services/payment-service/Dockerfile
     environment:
       <<: *service-env
@@ -206,7 +206,7 @@ services:
   tracking-service:
     <<: *service-defaults
     build:
-      context: .
+      context: ..
       dockerfile: services/tracking-service/Dockerfile
     ports:
       - "127.0.0.1:8006:8006"
@@ -227,7 +227,7 @@ services:
   notification-service:
     <<: *service-defaults
     build:
-      context: .
+      context: ..
       dockerfile: services/notification-service/Dockerfile
     ports:
       - "127.0.0.1:8007:8007"

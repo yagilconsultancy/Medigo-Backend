@@ -26,7 +26,7 @@ jobs:
 
             APP_DIR=/opt/mediride
             COMPOSE_FILE=deploy/docker-compose.staging.yml
-            DC="docker compose --env-file .env -f $COMPOSE_FILE"
+            DC="docker compose --env-file $APP_DIR/.env -f $APP_DIR/$COMPOSE_FILE"
 
             echo "=== Deploying MediRide to staging ==="
 
