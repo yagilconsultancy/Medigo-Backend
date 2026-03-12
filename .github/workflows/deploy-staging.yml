@@ -28,6 +28,25 @@ jobs:
 
             echo "=== Deploying MediRide to staging ==="
 
+            # Ensure git and docker are installed
+            if ! command -v git &>/dev/null; then
+              echo "Installing git..."
+              sudo dnf install -y git
+            fi
+            if ! command -v docker &>/dev/null; then
+              echo "Installing docker..."
+              sudo dnf install -y docker
+              sudo systemctl enable docker
+              sudo systemctl start docker
+              sudo usermod -aG docker ec2-user
+              # Install Docker Compose plugin
+              COMPOSE_VER=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+              sudo mkdir -p /usr/local/lib/docker/cli-plugins
+              sudo curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
+              sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+              echo "Docker installed. You may need to re-run this workflow once for group permissions to take effect."
+            fi
+
             # First-time setup: create dir and clone if it doesn't exist
             if [ ! -d "$APP_DIR/.git" ]; then
               echo "First-time setup: cloning repository..."
