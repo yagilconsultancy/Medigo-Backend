@@ -11,7 +11,7 @@ x-service-defaults: &service-defaults
 x-service-env: &service-env
   ENVIRONMENT: staging
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
-  RABBITMQ_URL: amqp://mediride:${RABBITMQ_PASSWORD}@rabbitmq:5672/mediride
+  RABBITMQ_URL: amqp://mediride:${RABBITMQ_PASSWORD:-staging_password}@rabbitmq:5672/mediride
   REDIS_URL: redis://redis:6379/0
 
 services:
@@ -117,7 +117,7 @@ services:
       dockerfile: services/auth-service/Dockerfile
     environment:
       <<: *service-env
-      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_auth
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_auth
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
@@ -136,7 +136,7 @@ services:
       dockerfile: services/user-service/Dockerfile
     environment:
       <<: *service-env
-      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_users
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_users
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       S3_ENDPOINT_URL: http://minio:9000
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
@@ -157,7 +157,7 @@ services:
       dockerfile: services/ride-service/Dockerfile
     environment:
       <<: *service-env
-      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_rides
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_rides
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       USER_SERVICE_URL: http://user-service:8002
       PAYMENT_SERVICE_URL: http://payment-service:8005
@@ -174,7 +174,7 @@ services:
       dockerfile: services/location-service/Dockerfile
     environment:
       <<: *service-env
-      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_locations
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_locations
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
     depends_on:
@@ -190,7 +190,7 @@ services:
       dockerfile: services/payment-service/Dockerfile
     environment:
       <<: *service-env
-      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_payments
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_payments
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       RIDE_SERVICE_URL: http://ride-service:8003
       MONERIS_CLIENT_ID: ${MONERIS_CLIENT_ID}
@@ -212,7 +212,7 @@ services:
       - "127.0.0.1:8006:8006"
     environment:
       <<: *service-env
-      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_tracking
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_tracking
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       LOCATION_SERVICE_URL: http://location-service:8004
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
@@ -233,7 +233,7 @@ services:
       - "127.0.0.1:8007:8007"
     environment:
       <<: *service-env
-      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_notifications
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_notifications
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT:-587}
