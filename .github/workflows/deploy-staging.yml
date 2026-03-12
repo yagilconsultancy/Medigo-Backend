@@ -20,7 +20,6 @@ jobs:
           host: ${{ secrets.STAGING_HOST }}
           username: ec2-user
           key: ${{ secrets.STAGING_SSH_KEY }}
-          script_stop: true
           script: |
             set -euo pipefail
 
@@ -29,33 +28,27 @@ jobs:
 
             echo "=== Deploying MediRide to staging ==="
 
-            cd $APP_DIR
-
-            # First-time setup: clone if repo doesn't exist
-            if [ ! -d ".git" ]; then
+            # First-time setup: create dir and clone if it doesn't exist
+            if [ ! -d "$APP_DIR/.git" ]; then
               echo "First-time setup: cloning repository..."
-              cd /opt
-              rm -rf mediride
-              git clone https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git mediride
-              cd $APP_DIR
-
-              # Check .env exists (must be manually created)
-              if [ ! -f ".env" ]; then
-                echo "ERROR: .env file not found!"
-                echo "SSH into the server and create it first:"
-                echo "  cp deploy/env.staging.example .env"
-                echo "  nano .env  # fill in real values"
-                exit 1
-              fi
+              sudo mkdir -p /opt/mediride
+              sudo chown ec2-user:ec2-user /opt/mediride
+              git clone https://${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git $APP_DIR
             else
               echo "Pulling latest changes..."
+              cd $APP_DIR
               git fetch origin main
               git reset --hard origin/main
             fi
 
+            cd $APP_DIR
+
             # Verify .env exists
             if [ ! -f ".env" ]; then
               echo "ERROR: .env file missing at $APP_DIR/.env"
+              echo "SSH into the server and create it first:"
+              echo "  cp deploy/env.staging.example .env"
+              echo "  nano .env  # fill in real values"
               exit 1
             fi
 
