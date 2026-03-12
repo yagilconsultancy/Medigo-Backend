@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients.moneris_client import MonerisClient
+from app.clients.stripe_client import StripeClient
 from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
-from app.dependencies import get_db, get_moneris_client, get_publisher
+from app.dependencies import get_db, get_stripe_client, get_publisher
 from app.repositories.earnings_period_repo import EarningsPeriodRepository
 from app.repositories.earnings_repo import EarningsRepository
 from app.repositories.fare_repo import FareBreakdownRepository
@@ -88,16 +88,16 @@ async def record_earnings(
 async def charge_ride(
     body: ChargeRideRequest,
     session: AsyncSession = Depends(get_db),
-    moneris: MonerisClient = Depends(get_moneris_client),
+    stripe: StripeClient = Depends(get_stripe_client),
     publisher: EventPublisher = Depends(get_publisher),
 ):
-    """Charge a rider for a completed ride via Moneris."""
+    """Charge a rider for a completed ride via Stripe."""
     service = PaymentProcessingService(
         tx_repo=TransactionRepository(session),
         fare_repo=FareBreakdownRepository(session),
         pm_repo=PaymentMethodRepository(session),
         earnings_repo=EarningsRepository(session),
-        moneris_client=moneris,
+        stripe_client=stripe,
         ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
         publisher=publisher,
     )
@@ -120,16 +120,16 @@ async def charge_ride(
 async def refund_ride(
     body: RefundRideRequest,
     session: AsyncSession = Depends(get_db),
-    moneris: MonerisClient = Depends(get_moneris_client),
+    stripe: StripeClient = Depends(get_stripe_client),
     publisher: EventPublisher = Depends(get_publisher),
 ):
-    """Refund a ride payment via Moneris."""
+    """Refund a ride payment via Stripe."""
     service = PaymentProcessingService(
         tx_repo=TransactionRepository(session),
         fare_repo=FareBreakdownRepository(session),
         pm_repo=PaymentMethodRepository(session),
         earnings_repo=EarningsRepository(session),
-        moneris_client=moneris,
+        stripe_client=stripe,
         ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
         publisher=publisher,
     )

@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from app.clients.moneris_client import MonerisClient
+from app.clients.stripe_client import StripeClient
 from app.config import settings
 from app.models.withdrawal import Withdrawal
 from app.repositories.earnings_repo import EarningsRepository
@@ -23,13 +23,13 @@ class WithdrawalService:
         earnings_repo: EarningsRepository,
         payment_method_repo: PaymentMethodRepository,
         publisher: EventPublisher,
-        moneris_client: MonerisClient,
+        stripe_client: StripeClient,
     ):
         self.withdrawal_repo = withdrawal_repo
         self.earnings_repo = earnings_repo
         self.payment_method_repo = payment_method_repo
         self.publisher = publisher
-        self.moneris = moneris_client
+        self.stripe = stripe_client
 
     async def get_withdrawal_fee(self, amount: float) -> dict:
         fee = round(amount * settings.WITHDRAWAL_FEE_PERCENT, 2)
@@ -59,7 +59,7 @@ class WithdrawalService:
 
         if not pm.external_id:
             raise ValidationError(
-                "Payment method is not linked to Moneris. Please re-add your card."
+                "Payment method is not linked to Stripe. Please re-add your card."
             )
 
         fee_info = await self.get_withdrawal_fee(amount)
@@ -91,12 +91,12 @@ class WithdrawalService:
         return withdrawal
 
     async def process_withdrawal(self, withdrawal_id: UUID) -> Withdrawal:
-        """Process a withdrawal via Moneris payout. Called by background task."""
+        """Process a withdrawal via Stripe payout. Called by background task."""
         withdrawal = await self.withdrawal_repo.get_by_id(withdrawal_id)
         if not withdrawal:
             raise NotFoundError("Withdrawal not found")
 
-        # Fetch the payment method for the Moneris vault data_key
+        # Fetch the payment method for the Stripe PaymentMethod ID
         pm = await self.payment_method_repo.get_by_id(withdrawal.payment_method_id)
         if not pm or not pm.external_id:
             await self._fail_withdrawal(
@@ -108,12 +108,13 @@ class WithdrawalService:
             return await self.withdrawal_repo.get_by_id(withdrawal_id)
 
         try:
-            # Process payout via Moneris independent refund (credit to card)
+            # Process payout via Stripe Transfer
             order_id = f"WD-{withdrawal_id}"
-            result = await self.moneris.process_payout(
+            result = await self.stripe.process_payout(
                 order_id=order_id,
                 amount=float(withdrawal.net_amount),
                 data_key=pm.external_id,
+                connected_account_id=pm.stripe_customer_id,
             )
 
             if not result.success:
@@ -121,7 +122,7 @@ class WithdrawalService:
                     withdrawal_id,
                     withdrawal.driver_id,
                     float(withdrawal.amount),
-                    f"Moneris payout declined: {result.message} (code: {result.response_code})",
+                    f"Stripe payout failed: {result.message}",
                 )
                 return await self.withdrawal_repo.get_by_id(withdrawal_id)
 
@@ -136,8 +137,8 @@ class WithdrawalService:
             )
 
             logger.info(
-                f"Withdrawal {withdrawal_id} completed via Moneris "
-                f"(txn: {result.transaction_id}, ref: {result.reference_number})"
+                f"Withdrawal {withdrawal_id} completed via Stripe "
+                f"(txn: {result.transaction_id})"
             )
 
             await self.publisher.publish(

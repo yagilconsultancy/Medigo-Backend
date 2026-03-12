@@ -3,9 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients.moneris_client import MonerisClient
+from app.clients.stripe_client import StripeClient
 from app.config import settings
-from app.dependencies import get_db, get_moneris_client, get_publisher
+from app.dependencies import get_db, get_stripe_client, get_publisher
 from app.repositories.earnings_repo import EarningsRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.repositories.withdrawal_repo import WithdrawalRepository
@@ -23,14 +23,14 @@ router = APIRouter()
 def _get_withdrawal_service(
     session: AsyncSession = Depends(get_db),
     publisher: EventPublisher = Depends(get_publisher),
-    moneris: MonerisClient = Depends(get_moneris_client),
+    stripe: StripeClient = Depends(get_stripe_client),
 ) -> WithdrawalService:
     return WithdrawalService(
         withdrawal_repo=WithdrawalRepository(session),
         earnings_repo=EarningsRepository(session),
         payment_method_repo=PaymentMethodRepository(session),
         publisher=publisher,
-        moneris_client=moneris,
+        stripe_client=stripe,
     )
 
 

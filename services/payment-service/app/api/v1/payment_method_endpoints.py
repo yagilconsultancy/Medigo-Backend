@@ -3,8 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients.moneris_client import MonerisClient
-from app.dependencies import get_db, get_moneris_client
+from app.clients.stripe_client import StripeClient
+from app.dependencies import get_db, get_stripe_client
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.schemas.payment_method import AddPaymentMethodRequest, PaymentMethodResponse
 from app.services.payment_method_service import PaymentMethodService
@@ -18,11 +18,11 @@ router = APIRouter()
 
 def _get_pm_service(
     session: AsyncSession = Depends(get_db),
-    moneris: MonerisClient = Depends(get_moneris_client),
+    stripe: StripeClient = Depends(get_stripe_client),
 ) -> PaymentMethodService:
     return PaymentMethodService(
         pm_repo=PaymentMethodRepository(session),
-        moneris_client=moneris,
+        stripe_client=stripe,
     )
 
 

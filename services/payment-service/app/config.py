@@ -9,11 +9,10 @@ class PaymentSettings(BaseServiceSettings):
     WITHDRAWAL_FEE_PERCENT: float = 0.015  # 1.5%
     MIN_WITHDRAWAL_AMOUNT: float = 10.00
 
-    # Moneris Payment Gateway
-    MONERIS_CLIENT_ID: str = ""
-    MONERIS_CLIENT_SECRET: str = ""
-    MONERIS_STORE_ID: str = ""
-    MONERIS_SANDBOX: bool = True  # False for production
+    # Stripe Payment Gateway
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
 
 
 settings = PaymentSettings()

@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from app.clients.moneris_client import MonerisClient
+from app.clients.stripe_client import StripeClient
 from app.clients.ride_service_client import RideServiceClient
 from app.models.transaction import Transaction
 from app.repositories.earnings_repo import EarningsRepository
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class PaymentProcessingService:
-    """Handles charging riders for completed rides via Moneris."""
+    """Handles charging riders for completed rides via Stripe."""
 
     def __init__(
         self,
@@ -27,7 +27,7 @@ class PaymentProcessingService:
         fare_repo: FareBreakdownRepository,
         pm_repo: PaymentMethodRepository,
         earnings_repo: EarningsRepository,
-        moneris_client: MonerisClient,
+        stripe_client: StripeClient,
         ride_client: RideServiceClient,
         publisher: EventPublisher,
     ):
@@ -35,7 +35,7 @@ class PaymentProcessingService:
         self.fare_repo = fare_repo
         self.pm_repo = pm_repo
         self.earnings_repo = earnings_repo
-        self.moneris = moneris_client
+        self.stripe = stripe_client
         self.ride_client = ride_client
         self.publisher = publisher
 
@@ -65,7 +65,10 @@ class PaymentProcessingService:
 
         # 3. Find rider's default payment method
         rider_methods = await self.pm_repo.get_by_user(rider_id)
-        default_pm = next((m for m in rider_methods if m.is_default and m.external_id), None)
+        default_pm = next(
+            (m for m in rider_methods if m.is_default and m.external_id and m.stripe_customer_id),
+            None,
+        )
 
         if not default_pm:
             # No payment method on file - create a pending transaction
@@ -84,12 +87,13 @@ class PaymentProcessingService:
             await self._record_driver_earnings(ride_id, driver_id, driver_earnings)
             return tx
 
-        # 4. Charge the rider via Moneris
+        # 4. Charge the rider via Stripe
         order_id = f"RIDE-{ride_id}"
-        result = await self.moneris.purchase(
+        result = await self.stripe.purchase(
             order_id=order_id,
             amount=total_fare,
             data_key=default_pm.external_id,
+            customer_id=default_pm.stripe_customer_id,
             description=f"MediRide #{str(ride_id)[:8]}",
         )
 
@@ -102,7 +106,7 @@ class PaymentProcessingService:
                 amount=total_fare,
                 status="completed",
                 reference_id=result.transaction_id,
-                description=f"Ride payment - Moneris ref: {result.reference_number}",
+                description=f"Ride payment - Stripe ref: {result.reference_number}",
             )
             await self.tx_repo.create(tx)
 
@@ -127,7 +131,7 @@ class PaymentProcessingService:
 
             logger.info(
                 f"Ride {ride_id} payment of ${total_fare} charged to rider {rider_id} "
-                f"(Moneris txn: {result.transaction_id})"
+                f"(Stripe pi: {result.transaction_id})"
             )
         else:
             # Payment failed
@@ -167,7 +171,7 @@ class PaymentProcessingService:
     async def refund_ride_payment(
         self, ride_id: UUID, rider_id: UUID
     ) -> Transaction | None:
-        """Refund a completed ride payment via Moneris."""
+        """Refund a completed ride payment via Stripe."""
         # Find the original completed payment transaction
         transactions = await self.tx_repo.get_by_ride_id(ride_id)
         original_tx = next(
@@ -183,7 +187,7 @@ class PaymentProcessingService:
             return None
 
         order_id = f"RIDE-{ride_id}"
-        result = await self.moneris.refund(
+        result = await self.stripe.refund(
             order_id=order_id,
             transaction_id=original_tx.reference_id,
             amount=float(original_tx.amount),

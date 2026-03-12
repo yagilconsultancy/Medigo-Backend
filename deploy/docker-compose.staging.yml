@@ -1,0 +1,259 @@
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks:
+    - mediride-network
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-service-env: &service-env
+  ENVIRONMENT: staging
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  RABBITMQ_URL: amqp://mediride:${RABBITMQ_PASSWORD}@rabbitmq:5672/mediride
+  REDIS_URL: redis://redis:6379/0
+
+services:
+  # ==================== INFRASTRUCTURE ====================
+
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    <<: *service-defaults
+    environment:
+      POSTGRES_USER: mediride
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: mediride_auth
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mediride"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    <<: *service-defaults
+    environment:
+      RABBITMQ_DEFAULT_USER: mediride
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: mediride
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    <<: *service-defaults
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    <<: *service-defaults
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ==================== APPLICATION SERVICES ====================
+
+  api-gateway:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    ports:
+      - "127.0.0.1:8080:8000"
+    environment:
+      <<: *service-env
+      AUTH_SERVICE_URL: http://auth-service:8001
+      USER_SERVICE_URL: http://user-service:8002
+      RIDE_SERVICE_URL: http://ride-service:8003
+      LOCATION_SERVICE_URL: http://location-service:8004
+      PAYMENT_SERVICE_URL: http://payment-service:8005
+      TRACKING_SERVICE_URL: http://tracking-service:8006
+      NOTIFICATION_SERVICE_URL: http://notification-service:8007
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-100}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-60}
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  auth-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_auth
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-5}
+      USER_SERVICE_URL: http://user-service:8002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  user-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_users
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_DOCUMENTS: ${S3_BUCKET_DOCUMENTS:-mediride-documents}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  ride-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/ride-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_rides
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      USER_SERVICE_URL: http://user-service:8002
+      PAYMENT_SERVICE_URL: http://payment-service:8005
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  location-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/location-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_locations
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  payment-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_payments
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      RIDE_SERVICE_URL: http://ride-service:8003
+      MONERIS_CLIENT_ID: ${MONERIS_CLIENT_ID}
+      MONERIS_CLIENT_SECRET: ${MONERIS_CLIENT_SECRET}
+      MONERIS_STORE_ID: ${MONERIS_STORE_ID}
+      MONERIS_SANDBOX: ${MONERIS_SANDBOX:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  tracking-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/tracking-service/Dockerfile
+    ports:
+      - "127.0.0.1:8006:8006"
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_tracking
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      LOCATION_SERVICE_URL: http://location-service:8004
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  notification-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    ports:
+      - "127.0.0.1:8007:8007"
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD}@postgres:5432/mediride_notifications
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@getmedigo.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  redis-data:
+  minio-data:
+
+networks:
+  mediride-network:
+    driver: bridge

@@ -34,6 +34,7 @@ PUBLIC_PATHS = {
     "/auth/reset-password",
     "/auth/driver/verify-invite",
     "/auth/driver/register",
+    "/payments/webhooks/stripe",
 }
 
 

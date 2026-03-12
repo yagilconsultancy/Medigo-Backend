@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.clients.moneris_client import MonerisClient
+from app.clients.stripe_client import StripeClient
 from app.config import settings
 from mediride_common.database.base import get_async_engine, get_async_session_factory
 from mediride_common.events.broker import RabbitMQBroker
@@ -12,7 +12,7 @@ _engine = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 _broker: RabbitMQBroker | None = None
 _publisher: EventPublisher | None = None
-_moneris_client: MonerisClient | None = None
+_stripe_client: StripeClient | None = None
 
 
 async def init_db() -> None:
@@ -28,13 +28,12 @@ async def init_broker() -> None:
     _publisher = EventPublisher(_broker, settings.SERVICE_NAME)
 
 
-def init_moneris() -> None:
-    global _moneris_client
-    _moneris_client = MonerisClient(
-        client_id=settings.MONERIS_CLIENT_ID,
-        client_secret=settings.MONERIS_CLIENT_SECRET,
-        store_id=settings.MONERIS_STORE_ID,
-        sandbox=settings.MONERIS_SANDBOX,
+def init_stripe() -> None:
+    global _stripe_client
+    _stripe_client = StripeClient(
+        secret_key=settings.STRIPE_SECRET_KEY,
+        publishable_key=settings.STRIPE_PUBLISHABLE_KEY,
+        webhook_secret=settings.STRIPE_WEBHOOK_SECRET,
     )
 
 
@@ -60,7 +59,7 @@ def get_publisher() -> EventPublisher:
     return _publisher
 
 
-def get_moneris_client() -> MonerisClient:
-    if not _moneris_client:
-        raise RuntimeError("Moneris client not initialized")
-    return _moneris_client
+def get_stripe_client() -> StripeClient:
+    if not _stripe_client:
+        raise RuntimeError("Stripe client not initialized")
+    return _stripe_client

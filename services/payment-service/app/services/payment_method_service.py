@@ -1,7 +1,7 @@
 import logging
 from uuid import UUID
 
-from app.clients.moneris_client import MonerisClient
+from app.clients.stripe_client import StripeClient
 from app.models.payment_method import PaymentMethod
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from mediride_common.exceptions import NotFoundError, ValidationError
@@ -13,10 +13,10 @@ class PaymentMethodService:
     def __init__(
         self,
         pm_repo: PaymentMethodRepository,
-        moneris_client: MonerisClient,
+        stripe_client: StripeClient,
     ):
         self.pm_repo = pm_repo
-        self.moneris = moneris_client
+        self.stripe = stripe_client
 
     async def add_payment_method(
         self,
@@ -29,18 +29,28 @@ class PaymentMethodService:
         *,
         cvd: str | None = None,
     ) -> PaymentMethod:
-        """Tokenize card via Moneris Vault and store the token locally."""
-        vault_result = await self.moneris.tokenize_card(
+        """Tokenize card via Stripe and store the PaymentMethod ID locally."""
+        # Look up existing Stripe customer_id for this user
+        existing = await self.pm_repo.get_by_user(user_id)
+        existing_customer_id = None
+        for m in existing:
+            if m.stripe_customer_id:
+                existing_customer_id = m.stripe_customer_id
+                break
+
+        vault_result = await self.stripe.tokenize_card(
             card_number=card_number,
             expiry_month=expiry_month,
             expiry_year=expiry_year,
             holder_name=holder_name,
             cvd=cvd,
+            user_id=str(user_id),
+            existing_customer_id=existing_customer_id,
         )
 
         if not vault_result.success or not vault_result.data_key:
             logger.error(
-                f"Moneris tokenization failed for user {user_id}: {vault_result.message}"
+                f"Stripe tokenization failed for user {user_id}: {vault_result.message}"
             )
             raise ValidationError(
                 f"Card tokenization failed: {vault_result.message or 'Unknown error'}"
@@ -50,7 +60,6 @@ class PaymentMethodService:
         brand = _detect_card_brand(card_number)
 
         # First payment method becomes the default
-        existing = await self.pm_repo.get_by_user(user_id)
         is_default = len(existing) == 0
 
         method = PaymentMethod(
@@ -61,6 +70,7 @@ class PaymentMethodService:
             holder_name=holder_name,
             is_default=is_default,
             external_id=vault_result.data_key,
+            stripe_customer_id=vault_result.customer_id,
         )
         return await self.pm_repo.create(method)
 
@@ -83,12 +93,12 @@ class PaymentMethodService:
                 "Cannot remove default payment method. Set another as default first."
             )
 
-        # Remove from Moneris Vault
+        # Detach from Stripe
         if pm.external_id:
-            deleted = await self.moneris.delete_vault_profile(pm.external_id)
+            deleted = await self.stripe.delete_vault_profile(pm.external_id)
             if not deleted:
                 logger.warning(
-                    f"Failed to delete Moneris vault profile {pm.external_id} for user {user_id}"
+                    f"Failed to detach Stripe PaymentMethod {pm.external_id} for user {user_id}"
                 )
 
         await self.pm_repo.soft_delete(pm_id)

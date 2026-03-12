@@ -2,9 +2,9 @@ import logging
 from uuid import UUID
 
 from app.config import settings
-from app.clients.moneris_client import MonerisClient
+from app.clients.stripe_client import StripeClient
 from app.clients.ride_service_client import RideServiceClient
-from app.dependencies import get_broker, get_db, get_moneris_client, get_publisher
+from app.dependencies import get_broker, get_db, get_stripe_client, get_publisher
 from app.repositories.earnings_repo import EarningsRepository
 from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
@@ -38,7 +38,7 @@ class RideCompletedConsumer(BaseEventConsumer):
                     fare_repo=FareBreakdownRepository(session),
                     pm_repo=PaymentMethodRepository(session),
                     earnings_repo=EarningsRepository(session),
-                    moneris_client=get_moneris_client(),
+                    stripe_client=get_stripe_client(),
                     ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
                     publisher=get_publisher(),
                 )
@@ -77,7 +77,7 @@ class RideCancelledConsumer(BaseEventConsumer):
                     fare_repo=FareBreakdownRepository(session),
                     pm_repo=PaymentMethodRepository(session),
                     earnings_repo=EarningsRepository(session),
-                    moneris_client=get_moneris_client(),
+                    stripe_client=get_stripe_client(),
                     ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
                     publisher=get_publisher(),
                 )
