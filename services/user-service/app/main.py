@@ -32,6 +32,7 @@ app = FastAPI(
     docs_url="/users/docs",
     openapi_url="/users/openapi.json",
     redoc_url="/users/redoc",
+    root_path="/api/v1",
 )
 
 app.add_middleware(CorrelationIdMiddleware)

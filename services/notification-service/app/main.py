@@ -36,6 +36,7 @@ app = FastAPI(
     docs_url="/notifications/docs",
     openapi_url="/notifications/openapi.json",
     redoc_url="/notifications/redoc",
+    root_path="/api/v1",
 )
 
 app.add_middleware(CorrelationIdMiddleware)

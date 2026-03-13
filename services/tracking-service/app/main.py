@@ -33,6 +33,7 @@ fastapi_app = FastAPI(
     docs_url="/tracking/docs",
     openapi_url="/tracking/openapi.json",
     redoc_url="/tracking/redoc",
+    root_path="/api/v1",
 )
 
 fastapi_app.add_middleware(CorrelationIdMiddleware)

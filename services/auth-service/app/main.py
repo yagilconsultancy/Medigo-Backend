@@ -28,6 +28,7 @@ app = FastAPI(
     docs_url="/auth/docs",
     openapi_url="/auth/openapi.json",
     redoc_url="/auth/redoc",
+    root_path="/api/v1",
 )
 
 # Middleware
