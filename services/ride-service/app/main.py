@@ -28,6 +28,9 @@ app = FastAPI(
     title="MediRide Ride Service",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/rides/docs",
+    openapi_url="/rides/openapi.json",
+    redoc_url="/rides/redoc",
 )
 
 app.add_middleware(CorrelationIdMiddleware)

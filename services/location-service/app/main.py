@@ -27,6 +27,9 @@ app = FastAPI(
     title="MediRide Location Service",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/locations/docs",
+    openapi_url="/locations/openapi.json",
+    redoc_url="/locations/redoc",
 )
 
 app.add_middleware(CorrelationIdMiddleware)

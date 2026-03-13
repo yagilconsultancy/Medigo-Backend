@@ -33,6 +33,9 @@ app = FastAPI(
     title="MediRide Notification Service",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/notifications/docs",
+    openapi_url="/notifications/openapi.json",
+    redoc_url="/notifications/redoc",
 )
 
 app.add_middleware(CorrelationIdMiddleware)

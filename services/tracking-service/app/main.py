@@ -30,6 +30,9 @@ fastapi_app = FastAPI(
     title="MediRide Tracking Service",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/tracking/docs",
+    openapi_url="/tracking/openapi.json",
+    redoc_url="/tracking/redoc",
 )
 
 fastapi_app.add_middleware(CorrelationIdMiddleware)

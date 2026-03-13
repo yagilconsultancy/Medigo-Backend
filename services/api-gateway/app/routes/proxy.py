@@ -49,6 +49,9 @@ def _get_service_url(path: str) -> tuple[str, str] | None:
 
 def _is_public_path(path: str) -> bool:
     """Check if the path is publicly accessible without auth."""
+    # Allow docs endpoints for all services
+    if path.endswith(("/docs", "/openapi.json", "/redoc", "/docs/oauth2-redirect")):
+        return True
     for public_path in PUBLIC_PATHS:
         if path.startswith(public_path):
             return True

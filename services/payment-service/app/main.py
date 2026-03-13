@@ -29,6 +29,9 @@ app = FastAPI(
     title="MediRide Payment Service",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/payments/docs",
+    openapi_url="/payments/openapi.json",
+    redoc_url="/payments/redoc",
 )
 
 app.add_middleware(CorrelationIdMiddleware)

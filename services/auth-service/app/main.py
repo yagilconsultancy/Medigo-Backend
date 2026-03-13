@@ -25,6 +25,9 @@ app = FastAPI(
     title="MediRide Auth Service",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/auth/docs",
+    openapi_url="/auth/openapi.json",
+    redoc_url="/auth/redoc",
 )
 
 # Middleware
