@@ -307,7 +307,7 @@ class AuthService:
             )
 
         logger.info(f"Password reset requested for user {credential.id}")
-        return raw_token if settings.ENVIRONMENT == "development" else None
+        return raw_token if settings.ENVIRONMENT != "production" else None
 
     async def reset_password(self, token: str, new_password: str) -> None:
         """Reset password using a valid reset token."""

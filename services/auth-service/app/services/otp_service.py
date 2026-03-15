@@ -27,8 +27,8 @@ class OTPService:
         if recent_count >= settings.OTP_MAX_REQUESTS_PER_HOUR:
             raise RateLimitError("Too many OTP requests. Please try again later.")
 
-        # In development, use a fixed OTP since email/SMS is not configured
-        if settings.ENVIRONMENT == "development":
+        # Use fixed OTP when email/SMS is not configured (dev/staging)
+        if settings.ENVIRONMENT != "production":
             code = DEV_DEFAULT_OTP
             logger.info(f"[DEV] Using default OTP: {code} for user {user_id}")
         else:

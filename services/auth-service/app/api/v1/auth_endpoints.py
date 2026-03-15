@@ -77,7 +77,7 @@ async def register(
     # In production, OTP is sent via notification service (email/SMS)
     # In development, we return it in the response for testing
     message = "Registration successful. Please verify your account."
-    if settings.ENVIRONMENT == "development":
+    if settings.ENVIRONMENT != "production":
         message += f" [DEV] OTP: {otp_code}"
 
     return StandardResponse(
@@ -170,7 +170,7 @@ async def resend_otp(
 ):
     otp_code = await auth_service.resend_otp(user_id, purpose)
     message = "OTP sent successfully"
-    if settings.ENVIRONMENT == "development":
+    if settings.ENVIRONMENT != "production":
         message += f" [DEV] OTP: {otp_code}"
     return StandardResponse(message=message)
 
@@ -232,7 +232,7 @@ async def register_driver(
         password=request.password,
     )
     message = "Driver registration successful. Please verify your account."
-    if settings.ENVIRONMENT == "development":
+    if settings.ENVIRONMENT != "production":
         message += f" [DEV] OTP: {otp_code}"
 
     return StandardResponse(
