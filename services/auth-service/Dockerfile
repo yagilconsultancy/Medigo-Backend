@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -e .
 COPY services/auth-service/app ./app
 COPY services/auth-service/alembic.ini .
 COPY services/auth-service/alembic ./alembic
+COPY services/auth-service/scripts ./scripts
 
 RUN useradd --create-home appuser
 USER appuser
