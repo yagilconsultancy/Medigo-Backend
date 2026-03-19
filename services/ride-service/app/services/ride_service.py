@@ -6,7 +6,6 @@ from uuid import UUID
 from app.clients.user_service_client import UserServiceClient
 from app.models.ride import Ride
 from app.models.ride_rating import RideRating
-from app.models.ride_request import RideRequest
 from app.models.ride_status_log import RideStatusLog
 from app.models.recurring_ride import RecurringRide
 from app.repositories.rating_repo import RatingRepository
@@ -18,13 +17,14 @@ from app.services.ride_state_machine import get_routing_key_for_status, validate
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.events.schemas import (
+    RideAssignedToBusinessPayload,
+    RideBusinessResponsePayload,
     RideCreatedPayload,
     RideRatingSubmittedPayload,
-    RideRequestPayload,
     RideStatusChangedPayload,
 )
 from mediride_common.exceptions import NotFoundError, ValidationError
-from mediride_common.schemas.enums import RatingType, RideRequestStatus, RideStatus
+from mediride_common.schemas.enums import RatingType, RideStatus, TripType
 from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,16 @@ class RideService:
     # ---- Core Ride Operations ----
 
     async def create_ride(self, rider_id: UUID, **ride_data) -> Ride:
+        # Validate: TRANSPORT_CARE_ASSISTANT requires a future scheduled ride
+        trip_type = ride_data.get("trip_type", TripType.TRANSPORT_ONLY)
+        if trip_type == TripType.TRANSPORT_CARE_ASSISTANT:
+            scheduled_at = ride_data.get("scheduled_at")
+            if not scheduled_at or scheduled_at <= utc_now():
+                raise ValidationError(
+                    "Transport + Care Assistant rides must be scheduled in the future "
+                    "(care assistant needs advance notice)"
+                )
+
         ride = Ride(rider_id=rider_id, **ride_data)
         ride = await self.ride_repo.create(ride)
 
@@ -125,7 +135,8 @@ class RideService:
     # ---- Status Transitions ----
 
     async def transition_status(
-        self, ride_id: UUID, to_status: str, changed_by: UUID, notes: str | None = None
+        self, ride_id: UUID, to_status: str, changed_by: UUID | None,
+        notes: str | None = None
     ) -> Ride:
         ride = await self.get_ride(ride_id)
         validate_transition(ride.status, to_status)
@@ -207,111 +218,241 @@ class RideService:
 
         return await self.ride_repo.get_by_id(ride_id)
 
-    # ---- Ride Request Flow ----
+    # ---- Admin Assignment Flow (2-Level Dispatch) ----
 
-    async def send_ride_request(
-        self, ride_id: UUID, driver_id: UUID, expiry_seconds: int = 120
-    ) -> RideRequest:
+    async def assign_ride_to_business(
+        self, ride_id: UUID, business_id: UUID, admin_id: UUID,
+        expiry_minutes: int = 30
+    ) -> Ride:
         ride = await self.get_ride(ride_id)
-        if ride.status not in (RideStatus.REQUESTED, RideStatus.CONFIRMED):
-            raise ValidationError("Ride is not available for driver assignment")
 
-        request = RideRequest(
-            ride_id=ride_id,
-            driver_id=driver_id,
-            expires_at=utc_now() + timedelta(seconds=expiry_seconds),
+        if ride.status != RideStatus.REQUESTED:
+            raise ValidationError(
+                f"Can only assign rides in REQUESTED status. Current: {ride.status}"
+            )
+
+        # Validate business exists and is active
+        business = await self.user_client.get_business(business_id)
+        if not business:
+            raise NotFoundError("Business not found")
+        if not business.get("is_active"):
+            raise ValidationError("Business is not active")
+
+        expires_at = utc_now() + timedelta(minutes=expiry_minutes)
+
+        await self.ride_repo.update(
+            ride_id,
+            assigned_to_business_id=business_id,
+            assigned_by_admin_id=admin_id,
+            assigned_to_business_at=utc_now(),
+            business_assignment_expires_at=expires_at,
+            status=RideStatus.PENDING_BUSINESS_ASSIGNMENT,
         )
-        request = await self.request_repo.create(request)
 
-        # Get rider info for the request payload
-        rider_info = await self.user_client.get_user_profile(ride.rider_id)
-        rider_name = "Unknown"
-        rider_rating_val = 5.0
-        if rider_info:
-            first = rider_info.get("first_name", "")
-            last = rider_info.get("last_name", "")
-            rider_name = f"{first} {last}".strip() or "Unknown"
-            rider_rating_val = rider_info.get("rating", 5.0)
+        log = RideStatusLog(
+            ride_id=ride_id,
+            from_status=RideStatus.REQUESTED,
+            to_status=RideStatus.PENDING_BUSINESS_ASSIGNMENT,
+            changed_by=admin_id,
+            notes=f"Assigned to business {business.get('name', business_id)}",
+        )
+        await self.status_log_repo.create(log)
 
         await self.publisher.publish(
             Exchanges.RIDES,
-            RoutingKeys.RIDE_REQUEST_SENT,
-            RideRequestPayload(
+            RoutingKeys.RIDE_ASSIGNED_TO_BUSINESS,
+            RideAssignedToBusinessPayload(
                 ride_id=ride_id,
                 rider_id=ride.rider_id,
-                driver_id=driver_id,
+                business_id=business_id,
+                assigned_by_admin_id=admin_id,
+                ride_type=ride.ride_type,
                 pickup_address=ride.pickup_address,
                 destination_address=ride.destination_address,
-                ride_type=ride.ride_type,
-                estimated_fare=float(ride.estimated_fare) if ride.estimated_fare else 0,
-                estimated_distance=float(ride.estimated_distance_miles) if ride.estimated_distance_miles else 0,
-                rider_name=rider_name,
-                rider_rating=rider_rating_val,
+                scheduled_at=ride.scheduled_at,
+                expires_at=expires_at,
             ).model_dump(mode="json"),
         )
 
-        return request
+        return await self.ride_repo.get_by_id(ride_id)
 
-    async def accept_ride_request(self, request_id: UUID, driver_id: UUID) -> Ride:
-        request = await self.request_repo.get_by_id(request_id)
-        if not request:
-            raise NotFoundError("Ride request not found")
-        if request.driver_id != driver_id:
-            raise ValidationError("This request was not sent to you")
-        if request.status != RideRequestStatus.PENDING:
-            raise ValidationError(f"Request is already {request.status}")
-        if request.expires_at < utc_now():
-            raise ValidationError("Request has expired")
+    async def admin_assign_driver(
+        self, ride_id: UUID, driver_id: UUID, admin_id: UUID
+    ) -> Ride:
+        ride = await self.get_ride(ride_id)
 
-        await self.request_repo.update(
-            request_id,
-            status=RideRequestStatus.ACCEPTED,
-            responded_at=utc_now(),
-        )
-
-        # Assign driver to ride and transition status
-        ride = await self.get_ride(request.ride_id)
-        await self.ride_repo.update(request.ride_id, driver_id=driver_id)
-
-        # Transition to DRIVER_ASSIGNED if currently CONFIRMED or REQUESTED
-        if ride.status in (RideStatus.REQUESTED, RideStatus.CONFIRMED):
-            # First confirm if still requested
-            if ride.status == RideStatus.REQUESTED:
-                await self.transition_status(
-                    request.ride_id, RideStatus.CONFIRMED, driver_id
-                )
-            await self.transition_status(
-                request.ride_id, RideStatus.DRIVER_ASSIGNED, driver_id
+        if ride.status not in (RideStatus.REQUESTED, RideStatus.CONFIRMED):
+            raise ValidationError(
+                f"Can only assign driver in REQUESTED or CONFIRMED status. "
+                f"Current: {ride.status}"
             )
 
-        # Decline other pending requests for this ride
-        other_requests = await self.request_repo.get_by_ride_id(request.ride_id)
-        for other in other_requests:
-            if other.id != request_id and other.status == RideRequestStatus.PENDING:
-                await self.request_repo.update(
-                    other.id,
-                    status=RideRequestStatus.DECLINED,
-                    responded_at=utc_now(),
-                )
+        # Validate driver exists and is approved
+        driver_info = await self.user_client.get_driver_profile(driver_id)
+        if not driver_info:
+            raise NotFoundError("Driver not found")
+        if not driver_info.get("is_approved"):
+            raise ValidationError("Driver is not approved")
 
-        return await self.ride_repo.get_by_id(request.ride_id)
+        # One-step: REQUESTED → CONFIRMED → DRIVER_ASSIGNED
+        if ride.status == RideStatus.REQUESTED:
+            await self.transition_status(
+                ride_id, RideStatus.CONFIRMED, admin_id,
+                notes="Admin confirmed for direct assignment"
+            )
 
-    async def decline_ride_request(self, request_id: UUID, driver_id: UUID) -> RideRequest:
-        request = await self.request_repo.get_by_id(request_id)
-        if not request:
-            raise NotFoundError("Ride request not found")
-        if request.driver_id != driver_id:
-            raise ValidationError("This request was not sent to you")
-        if request.status != RideRequestStatus.PENDING:
-            raise ValidationError(f"Request is already {request.status}")
-
-        await self.request_repo.update(
-            request_id,
-            status=RideRequestStatus.DECLINED,
-            responded_at=utc_now(),
+        await self.ride_repo.update(ride_id, driver_id=driver_id)
+        await self.transition_status(
+            ride_id, RideStatus.DRIVER_ASSIGNED, admin_id,
+            notes=f"Admin assigned driver {driver_id}"
         )
 
-        return await self.request_repo.get_by_id(request_id)
+        return await self.ride_repo.get_by_id(ride_id)
+
+    # ---- Business Assignment Flow ----
+
+    async def business_accept_ride(self, ride_id: UUID, business_id: UUID) -> Ride:
+        ride = await self.get_ride(ride_id)
+
+        if ride.status != RideStatus.PENDING_BUSINESS_ASSIGNMENT:
+            raise ValidationError(
+                f"Ride is not pending business assignment. Current: {ride.status}"
+            )
+        if ride.assigned_to_business_id != business_id:
+            raise ValidationError("This ride was not assigned to your business")
+
+        # Check if expired
+        if (ride.business_assignment_expires_at
+                and ride.business_assignment_expires_at < utc_now()):
+            raise ValidationError("Business assignment has expired")
+
+        await self.ride_repo.update(
+            ride_id,
+            status=RideStatus.CONFIRMED,
+            business_accepted_at=utc_now(),
+        )
+
+        log = RideStatusLog(
+            ride_id=ride_id,
+            from_status=RideStatus.PENDING_BUSINESS_ASSIGNMENT,
+            to_status=RideStatus.CONFIRMED,
+            changed_by=None,
+            notes=f"Business {business_id} accepted assignment",
+        )
+        await self.status_log_repo.create(log)
+
+        await self.publisher.publish(
+            Exchanges.RIDES,
+            RoutingKeys.RIDE_BUSINESS_ACCEPTED,
+            RideBusinessResponsePayload(
+                ride_id=ride_id,
+                rider_id=ride.rider_id,
+                business_id=business_id,
+            ).model_dump(mode="json"),
+        )
+
+        return await self.ride_repo.get_by_id(ride_id)
+
+    async def business_reject_ride(
+        self, ride_id: UUID, business_id: UUID, reason: str | None = None
+    ) -> Ride:
+        ride = await self.get_ride(ride_id)
+
+        if ride.status != RideStatus.PENDING_BUSINESS_ASSIGNMENT:
+            raise ValidationError(
+                f"Ride is not pending business assignment. Current: {ride.status}"
+            )
+        if ride.assigned_to_business_id != business_id:
+            raise ValidationError("This ride was not assigned to your business")
+
+        # Clear assignment fields, return to REQUESTED for admin reassignment
+        await self.ride_repo.update(
+            ride_id,
+            status=RideStatus.REQUESTED,
+            assigned_to_business_id=None,
+            assigned_by_admin_id=None,
+            assigned_to_business_at=None,
+            business_assignment_expires_at=None,
+            business_accepted_at=None,
+        )
+
+        log = RideStatusLog(
+            ride_id=ride_id,
+            from_status=RideStatus.PENDING_BUSINESS_ASSIGNMENT,
+            to_status=RideStatus.REQUESTED,
+            changed_by=None,
+            notes=f"Business {business_id} rejected: {reason or 'No reason given'}",
+        )
+        await self.status_log_repo.create(log)
+
+        await self.publisher.publish(
+            Exchanges.RIDES,
+            RoutingKeys.RIDE_BUSINESS_REJECTED,
+            RideBusinessResponsePayload(
+                ride_id=ride_id,
+                rider_id=ride.rider_id,
+                business_id=business_id,
+                reason=reason,
+            ).model_dump(mode="json"),
+        )
+
+        return await self.ride_repo.get_by_id(ride_id)
+
+    async def business_assign_driver(
+        self, ride_id: UUID, driver_id: UUID, business_id: UUID
+    ) -> Ride:
+        ride = await self.get_ride(ride_id)
+
+        if ride.status != RideStatus.CONFIRMED:
+            raise ValidationError(
+                f"Can only assign driver to CONFIRMED rides. Current: {ride.status}"
+            )
+        if ride.assigned_to_business_id != business_id:
+            raise ValidationError("This ride is not assigned to your business")
+
+        # Validate driver exists, is approved, and belongs to this business
+        driver_info = await self.user_client.get_driver_profile(driver_id)
+        if not driver_info:
+            raise NotFoundError("Driver not found")
+        if not driver_info.get("is_approved"):
+            raise ValidationError("Driver is not approved")
+
+        await self.ride_repo.update(ride_id, driver_id=driver_id)
+        await self.transition_status(
+            ride_id, RideStatus.DRIVER_ASSIGNED, None,
+            notes=f"Business {business_id} assigned driver {driver_id}"
+        )
+
+        return await self.ride_repo.get_by_id(ride_id)
+
+    # ---- Admin & Business Queries ----
+
+    async def get_pending_admin_rides(
+        self, offset: int = 0, limit: int = 20
+    ) -> tuple[list[Ride], int]:
+        return await self.ride_repo.get_pending_admin_review(offset, limit)
+
+    async def get_pending_business_rides(
+        self, business_id: UUID, offset: int = 0, limit: int = 20
+    ) -> tuple[list[Ride], int]:
+        return await self.ride_repo.get_pending_for_business(business_id, offset, limit)
+
+    async def get_business_rides(
+        self, business_id: UUID, status_filter: str | None = None,
+        offset: int = 0, limit: int = 20
+    ) -> tuple[list[Ride], int]:
+        return await self.ride_repo.get_by_business(
+            business_id, status_filter, offset, limit
+        )
+
+    async def get_all_rides_admin(
+        self, status_filter: str | None = None,
+        ride_type_filter: str | None = None,
+        offset: int = 0, limit: int = 20
+    ) -> tuple[list[Ride], int]:
+        return await self.ride_repo.get_all_rides_admin(
+            status_filter, ride_type_filter, offset, limit
+        )
 
     # ---- Driver Queries ----
 
@@ -338,31 +479,6 @@ class RideService:
             driver_id, today_start
         )
         return stats
-
-    async def get_pending_requests_for_driver(self, driver_id: UUID) -> list[dict]:
-        requests = await self.request_repo.get_pending_for_driver(driver_id)
-        enriched = []
-        for req in requests:
-            ride = await self.ride_repo.get_by_id(req.ride_id)
-            if not ride:
-                continue
-
-            rider_info = await self.user_client.get_user_profile(ride.rider_id)
-            rider_name = "Unknown"
-            rider_rating_val = 5.0
-            if rider_info:
-                first = rider_info.get("first_name", "")
-                last = rider_info.get("last_name", "")
-                rider_name = f"{first} {last}".strip() or "Unknown"
-                rider_rating_val = rider_info.get("rating", 5.0)
-
-            enriched.append({
-                "request": req,
-                "ride": ride,
-                "rider_name": rider_name,
-                "rider_rating": rider_rating_val,
-            })
-        return enriched
 
     # ---- Rider Queries ----
 

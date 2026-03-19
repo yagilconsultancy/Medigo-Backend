@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ride import Ride
 from mediride_common.schemas.enums import RideStatus
+from mediride_common.utils import utc_now
 
 
 class RideRepository:
@@ -63,7 +64,7 @@ class RideRepository:
 
         if status_filter == "upcoming":
             conditions.append(Ride.status.in_([
-                RideStatus.REQUESTED, RideStatus.CONFIRMED,
+                RideStatus.CONFIRMED,
                 RideStatus.DRIVER_ASSIGNED, RideStatus.DRIVER_EN_ROUTE,
                 RideStatus.DRIVER_ARRIVED, RideStatus.IN_PROGRESS,
             ]))
@@ -97,9 +98,10 @@ class RideRepository:
 
         if status_filter == "upcoming":
             conditions.append(Ride.status.in_([
-                RideStatus.REQUESTED, RideStatus.CONFIRMED,
-                RideStatus.DRIVER_ASSIGNED, RideStatus.DRIVER_EN_ROUTE,
-                RideStatus.DRIVER_ARRIVED, RideStatus.IN_PROGRESS,
+                RideStatus.REQUESTED, RideStatus.PENDING_BUSINESS_ASSIGNMENT,
+                RideStatus.CONFIRMED, RideStatus.DRIVER_ASSIGNED,
+                RideStatus.DRIVER_EN_ROUTE, RideStatus.DRIVER_ARRIVED,
+                RideStatus.IN_PROGRESS,
             ]))
         elif status_filter == "completed":
             conditions.append(Ride.status == RideStatus.COMPLETED)
@@ -186,3 +188,102 @@ class RideRepository:
             )
         )
         return float(result.scalar_one())
+
+    # ---- Admin & Business Assignment Queries ----
+
+    async def get_pending_admin_review(
+        self, offset: int = 0, limit: int = 20
+    ) -> tuple[list[Ride], int]:
+        base_query = select(Ride).where(
+            Ride.status == RideStatus.REQUESTED,
+            Ride.deleted_at.is_(None),
+        )
+        count_result = await self.session.execute(
+            select(func.count()).select_from(base_query.subquery())
+        )
+        total = count_result.scalar_one()
+
+        result = await self.session.execute(
+            base_query.offset(offset).limit(limit).order_by(Ride.created_at.asc())
+        )
+        return list(result.scalars().all()), total
+
+    async def get_pending_for_business(
+        self, business_id: UUID, offset: int = 0, limit: int = 20
+    ) -> tuple[list[Ride], int]:
+        base_query = select(Ride).where(
+            Ride.assigned_to_business_id == business_id,
+            Ride.status == RideStatus.PENDING_BUSINESS_ASSIGNMENT,
+            Ride.deleted_at.is_(None),
+        )
+        count_result = await self.session.execute(
+            select(func.count()).select_from(base_query.subquery())
+        )
+        total = count_result.scalar_one()
+
+        result = await self.session.execute(
+            base_query.offset(offset).limit(limit)
+            .order_by(Ride.assigned_to_business_at.asc())
+        )
+        return list(result.scalars().all()), total
+
+    async def get_by_business(
+        self,
+        business_id: UUID,
+        status_filter: str | None = None,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[Ride], int]:
+        conditions = [
+            Ride.assigned_to_business_id == business_id,
+            Ride.deleted_at.is_(None),
+        ]
+        if status_filter:
+            conditions.append(Ride.status == status_filter)
+
+        base_query = select(Ride).where(*conditions)
+        count_result = await self.session.execute(
+            select(func.count()).select_from(base_query.subquery())
+        )
+        total = count_result.scalar_one()
+
+        result = await self.session.execute(
+            base_query.offset(offset).limit(limit).order_by(Ride.scheduled_at.desc())
+        )
+        return list(result.scalars().all()), total
+
+    async def get_all_rides_admin(
+        self,
+        status_filter: str | None = None,
+        ride_type_filter: str | None = None,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> tuple[list[Ride], int]:
+        conditions = [Ride.deleted_at.is_(None)]
+        if status_filter:
+            conditions.append(Ride.status == status_filter)
+        if ride_type_filter:
+            conditions.append(Ride.ride_type == ride_type_filter)
+
+        base_query = select(Ride).where(*conditions)
+        count_result = await self.session.execute(
+            select(func.count()).select_from(base_query.subquery())
+        )
+        total = count_result.scalar_one()
+
+        result = await self.session.execute(
+            base_query.offset(offset).limit(limit).order_by(Ride.created_at.desc())
+        )
+        return list(result.scalars().all()), total
+
+    async def get_expired_business_assignments(self) -> list[Ride]:
+        now = utc_now()
+        result = await self.session.execute(
+            select(Ride).where(
+                Ride.status == RideStatus.PENDING_BUSINESS_ASSIGNMENT,
+                Ride.business_assignment_expires_at.isnot(None),
+                Ride.business_assignment_expires_at <= now,
+                Ride.deleted_at.is_(None),
+            )
+        )
+        return list(result.scalars().all())

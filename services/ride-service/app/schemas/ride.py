@@ -3,13 +3,19 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from mediride_common.schemas.enums import (
+    RideType,
+    TripStructure,
+    TripType,
+)
+
 
 # ---- Request Schemas ----
 
 class CreateRideRequest(BaseModel):
-    ride_type: str
-    trip_type: str = "transport_only"
-    trip_structure: str = "one_way"
+    ride_type: RideType
+    trip_type: TripType = TripType.TRANSPORT_ONLY
+    trip_structure: TripStructure = TripStructure.ONE_WAY
     pickup_address: str
     pickup_latitude: float | None = None
     pickup_longitude: float | None = None
@@ -28,6 +34,9 @@ class CreateRideRequest(BaseModel):
     estimated_duration_minutes: int | None = None
     estimated_fare: float | None = None
     business_id: UUID | None = None
+    use_highway_407: bool = False
+    highway_407_route: str | None = None
+    is_dialysis_trip: bool = False
 
 
 class StatusTransitionRequest(BaseModel):
@@ -47,11 +56,30 @@ class CreateRecurringRideRequest(BaseModel):
     frequency: str
     pickup_address: str
     destination_address: str
-    ride_type: str
+    ride_type: RideType
     scheduled_time: time
     days_of_week: list[int] | None = None
     start_date: date
     end_date: date | None = None
+
+
+# Admin & Business request schemas
+
+class AssignBusinessRequest(BaseModel):
+    business_id: UUID
+    expiry_minutes: int = 30
+
+
+class AdminAssignDriverRequest(BaseModel):
+    driver_id: UUID
+
+
+class BusinessAssignDriverRequest(BaseModel):
+    driver_id: UUID
+
+
+class BusinessRejectRequest(BaseModel):
+    reason: str | None = None
 
 
 # ---- Response Schemas ----
@@ -61,6 +89,10 @@ class RideResponse(BaseModel):
     rider_id: UUID
     driver_id: UUID | None = None
     business_id: UUID | None = None
+    assigned_to_business_id: UUID | None = None
+    assigned_by_admin_id: UUID | None = None
+    assigned_to_business_at: datetime | None = None
+    business_accepted_at: datetime | None = None
     ride_type: str
     trip_type: str
     trip_structure: str
@@ -75,6 +107,9 @@ class RideResponse(BaseModel):
     special_instructions: str | None = None
     visit_type: str | None = None
     facility_name: str | None = None
+    use_highway_407: bool = False
+    highway_407_route: str | None = None
+    is_dialysis_trip: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -85,6 +120,10 @@ class RideDetailResponse(BaseModel):
     rider_id: UUID
     driver_id: UUID | None = None
     business_id: UUID | None = None
+    assigned_to_business_id: UUID | None = None
+    assigned_by_admin_id: UUID | None = None
+    assigned_to_business_at: datetime | None = None
+    business_accepted_at: datetime | None = None
     ride_type: str
     trip_type: str
     trip_structure: str
@@ -112,6 +151,9 @@ class RideDetailResponse(BaseModel):
     assistance_level: str | None = None
     cancellation_reason: str | None = None
     cancelled_at: datetime | None = None
+    use_highway_407: bool = False
+    highway_407_route: str | None = None
+    is_dialysis_trip: bool = False
     created_at: datetime
 
     # Enriched fields
@@ -140,23 +182,6 @@ class DriverStatsResponse(BaseModel):
     average_earnings: float
     rating: float
     earnings_today: float
-
-
-class RideRequestResponse(BaseModel):
-    id: UUID
-    ride_id: UUID
-    driver_id: UUID
-    status: str
-    rider_name: str
-    rider_rating: float
-    pickup_address: str
-    destination_address: str
-    ride_type: str
-    estimated_fare: float | None = None
-    estimated_distance_miles: float | None = None
-    expires_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class ShareRideResponse(BaseModel):

@@ -42,6 +42,12 @@ class RoutingKeys:
     RIDE_REQUEST_ACCEPTED = "ride.request.accepted"
     RIDE_REQUEST_DECLINED = "ride.request.declined"
 
+    # Ride assignment events (2-level dispatch)
+    RIDE_ASSIGNED_TO_BUSINESS = "ride.assigned_to_business"
+    RIDE_BUSINESS_ACCEPTED = "ride.business_accepted"
+    RIDE_BUSINESS_REJECTED = "ride.business_rejected"
+    RIDE_BUSINESS_ASSIGNMENT_EXPIRED = "ride.business_assignment_expired"
+
     # Rating events
     RIDE_RATING_SUBMITTED = "ride.rating.submitted"
 

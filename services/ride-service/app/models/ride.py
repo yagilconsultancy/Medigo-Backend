@@ -1,11 +1,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mediride_common.database.base import Base
+from mediride_common.schemas.enums import (
+    RideStatus,
+    RideType,
+    TripStructure,
+    TripType,
+)
 
 
 class Ride(Base):
@@ -24,10 +30,33 @@ class Ride(Base):
         PGUUID(as_uuid=True), nullable=True, index=True
     )
 
+    # Business assignment (2-level dispatch)
+    assigned_to_business_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True, index=True
+    )
+    assigned_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+    assigned_to_business_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    business_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    business_assignment_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Ride classification
-    ride_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    trip_type: Mapped[str] = mapped_column(String(20), default="transport_only")
-    trip_structure: Mapped[str] = mapped_column(String(20), default="one_way")
+    ride_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=RideType.AMBULATORY
+    )
+    trip_type: Mapped[str] = mapped_column(
+        String(30), default=TripType.TRANSPORT_ONLY
+    )
+    trip_structure: Mapped[str] = mapped_column(
+        String(20), default=TripStructure.ONE_WAY
+    )
 
     # Locations
     pickup_address: Mapped[str] = mapped_column(Text, nullable=False)
@@ -43,7 +72,9 @@ class Ride(Base):
     dropoff_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Status
-    status: Mapped[str] = mapped_column(String(20), default="requested", index=True)
+    status: Mapped[str] = mapped_column(
+        String(40), default=RideStatus.REQUESTED, index=True
+    )
 
     # Medical info
     visit_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -77,6 +108,19 @@ class Ride(Base):
     # Recurring ride reference
     recurring_ride_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True
+    )
+
+    # Highway 407 toll
+    use_highway_407: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    highway_407_route: Mapped[str | None] = mapped_column(
+        String(50), nullable=True
+    )
+
+    # Dialysis trip flag
+    is_dialysis_trip: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
     )
 
     # Timestamps

@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.api.v1.admin_ride_endpoints import router as admin_router
+from app.api.v1.business_ride_endpoints import router as business_router
 from app.api.v1.driver_ride_endpoints import router as driver_router
 from app.api.v1.rating_endpoints import router as rating_router
 from app.api.v1.recurring_ride_endpoints import router as recurring_router
@@ -11,6 +13,8 @@ router = APIRouter()
 
 router.include_router(ride_router, tags=["Rides"])
 router.include_router(rider_router, tags=["Rider"])
+router.include_router(admin_router, prefix="/admin", tags=["Admin Rides"])
+router.include_router(business_router, prefix="/business", tags=["Business Rides"])
 router.include_router(driver_router, prefix="/driver", tags=["Driver Rides"])
 router.include_router(rating_router, tags=["Ratings"])
 router.include_router(recurring_router, prefix="/recurring", tags=["Recurring Rides"])

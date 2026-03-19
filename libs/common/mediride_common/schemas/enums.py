@@ -10,6 +10,7 @@ class UserRole(StrEnum):
 
 class RideStatus(StrEnum):
     REQUESTED = "requested"
+    PENDING_BUSINESS_ASSIGNMENT = "pending_business_assignment"
     CONFIRMED = "confirmed"
     DRIVER_ASSIGNED = "driver_assigned"
     DRIVER_EN_ROUTE = "driver_en_route"
@@ -21,14 +22,16 @@ class RideStatus(StrEnum):
 
 
 class RideType(StrEnum):
-    STANDARD = "standard"
+    AMBULATORY = "ambulatory"
+    STANDARD = "standard"  # Deprecated: use AMBULATORY
     WHEELCHAIR = "wheelchair"
     STRETCHER = "stretcher"
 
 
 class TripType(StrEnum):
     TRANSPORT_ONLY = "transport_only"
-    TRANSPORT_ESCORT = "transport_escort"
+    TRANSPORT_CARE_ASSISTANT = "transport_care_assistant"
+    TRANSPORT_ESCORT = "transport_escort"  # Deprecated: use TRANSPORT_CARE_ASSISTANT
 
 
 class TripStructure(StrEnum):
@@ -165,3 +168,10 @@ class MessageType(StrEnum):
     TEXT = "text"
     IMAGE = "image"
     SYSTEM = "system"
+
+
+class BusinessAssignmentStatus(StrEnum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    EXPIRED = "expired"

@@ -17,8 +17,8 @@ class RideStatusLog(Base):
     ride_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("rides.id"), nullable=False, index=True
     )
-    from_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    to_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    from_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    to_status: Mapped[str] = mapped_column(String(40), nullable=False)
     changed_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True
     )

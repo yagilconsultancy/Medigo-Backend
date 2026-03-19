@@ -164,6 +164,55 @@ async def update_driver_stats_internal(
     return {"updated": True, "driver_id": str(driver_id)}
 
 
+@router.get("/businesses/{business_id}")
+async def get_business_internal(
+    business_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get business details. Called by ride-service for assignment validation."""
+    business_repo = BusinessRepository(session)
+    business = await business_repo.get_by_id(business_id)
+    if not business:
+        raise HTTPException(status_code=404, detail="Business not found")
+
+    return {
+        "id": str(business.id),
+        "name": business.name,
+        "type": business.type,
+        "is_active": business.is_active,
+        "email": business.email,
+        "phone": business.phone,
+    }
+
+
+@router.get("/businesses/{business_id}/drivers")
+async def get_business_drivers_internal(
+    business_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get approved drivers for a business. Called by ride-service for driver assignment."""
+    from app.repositories.driver_repo import DriverRepository
+
+    driver_repo = DriverRepository(session)
+    drivers, _ = await driver_repo.list_by_business(
+        business_id, offset=0, limit=500, is_approved=True
+    )
+    return {
+        "drivers": [
+            {
+                "user_id": str(d.user_id),
+                "is_approved": d.is_approved,
+                "is_online": d.is_online,
+                "vehicle_type": d.vehicle_type,
+                "business_id": str(d.business_id),
+            }
+            for d in drivers
+        ]
+    }
+
+
 @router.post("/invitations/accept")
 async def accept_invitation(
     request: AcceptInvitationRequest,

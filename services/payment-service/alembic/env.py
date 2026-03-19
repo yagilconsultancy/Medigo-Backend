@@ -10,7 +10,8 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.models import (  # noqa: F401
-    DriverEarnings, EarningsPeriod, FareBreakdown, PaymentMethod, Transaction, Withdrawal,
+    DialysisRatePlan, DriverEarnings, EarningsPeriod, FareBreakdown,
+    Holiday, PaymentMethod, RateCard, Transaction, WeatherCondition, Withdrawal,
 )
 from mediride_common.database.base import Base
 

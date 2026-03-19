@@ -37,7 +37,27 @@ async def get_ride_internal(
     ride = await repo.get_by_id(ride_id)
     if not ride:
         raise HTTPException(status_code=404, detail="Ride not found")
-    return RideResponse.model_validate(ride).model_dump(mode="json")
+
+    data = RideResponse.model_validate(ride).model_dump(mode="json")
+
+    # Enrich with fields needed by payment-service fare calculation
+    data["timeline"] = [
+        {
+            "to_status": log.to_status,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+        }
+        for log in (ride.status_logs or [])
+    ]
+    data["use_highway_407"] = ride.use_highway_407
+    data["highway_407_route"] = ride.highway_407_route
+    data["is_dialysis_trip"] = ride.is_dialysis_trip
+    data["actual_distance_miles"] = float(ride.actual_distance_miles) if ride.actual_distance_miles else None
+    data["estimated_distance_miles"] = float(ride.estimated_distance_miles) if ride.estimated_distance_miles else None
+    data["pickup_at"] = ride.pickup_at.isoformat() if ride.pickup_at else None
+    data["pickup_address"] = ride.pickup_address
+    data["destination_address"] = ride.destination_address
+
+    return data
 
 
 @router.get("/rides/driver/{driver_id}/completed")

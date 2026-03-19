@@ -20,6 +20,8 @@ from mediride_common.events.schemas import (
     EventEnvelope,
     PasswordResetRequestedPayload,
     PaymentCompletedPayload,
+    RideAssignedToBusinessPayload,
+    RideBusinessResponsePayload,
     RideRequestPayload,
     RideStatusChangedPayload,
     UserRegisteredPayload,
@@ -151,6 +153,48 @@ class RideEventConsumer(BaseEventConsumer):
                             data={"ride_id": str(payload.ride_id), "screen": "ride_history"},
                         )
 
+                elif envelope.event_type == RoutingKeys.RIDE_ASSIGNED_TO_BUSINESS:
+                    payload = RideAssignedToBusinessPayload(**envelope.payload)
+                    await svc.create_notification(
+                        user_id=payload.rider_id,
+                        title="Ride Being Processed",
+                        body="Your ride request is being processed and a provider is being assigned.",
+                        notification_type=NotificationType.RIDE_UPDATE,
+                        data={"ride_id": str(payload.ride_id), "screen": "ride_detail"},
+                    )
+
+                elif envelope.event_type == RoutingKeys.RIDE_BUSINESS_ACCEPTED:
+                    payload = RideBusinessResponsePayload(**envelope.payload)
+                    await svc.create_notification(
+                        user_id=payload.rider_id,
+                        title="Provider Confirmed",
+                        body="A transport provider has confirmed your ride. A driver is being assigned.",
+                        notification_type=NotificationType.RIDE_UPDATE,
+                        data={"ride_id": str(payload.ride_id), "screen": "ride_detail"},
+                    )
+
+                elif envelope.event_type == RoutingKeys.RIDE_BUSINESS_REJECTED:
+                    payload = RideBusinessResponsePayload(**envelope.payload)
+                    # Notify admin that the ride needs reassignment
+                    # (rider_id is used here; admin notification would require admin user IDs)
+                    await svc.create_notification(
+                        user_id=payload.rider_id,
+                        title="Ride Reassignment",
+                        body="Your ride is being reassigned to another provider. We'll notify you shortly.",
+                        notification_type=NotificationType.RIDE_UPDATE,
+                        data={"ride_id": str(payload.ride_id), "screen": "ride_detail"},
+                    )
+
+                elif envelope.event_type == RoutingKeys.RIDE_BUSINESS_ASSIGNMENT_EXPIRED:
+                    payload = RideBusinessResponsePayload(**envelope.payload)
+                    await svc.create_notification(
+                        user_id=payload.rider_id,
+                        title="Ride Reassignment",
+                        body="Your ride is being reassigned to another provider. We apologize for the delay.",
+                        notification_type=NotificationType.RIDE_UPDATE,
+                        data={"ride_id": str(payload.ride_id), "screen": "ride_detail"},
+                    )
+
                 elif envelope.event_type == RoutingKeys.RIDE_REQUEST_SENT:
                     payload = RideRequestPayload(**envelope.payload)
                     await svc.create_notification(
@@ -280,6 +324,10 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
             RoutingKeys.RIDE_COMPLETED,
             RoutingKeys.RIDE_CANCELLED,
             RoutingKeys.RIDE_REQUEST_SENT,
+            RoutingKeys.RIDE_ASSIGNED_TO_BUSINESS,
+            RoutingKeys.RIDE_BUSINESS_ACCEPTED,
+            RoutingKeys.RIDE_BUSINESS_REJECTED,
+            RoutingKeys.RIDE_BUSINESS_ASSIGNMENT_EXPIRED,
         ],
     )
 

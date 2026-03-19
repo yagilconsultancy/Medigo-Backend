@@ -42,6 +42,12 @@ def get_broker() -> RabbitMQBroker | None:
     return _broker
 
 
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    if not _session_factory:
+        raise RuntimeError("Database not initialized")
+    return _session_factory
+
+
 def get_publisher() -> EventPublisher:
     if not _publisher:
         raise RuntimeError("Event publisher not initialized")

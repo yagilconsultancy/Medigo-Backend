@@ -5,10 +5,14 @@ from app.config import settings
 from app.clients.stripe_client import StripeClient
 from app.clients.ride_service_client import RideServiceClient
 from app.dependencies import get_broker, get_db, get_stripe_client, get_publisher
+from app.repositories.dialysis_rate_plan_repo import DialysisRatePlanRepository
 from app.repositories.earnings_repo import EarningsRepository
 from app.repositories.fare_repo import FareBreakdownRepository
+from app.repositories.holiday_repo import HolidayRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
+from app.repositories.rate_card_repo import RateCardRepository
 from app.repositories.transaction_repo import TransactionRepository
+from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.services.payment_processing_service import PaymentProcessingService
 from mediride_common.events.constants import Exchanges, Queues, RoutingKeys
 from mediride_common.events.consumer import BaseEventConsumer
@@ -38,6 +42,10 @@ class RideCompletedConsumer(BaseEventConsumer):
                     fare_repo=FareBreakdownRepository(session),
                     pm_repo=PaymentMethodRepository(session),
                     earnings_repo=EarningsRepository(session),
+                    rate_card_repo=RateCardRepository(session),
+                    holiday_repo=HolidayRepository(session),
+                    weather_repo=WeatherConditionRepository(session),
+                    dialysis_repo=DialysisRatePlanRepository(session),
                     stripe_client=get_stripe_client(),
                     ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
                     publisher=get_publisher(),
@@ -77,6 +85,10 @@ class RideCancelledConsumer(BaseEventConsumer):
                     fare_repo=FareBreakdownRepository(session),
                     pm_repo=PaymentMethodRepository(session),
                     earnings_repo=EarningsRepository(session),
+                    rate_card_repo=RateCardRepository(session),
+                    holiday_repo=HolidayRepository(session),
+                    weather_repo=WeatherConditionRepository(session),
+                    dialysis_repo=DialysisRatePlanRepository(session),
                     stripe_client=get_stripe_client(),
                     ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
                     publisher=get_publisher(),

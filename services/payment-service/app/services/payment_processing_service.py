@@ -4,10 +4,14 @@ from uuid import UUID
 from app.clients.stripe_client import StripeClient
 from app.clients.ride_service_client import RideServiceClient
 from app.models.transaction import Transaction
+from app.repositories.dialysis_rate_plan_repo import DialysisRatePlanRepository
 from app.repositories.earnings_repo import EarningsRepository
 from app.repositories.fare_repo import FareBreakdownRepository
+from app.repositories.holiday_repo import HolidayRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
+from app.repositories.rate_card_repo import RateCardRepository
 from app.repositories.transaction_repo import TransactionRepository
+from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.services.fare_service import FareService
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
@@ -27,6 +31,10 @@ class PaymentProcessingService:
         fare_repo: FareBreakdownRepository,
         pm_repo: PaymentMethodRepository,
         earnings_repo: EarningsRepository,
+        rate_card_repo: RateCardRepository,
+        holiday_repo: HolidayRepository,
+        weather_repo: WeatherConditionRepository,
+        dialysis_repo: DialysisRatePlanRepository,
         stripe_client: StripeClient,
         ride_client: RideServiceClient,
         publisher: EventPublisher,
@@ -35,6 +43,10 @@ class PaymentProcessingService:
         self.fare_repo = fare_repo
         self.pm_repo = pm_repo
         self.earnings_repo = earnings_repo
+        self.rate_card_repo = rate_card_repo
+        self.holiday_repo = holiday_repo
+        self.weather_repo = weather_repo
+        self.dialysis_repo = dialysis_repo
         self.stripe = stripe_client
         self.ride_client = ride_client
         self.publisher = publisher
@@ -53,11 +65,26 @@ class PaymentProcessingService:
             raise NotFoundError(f"Ride {ride_id} not found in ride-service")
 
         # 2. Calculate fare
-        fare_service = FareService(fare_repo=self.fare_repo)
+        fare_service = FareService(
+            fare_repo=self.fare_repo,
+            rate_card_repo=self.rate_card_repo,
+            holiday_repo=self.holiday_repo,
+            weather_repo=self.weather_repo,
+            dialysis_repo=self.dialysis_repo,
+        )
         breakdown = await fare_service.calculate_fare({
             "ride_id": ride_id,
             "ride_type": ride_data.get("ride_type", "standard"),
-            "distance_miles": ride_data.get("actual_distance", ride_data.get("estimated_distance", 0)),
+            "distance_miles": ride_data.get("actual_distance_miles",
+                                            ride_data.get("estimated_distance_miles", 0)),
+            "timeline": ride_data.get("timeline", []),
+            "pickup_at": ride_data.get("pickup_at"),
+            "scheduled_at": ride_data.get("scheduled_at"),
+            "use_highway_407": ride_data.get("use_highway_407", False),
+            "highway_407_route": ride_data.get("highway_407_route"),
+            "is_dialysis_trip": ride_data.get("is_dialysis_trip", False),
+            "pickup_address": ride_data.get("pickup_address", ""),
+            "destination_address": ride_data.get("destination_address", ""),
         })
 
         total_fare = float(breakdown.total_fare)

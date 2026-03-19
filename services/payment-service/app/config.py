@@ -8,6 +8,7 @@ class PaymentSettings(BaseServiceSettings):
     RIDE_SERVICE_URL: str = "http://ride-service:8003"
     WITHDRAWAL_FEE_PERCENT: float = 0.015  # 1.5%
     MIN_WITHDRAWAL_AMOUNT: float = 10.00
+    DEFAULT_CURRENCY: str = "CAD"
 
     # Stripe Payment Gateway
     STRIPE_SECRET_KEY: str = ""

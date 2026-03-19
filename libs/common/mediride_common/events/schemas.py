@@ -156,6 +156,26 @@ class RideETAUpdatedPayload(BaseModel):
     distance_miles: float
 
 
+# Ride assignment event payloads (2-level dispatch)
+class RideAssignedToBusinessPayload(BaseModel):
+    ride_id: UUID
+    rider_id: UUID
+    business_id: UUID
+    assigned_by_admin_id: UUID
+    ride_type: str
+    pickup_address: str
+    destination_address: str
+    scheduled_at: datetime
+    expires_at: datetime | None = None
+
+
+class RideBusinessResponsePayload(BaseModel):
+    ride_id: UUID
+    rider_id: UUID
+    business_id: UUID
+    reason: str | None = None
+
+
 # Chat event payloads
 class ChatMessageSentPayload(BaseModel):
     conversation_id: UUID

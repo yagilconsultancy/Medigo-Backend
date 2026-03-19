@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,7 +12,8 @@ from app.repositories.ride_repo import RideRepository
 from app.repositories.ride_request_repo import RideRequestRepository
 from app.repositories.status_log_repo import StatusLogRepository
 from app.schemas.ride import (
-    DriverStatsResponse,
+    AdminAssignDriverRequest,
+    AssignBusinessRequest,
     RideResponse,
 )
 from app.services.ride_service import RideService
@@ -38,15 +41,16 @@ def _get_ride_service(
     )
 
 
-@router.get("/upcoming", response_model=PaginatedResponse[RideResponse])
-async def get_upcoming_rides(
+@router.get("/rides/pending", response_model=PaginatedResponse[RideResponse])
+async def get_pending_rides(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: RideService = Depends(_get_ride_service),
 ):
+    """Get all REQUESTED rides awaiting admin assignment."""
     offset = (page - 1) * limit
-    rides, total = await service.get_upcoming_rides_for_driver(user.id, offset, limit)
+    rides, total = await service.get_pending_admin_rides(offset, limit)
     return PaginatedResponse(
         data=[RideResponse.model_validate(r) for r in rides],
         total=total,
@@ -56,16 +60,56 @@ async def get_upcoming_rides(
     )
 
 
-@router.get("/trips", response_model=PaginatedResponse[RideResponse])
-async def get_driver_trips(
+@router.put(
+    "/rides/{ride_id}/assign-business",
+    response_model=StandardResponse[RideResponse],
+)
+async def assign_ride_to_business(
+    ride_id: UUID,
+    body: AssignBusinessRequest,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: RideService = Depends(_get_ride_service),
+):
+    """Assign a ride to a business fleet for fulfillment."""
+    ride = await service.assign_ride_to_business(
+        ride_id, body.business_id, user.id, body.expiry_minutes
+    )
+    return StandardResponse(
+        data=RideResponse.model_validate(ride),
+        message="Ride assigned to business",
+    )
+
+
+@router.put(
+    "/rides/{ride_id}/assign-driver",
+    response_model=StandardResponse[RideResponse],
+)
+async def admin_assign_driver(
+    ride_id: UUID,
+    body: AdminAssignDriverRequest,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: RideService = Depends(_get_ride_service),
+):
+    """Admin directly assigns a driver (typically for ambulatory rides)."""
+    ride = await service.admin_assign_driver(ride_id, body.driver_id, user.id)
+    return StandardResponse(
+        data=RideResponse.model_validate(ride),
+        message="Driver assigned by admin",
+    )
+
+
+@router.get("/rides", response_model=PaginatedResponse[RideResponse])
+async def get_all_rides(
     status: str | None = None,
+    ride_type: str | None = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: RideService = Depends(_get_ride_service),
 ):
+    """Admin dashboard: get all rides with optional filters."""
     offset = (page - 1) * limit
-    rides, total = await service.get_driver_trips(user.id, status, offset, limit)
+    rides, total = await service.get_all_rides_admin(status, ride_type, offset, limit)
     return PaginatedResponse(
         data=[RideResponse.model_validate(r) for r in rides],
         total=total,
@@ -73,12 +117,3 @@ async def get_driver_trips(
         limit=limit,
         total_pages=(total + limit - 1) // limit if total > 0 else 0,
     )
-
-
-@router.get("/stats", response_model=StandardResponse[DriverStatsResponse])
-async def get_driver_stats(
-    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
-    service: RideService = Depends(_get_ride_service),
-):
-    stats = await service.get_driver_stats(user.id)
-    return StandardResponse(data=DriverStatsResponse(**stats))
