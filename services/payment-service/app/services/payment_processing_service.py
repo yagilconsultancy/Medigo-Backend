@@ -17,7 +17,7 @@ from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.events.schemas import PaymentCompletedPayload
 from mediride_common.exceptions import NotFoundError, ValidationError
-from mediride_common.schemas.enums import TransactionType
+from mediride_common.schemas.enums import PaymentStatus, TransactionType
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class PaymentProcessingService:
                 user_id=rider_id,
                 transaction_type=TransactionType.RIDE_PAYMENT,
                 amount=total_fare,
-                status="pending",
+                status=PaymentStatus.PENDING,
                 description=f"Ride payment pending - no payment method on file",
             )
             await self.tx_repo.create(tx)
@@ -131,7 +131,7 @@ class PaymentProcessingService:
                 user_id=rider_id,
                 transaction_type=TransactionType.RIDE_PAYMENT,
                 amount=total_fare,
-                status="completed",
+                status=PaymentStatus.COMPLETED,
                 reference_id=result.transaction_id,
                 description=f"Ride payment - Stripe ref: {result.reference_number}",
             )
@@ -152,7 +152,7 @@ class PaymentProcessingService:
                     ride_id=ride_id,
                     user_id=rider_id,
                     amount=total_fare,
-                    status="completed",
+                    status=PaymentStatus.COMPLETED,
                 ).model_dump(mode="json"),
             )
 
@@ -167,7 +167,7 @@ class PaymentProcessingService:
                 user_id=rider_id,
                 transaction_type=TransactionType.RIDE_PAYMENT,
                 amount=total_fare,
-                status="failed",
+                status=PaymentStatus.FAILED,
                 reference_id=result.response_code,
                 description=f"Payment failed: {result.message}",
             )
@@ -181,7 +181,7 @@ class PaymentProcessingService:
                     ride_id=ride_id,
                     user_id=rider_id,
                     amount=total_fare,
-                    status="failed",
+                    status=PaymentStatus.FAILED,
                 ).model_dump(mode="json"),
             )
 
@@ -204,7 +204,7 @@ class PaymentProcessingService:
         original_tx = next(
             (t for t in transactions
              if t.transaction_type == TransactionType.RIDE_PAYMENT
-             and t.status == "completed"
+             and t.status == PaymentStatus.COMPLETED
              and t.reference_id),
             None,
         )
@@ -226,7 +226,7 @@ class PaymentProcessingService:
                 user_id=rider_id,
                 transaction_type=TransactionType.REFUND,
                 amount=float(original_tx.amount),
-                status="completed",
+                status=PaymentStatus.COMPLETED,
                 reference_id=result.transaction_id,
                 description=f"Refund for ride {ride_id}",
             )
@@ -240,7 +240,7 @@ class PaymentProcessingService:
                     ride_id=ride_id,
                     user_id=rider_id,
                     amount=float(original_tx.amount),
-                    status="refunded",
+                    status=PaymentStatus.REFUNDED,
                 ).model_dump(mode="json"),
             )
 
@@ -263,7 +263,7 @@ class PaymentProcessingService:
             user_id=driver_id,
             transaction_type=TransactionType.RIDE_PAYMENT,
             amount=amount,
-            status="completed",
+            status=PaymentStatus.COMPLETED,
             description=f"Earnings from ride {ride_id}",
         )
         await self.tx_repo.create(tx)

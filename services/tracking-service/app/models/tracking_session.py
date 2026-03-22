@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from mediride_common.database.base import Base
+from mediride_common.schemas.enums import TrackingSessionStatus
 
 
 class TrackingSession(Base):
@@ -15,7 +16,7 @@ class TrackingSession(Base):
     ride_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     driver_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     rider_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=TrackingSessionStatus.ACTIVE, index=True)
 
     # Current driver position
     current_latitude: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)

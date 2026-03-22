@@ -1,13 +1,16 @@
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.stripe_client import StripeClient
 from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_stripe_client, get_publisher
+from app.models.fare_breakdown import FareBreakdown
 from app.repositories.dialysis_rate_plan_repo import DialysisRatePlanRepository
 from app.repositories.earnings_period_repo import EarningsPeriodRepository
 from app.repositories.earnings_repo import EarningsRepository
@@ -161,3 +164,51 @@ async def refund_ride(
             "amount": float(refund_tx.amount),
         }
     return {"status": "no_payment_to_refund"}
+
+
+@router.get(
+    "/internal/payments/revenue-summary",
+    dependencies=[Depends(_verify_internal)],
+)
+async def revenue_summary(
+    days: int = Query(default=30, ge=1, le=365),
+    session: AsyncSession = Depends(get_db),
+):
+    """Return total revenue, driver earnings, and platform fees for a period."""
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+
+    result = await session.execute(
+        select(
+            func.coalesce(func.sum(FareBreakdown.total_fare), 0).label("total_revenue"),
+            func.coalesce(func.sum(FareBreakdown.driver_earnings), 0).label("total_driver_earnings"),
+            func.coalesce(func.sum(FareBreakdown.platform_fee), 0).label("total_platform_fees"),
+            func.count().label("fare_count"),
+        ).where(FareBreakdown.created_at >= since)
+    )
+    row = result.one()
+
+    # Daily revenue trend
+    trend_result = await session.execute(
+        select(
+            cast(FareBreakdown.created_at, Date).label("date"),
+            func.sum(FareBreakdown.total_fare).label("revenue"),
+            func.count().label("count"),
+        )
+        .where(FareBreakdown.created_at >= since)
+        .group_by(cast(FareBreakdown.created_at, Date))
+        .order_by(cast(FareBreakdown.created_at, Date))
+    )
+    trend = [
+        {"date": str(r.date), "revenue": float(r.revenue), "count": r.count}
+        for r in trend_result.all()
+    ]
+
+    return {
+        "total_revenue": float(row.total_revenue),
+        "total_driver_earnings": float(row.total_driver_earnings),
+        "total_platform_fees": float(row.total_platform_fees),
+        "fare_count": row.fare_count,
+        "period_days": days,
+        "trend": trend,
+    }

@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mediride_common.database.base import Base
+from mediride_common.schemas.enums import InvitationStatus
 
 
 class DriverInvitation(Base):
@@ -21,7 +22,7 @@ class DriverInvitation(Base):
     invited_by: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
-    status: Mapped[str] = mapped_column(String(20), default="pending")
+    status: Mapped[str] = mapped_column(String(20), default=InvitationStatus.PENDING)
     token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

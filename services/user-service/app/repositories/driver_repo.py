@@ -53,5 +53,14 @@ class DriverRepository:
             .values(**kwargs)
         )
 
+    async def get_available_drivers(self) -> list[DriverProfile]:
+        """Get all approved drivers for admin assignment."""
+        result = await self.session.execute(
+            select(DriverProfile)
+            .where(DriverProfile.is_approved.is_(True))
+            .order_by(DriverProfile.rating.desc())
+        )
+        return list(result.scalars().all())
+
     async def set_online_status(self, user_id: UUID, is_online: bool) -> None:
         await self.update(user_id, is_online=is_online)

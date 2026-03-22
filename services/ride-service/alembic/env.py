@@ -10,7 +10,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.models import (  # noqa: F401
-    RecurringRide, Ride, RideRating, RideRequest, RideStatusLog,
+    AdminNote, RecurringRide, Ride, RideRating, RideRequest, RideStatusLog,
     SafetyReport, VehicleChecklist,
 )
 from mediride_common.database.base import Base

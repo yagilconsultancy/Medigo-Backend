@@ -26,3 +26,20 @@ class PaymentServiceClient:
         except httpx.RequestError as e:
             logger.error(f"Error calling payment-service for ride {ride_id}: {e}")
             return None
+
+    async def get_revenue_summary(self, days: int = 30) -> dict | None:
+        """Fetch revenue summary from payment-service for analytics dashboard."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/payments/revenue-summary",
+                    params={"days": days},
+                    headers={"X-Internal-Service": "ride-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(f"Failed to fetch revenue summary: {resp.status_code}")
+                return None
+        except httpx.RequestError as e:
+            logger.error(f"Error calling payment-service for revenue summary: {e}")
+            return None

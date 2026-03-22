@@ -328,6 +328,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_TRACKING_PASSWORD:-dev_password}@postgres-tracking:5432/mediride_tracking
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-secret-key-change-in-production}
       LOCATION_SERVICE_URL: http://location-service:8004
+      RIDE_SERVICE_URL: http://ride-service:8003
+      USER_SERVICE_URL: http://user-service:8002
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
     depends_on:
       postgres-tracking:

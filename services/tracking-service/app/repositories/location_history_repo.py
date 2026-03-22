@@ -31,3 +31,15 @@ class LocationHistoryRepository:
             .limit(limit)
         )
         return list(result.scalars().all()), total
+
+    async def get_recent_by_session(
+        self, session_id: UUID, limit: int = 100
+    ) -> list[LocationHistory]:
+        result = await self.session.execute(
+            select(LocationHistory)
+            .where(LocationHistory.session_id == session_id)
+            .order_by(LocationHistory.recorded_at.desc())
+            .limit(limit)
+        )
+        # Reverse to chronological order for route rendering
+        return list(reversed(result.scalars().all()))

@@ -8,7 +8,7 @@ from app.repositories.earnings_repo import EarningsRepository
 from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.models.transaction import Transaction
-from mediride_common.schemas.enums import TransactionType
+from mediride_common.schemas.enums import PaymentStatus, TransactionType
 from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -171,7 +171,7 @@ class EarningsService:
             user_id=driver_id,
             transaction_type=TransactionType.RIDE_PAYMENT,
             amount=fare_amount,
-            status="completed",
+            status=PaymentStatus.COMPLETED,
             description=f"Earnings from ride {ride_id}",
         )
         await self.tx_repo.create(tx)

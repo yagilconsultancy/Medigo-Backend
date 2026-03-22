@@ -4,6 +4,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.driver_invitation import DriverInvitation
+from mediride_common.schemas.enums import InvitationStatus
 from mediride_common.utils import utc_now
 
 
@@ -29,7 +30,7 @@ class InvitationRepository:
             select(DriverInvitation).where(
                 DriverInvitation.email == email,
                 DriverInvitation.business_id == business_id,
-                DriverInvitation.status == "pending",
+                DriverInvitation.status == InvitationStatus.PENDING,
             )
         )
         return result.scalar_one_or_none()
@@ -56,12 +57,12 @@ class InvitationRepository:
         await self.session.execute(
             update(DriverInvitation)
             .where(DriverInvitation.id == invitation_id)
-            .values(status="accepted", accepted_at=utc_now())
+            .values(status=InvitationStatus.ACCEPTED, accepted_at=utc_now())
         )
 
     async def revoke(self, invitation_id: UUID) -> None:
         await self.session.execute(
             update(DriverInvitation)
             .where(DriverInvitation.id == invitation_id)
-            .values(status="revoked")
+            .values(status=InvitationStatus.REVOKED)
         )

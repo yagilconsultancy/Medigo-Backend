@@ -27,6 +27,52 @@ class UpdateFareRequest(BaseModel):
     final_fare: float
 
 
+@router.get("/rides/active")
+async def get_active_rides_internal(
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get all active transit rides. Called by tracking-service for admin dashboard."""
+    repo = RideRepository(session)
+    rides = await repo.get_active_transit_rides()
+    return {
+        "rides": [
+            {
+                "id": str(r.id),
+                "rider_id": str(r.rider_id),
+                "driver_id": str(r.driver_id) if r.driver_id else None,
+                "status": r.status,
+                "ride_type": r.ride_type,
+                "trip_type": r.trip_type,
+                "pickup_address": r.pickup_address,
+                "destination_address": r.destination_address,
+                "pickup_latitude": float(r.pickup_latitude) if r.pickup_latitude else None,
+                "pickup_longitude": float(r.pickup_longitude) if r.pickup_longitude else None,
+                "destination_latitude": float(r.destination_latitude) if r.destination_latitude else None,
+                "destination_longitude": float(r.destination_longitude) if r.destination_longitude else None,
+                "estimated_distance_miles": float(r.estimated_distance_miles) if r.estimated_distance_miles else None,
+                "estimated_duration_minutes": r.estimated_duration_minutes,
+                "special_instructions": r.special_instructions,
+                "mobility_level": r.mobility_level,
+                "scheduled_at": r.scheduled_at.isoformat() if r.scheduled_at else None,
+                "pickup_at": r.pickup_at.isoformat() if r.pickup_at else None,
+            }
+            for r in rides
+        ]
+    }
+
+
+@router.get("/rides/completed-today-count")
+async def get_completed_today_count_internal(
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get count of rides completed today. Called by tracking-service for KPI."""
+    repo = RideRepository(session)
+    count = await repo.get_completed_today_count()
+    return {"count": count}
+
+
 @router.get("/rides/{ride_id}")
 async def get_ride_internal(
     ride_id: UUID,

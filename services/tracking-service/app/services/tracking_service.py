@@ -11,6 +11,7 @@ from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.events.schemas import DriverLocationUpdatedPayload, RideETAUpdatedPayload
 from mediride_common.exceptions import NotFoundError
+from mediride_common.schemas.enums import TrackingSessionStatus
 from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class TrackingService:
             ride_id=ride_id,
             driver_id=driver_id,
             rider_id=rider_id,
-            status="active",
+            status=TrackingSessionStatus.ACTIVE,
             pickup_latitude=pickup_latitude,
             pickup_longitude=pickup_longitude,
             destination_latitude=destination_latitude,

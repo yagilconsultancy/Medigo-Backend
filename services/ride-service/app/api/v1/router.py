@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
+from app.api.v1.admin_booking_endpoints import router as admin_booking_router
 from app.api.v1.admin_ride_endpoints import router as admin_router
+from app.api.v1.analytics_endpoints import router as analytics_router
 from app.api.v1.business_ride_endpoints import router as business_router
 from app.api.v1.driver_ride_endpoints import router as driver_router
 from app.api.v1.rating_endpoints import router as rating_router
@@ -14,6 +16,8 @@ router = APIRouter()
 router.include_router(ride_router, tags=["Rides"])
 router.include_router(rider_router, tags=["Rider"])
 router.include_router(admin_router, prefix="/admin", tags=["Admin Rides"])
+router.include_router(admin_booking_router, prefix="/admin", tags=["Admin Booking Management"])
+router.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])
 router.include_router(business_router, prefix="/business", tags=["Business Rides"])
 router.include_router(driver_router, prefix="/driver", tags=["Driver Rides"])
 router.include_router(rating_router, tags=["Ratings"])

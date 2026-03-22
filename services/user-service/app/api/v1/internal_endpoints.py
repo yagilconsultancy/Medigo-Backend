@@ -213,6 +213,41 @@ async def get_business_drivers_internal(
     }
 
 
+@router.get("/drivers/available")
+async def get_available_drivers_internal(
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get all approved drivers for admin assignment. Called by ride-service."""
+    from app.repositories.driver_repo import DriverRepository
+    from app.repositories.user_repo import UserRepository
+
+    driver_repo = DriverRepository(session)
+    user_repo = UserRepository(session)
+
+    drivers = await driver_repo.get_available_drivers()
+
+    result = []
+    for d in drivers:
+        user = await user_repo.get_by_id(d.user_id)
+        result.append({
+            "user_id": str(d.user_id),
+            "name": f"{user.first_name} {user.last_name}" if user else "Unknown",
+            "phone": user.phone if user else None,
+            "avatar_url": user.avatar_url if user else None,
+            "rating": float(d.rating),
+            "total_trips": d.total_trips,
+            "is_online": d.is_online,
+            "vehicle_type": d.vehicle_type,
+            "vehicle_make": d.vehicle_make,
+            "vehicle_model": d.vehicle_model,
+            "vehicle_plate": d.vehicle_plate,
+            "business_id": str(d.business_id) if d.business_id else None,
+        })
+
+    return {"drivers": result}
+
+
 @router.post("/invitations/accept")
 async def accept_invitation(
     request: AcceptInvitationRequest,

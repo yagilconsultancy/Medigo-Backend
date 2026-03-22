@@ -74,3 +74,18 @@ class UserServiceClient:
         except httpx.RequestError as e:
             logger.error(f"Error fetching drivers for business {business_id}: {e}")
             return []
+
+    async def get_available_drivers(self) -> list[dict]:
+        """Get all approved, active drivers for admin assignment."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/drivers/available",
+                    headers={"X-Internal-Service": "ride-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("drivers", [])
+                return []
+        except httpx.RequestError as e:
+            logger.error(f"Error fetching available drivers: {e}")
+            return []

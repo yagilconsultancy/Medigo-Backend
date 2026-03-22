@@ -276,6 +276,32 @@ class RideRepository:
         )
         return list(result.scalars().all()), total
 
+    async def get_active_transit_rides(self) -> list[Ride]:
+        """Get all rides in active transit states for admin monitoring."""
+        result = await self.session.execute(
+            select(Ride).where(
+                Ride.status.in_([
+                    RideStatus.DRIVER_EN_ROUTE,
+                    RideStatus.DRIVER_ARRIVED,
+                    RideStatus.IN_PROGRESS,
+                ]),
+                Ride.deleted_at.is_(None),
+            ).order_by(Ride.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def get_completed_today_count(self) -> int:
+        """Count rides completed today (since midnight UTC)."""
+        today_start = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
+        result = await self.session.execute(
+            select(func.count()).where(
+                Ride.status == RideStatus.COMPLETED,
+                Ride.dropoff_at >= today_start,
+                Ride.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one()
+
     async def get_expired_business_assignments(self) -> list[Ride]:
         now = utc_now()
         result = await self.session.execute(

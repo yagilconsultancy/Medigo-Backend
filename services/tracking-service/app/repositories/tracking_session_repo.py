@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tracking_session import TrackingSession
+from mediride_common.schemas.enums import TrackingSessionStatus
 from mediride_common.utils import utc_now
 
 
@@ -26,7 +27,7 @@ class TrackingSessionRepository:
         result = await self.session.execute(
             select(TrackingSession).where(
                 TrackingSession.ride_id == ride_id,
-                TrackingSession.status == "active",
+                TrackingSession.status == TrackingSessionStatus.ACTIVE,
             )
         )
         return result.scalar_one_or_none()
@@ -35,7 +36,7 @@ class TrackingSessionRepository:
         result = await self.session.execute(
             select(TrackingSession).where(
                 TrackingSession.driver_id == driver_id,
-                TrackingSession.status == "active",
+                TrackingSession.status == TrackingSessionStatus.ACTIVE,
             )
         )
         return result.scalar_one_or_none()
@@ -74,5 +75,50 @@ class TrackingSessionRepository:
         await self.session.execute(
             update(TrackingSession)
             .where(TrackingSession.id == session_id)
-            .values(status="completed", completed_at=utc_now(), updated_at=utc_now())
+            .values(status=TrackingSessionStatus.COMPLETED, completed_at=utc_now(), updated_at=utc_now())
         )
+
+    # ---- Admin bulk queries ----
+
+    async def get_all_active_sessions(self) -> list[TrackingSession]:
+        result = await self.session.execute(
+            select(TrackingSession).where(TrackingSession.status == TrackingSessionStatus.ACTIVE)
+            .order_by(TrackingSession.started_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def get_active_count(self) -> int:
+        result = await self.session.execute(
+            select(func.count()).where(TrackingSession.status == TrackingSessionStatus.ACTIVE)
+        )
+        return result.scalar_one()
+
+    async def get_arriving_soon_count(self, threshold: float = 5.0) -> int:
+        result = await self.session.execute(
+            select(func.count()).where(
+                TrackingSession.status == TrackingSessionStatus.ACTIVE,
+                TrackingSession.eta_minutes.isnot(None),
+                TrackingSession.eta_minutes <= threshold,
+            )
+        )
+        return result.scalar_one()
+
+    async def get_avg_speed(self) -> float | None:
+        result = await self.session.execute(
+            select(func.avg(TrackingSession.current_speed)).where(
+                TrackingSession.status == TrackingSessionStatus.ACTIVE,
+                TrackingSession.current_speed.isnot(None),
+            )
+        )
+        val = result.scalar_one()
+        return float(val) if val is not None else None
+
+    async def get_completed_today_count(self) -> int:
+        today_start = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
+        result = await self.session.execute(
+            select(func.count()).where(
+                TrackingSession.status == TrackingSessionStatus.COMPLETED,
+                TrackingSession.completed_at >= today_start,
+            )
+        )
+        return result.scalar_one()

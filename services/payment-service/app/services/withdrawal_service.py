@@ -11,6 +11,7 @@ from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.events.schemas import WithdrawalPayload
 from mediride_common.exceptions import NotFoundError, ValidationError
+from mediride_common.schemas.enums import WithdrawalStatus
 from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,7 @@ class WithdrawalService:
                 withdrawal_id=withdrawal.id,
                 driver_id=driver_id,
                 amount=amount,
-                status="pending",
+                status=WithdrawalStatus.PENDING,
             ).model_dump(mode="json"),
         )
 
@@ -129,7 +130,7 @@ class WithdrawalService:
             # Payout succeeded
             await self.withdrawal_repo.update(
                 withdrawal_id,
-                status="completed",
+                status=WithdrawalStatus.COMPLETED,
                 processed_at=utc_now(),
             )
             await self.earnings_repo.complete_withdrawal(
@@ -148,7 +149,7 @@ class WithdrawalService:
                     withdrawal_id=withdrawal_id,
                     driver_id=withdrawal.driver_id,
                     amount=float(withdrawal.amount),
-                    status="completed",
+                    status=WithdrawalStatus.COMPLETED,
                 ).model_dump(mode="json"),
             )
 
@@ -173,7 +174,7 @@ class WithdrawalService:
         """Mark withdrawal as failed and reverse the balance deduction."""
         logger.error(f"Withdrawal {withdrawal_id} failed: {reason}")
         await self.withdrawal_repo.update(
-            withdrawal_id, status="failed", failure_reason=reason
+            withdrawal_id, status=WithdrawalStatus.FAILED, failure_reason=reason
         )
         # Reverse the balance deduction so funds are available again
         await self.earnings_repo.reverse_withdrawal_deduction(driver_id, amount)
@@ -185,7 +186,7 @@ class WithdrawalService:
                 withdrawal_id=withdrawal_id,
                 driver_id=driver_id,
                 amount=amount,
-                status="failed",
+                status=WithdrawalStatus.FAILED,
             ).model_dump(mode="json"),
         )
 
