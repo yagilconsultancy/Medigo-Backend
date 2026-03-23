@@ -69,6 +69,26 @@ class RoutingKeys:
     CHAT_MESSAGE_SENT = "chat.message.sent"
     CHAT_MESSAGE_READ = "chat.message.read"
 
+    # Refund events
+    REFUND_REQUEST_CREATED = "refund.request.created"
+    REFUND_REQUEST_APPROVED = "refund.request.approved"
+    REFUND_REQUEST_REJECTED = "refund.request.rejected"
+
+    # Payout events
+    PAYOUT_INITIATED = "payout.initiated"
+    PAYOUT_COMPLETED = "payout.completed"
+    PAYOUT_FAILED = "payout.failed"
+
+    # Fleet events
+    FLEET_APPLICATION_CREATED = "fleet.application.created"
+    FLEET_APPLICATION_APPROVED = "fleet.application.approved"
+    FLEET_APPLICATION_REJECTED = "fleet.application.rejected"
+    FLEET_APPLICATION_INFO_REQUESTED = "fleet.application.info_requested"
+    FLEET_STATUS_CHANGED = "fleet.status.changed"
+    FLEET_VEHICLE_CREATED = "fleet.vehicle.created"
+    FLEET_VEHICLE_STATUS_CHANGED = "fleet.vehicle.status_changed"
+    FLEET_VEHICLE_MAINTENANCE_SCHEDULED = "fleet.vehicle.maintenance_scheduled"
+
 
 class Queues:
     # user-service queues

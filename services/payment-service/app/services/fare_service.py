@@ -224,6 +224,10 @@ class FareService:
                 is_dialysis_rate=is_dialysis_rate,
                 dialysis_plan_id=dialysis_plan_id,
                 rate_card_version=rate_card.version,
+                business_id=ride_data.get("business_id"),
+                driver_id=ride_data.get("driver_id"),
+                ride_type=ride_data.get("ride_type"),
+                pickup_city=ride_data.get("pickup_city"),
             )
             return await self.fare_repo.create(breakdown)
         else:

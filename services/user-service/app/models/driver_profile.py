@@ -35,6 +35,7 @@ class DriverProfile(Base):
     is_online: Mapped[bool] = mapped_column(Boolean, default=False)
     rating: Mapped[float] = mapped_column(Numeric(3, 2), default=5.00)
     total_trips: Mapped[int] = mapped_column(Integer, default=0)
+    specialty: Mapped[str | None] = mapped_column(String(30), nullable=True)
     invited_via_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

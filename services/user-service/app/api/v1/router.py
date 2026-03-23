@@ -8,6 +8,10 @@ from app.api.v1.passenger_endpoints import router as passenger_router
 from app.api.v1.vehicle_endpoints import router as vehicle_router
 from app.api.v1.settings_endpoints import router as settings_router
 from app.api.v1.saved_location_endpoints import router as saved_location_router
+from app.api.v1.fleet_application_endpoints import router as fleet_app_router
+from app.api.v1.fleet_company_endpoints import router as fleet_company_router
+from app.api.v1.fleet_vehicle_endpoints import router as fleet_vehicle_router
+from app.api.v1.fleet_earnings_endpoints import router as fleet_earnings_router
 
 router = APIRouter()
 router.include_router(user_router, tags=["Users"])
@@ -18,3 +22,7 @@ router.include_router(passenger_router, tags=["Passengers"])
 router.include_router(vehicle_router, tags=["Vehicle & Avatar"])
 router.include_router(settings_router, tags=["Settings"])
 router.include_router(saved_location_router, tags=["Saved Locations"])
+router.include_router(fleet_app_router, tags=["Fleet Applications"])
+router.include_router(fleet_company_router, tags=["Fleet Companies"])
+router.include_router(fleet_vehicle_router, tags=["Fleet Vehicles"])
+router.include_router(fleet_earnings_router, tags=["Fleet Earnings"])

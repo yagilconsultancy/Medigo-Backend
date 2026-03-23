@@ -248,6 +248,43 @@ async def get_available_drivers_internal(
     return {"drivers": result}
 
 
+@router.get("/drivers/with-details")
+async def get_drivers_with_details(
+    driver_ids: str = "",
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Batch get driver details (name, specialty, fleet). Called by payment-service."""
+    from app.repositories.driver_repo import DriverRepository
+    from app.repositories.user_repo import UserRepository
+
+    if not driver_ids.strip():
+        return {"drivers": []}
+
+    ids = [UUID(d.strip()) for d in driver_ids.split(",") if d.strip()]
+    driver_repo = DriverRepository(session)
+    user_repo = UserRepository(session)
+    business_repo = BusinessRepository(session)
+
+    drivers = []
+    for driver_id in ids:
+        user = await user_repo.get_by_id(driver_id)
+        driver = await driver_repo.get_by_user_id(driver_id)
+        if user and driver:
+            business = await business_repo.get_by_id(driver.business_id) if driver.business_id else None
+            drivers.append({
+                "driver_id": str(driver_id),
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "avatar_url": user.avatar_url,
+                "specialty": getattr(driver, "specialty", None),
+                "fleet_name": business.name if business else None,
+                "business_id": str(driver.business_id) if driver.business_id else None,
+            })
+
+    return {"drivers": drivers}
+
+
 @router.post("/invitations/accept")
 async def accept_invitation(
     request: AcceptInvitationRequest,

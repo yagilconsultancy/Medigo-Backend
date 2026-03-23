@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.models import (  # noqa: F401
     Business, DriverDocument, DriverInvitation, DriverProfile,
-    EmergencyContact, Passenger, SavedLocation, User, UserSettings,
+    EmergencyContact, FleetApplication, FleetDocument, Passenger,
+    SavedLocation, User, UserSettings, Vehicle, VehicleMaintenanceLog,
 )
 from mediride_common.database.base import Base
 

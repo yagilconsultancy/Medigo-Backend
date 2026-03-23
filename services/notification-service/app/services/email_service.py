@@ -1,8 +1,6 @@
 import logging
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
-import aiosmtplib
+import aioboto3
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.config import settings
@@ -15,29 +13,38 @@ _template_env = Environment(
     autoescape=select_autoescape(["html"]),
 )
 
+_session = aioboto3.Session()
+
 
 async def send_email(to: str, subject: str, html_body: str) -> bool:
-    """Send email via SMTP."""
-    if not settings.SMTP_USER:
-        logger.warning(f"SMTP not configured. Would send to {to}: {subject}")
+    """Send email via AWS SES."""
+    if not settings.AWS_ACCESS_KEY_ID:
+        logger.warning(f"AWS SES not configured. Would send to {to}: {subject}")
         logger.info(f"Email body preview: {html_body[:200]}...")
         return True
 
     try:
-        message = MIMEMultipart("alternative")
-        message["From"] = settings.EMAIL_FROM
-        message["To"] = to
-        message["Subject"] = subject
-        message.attach(MIMEText(html_body, "html"))
+        async with _session.client(
+            "ses",
+            region_name=settings.AWS_REGION,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        ) as ses:
+            kwargs = {
+                "Source": settings.EMAIL_FROM,
+                "Destination": {"ToAddresses": [to]},
+                "Message": {
+                    "Subject": {"Data": subject, "Charset": "UTF-8"},
+                    "Body": {
+                        "Html": {"Data": html_body, "Charset": "UTF-8"},
+                    },
+                },
+            }
+            if settings.SES_CONFIGURATION_SET:
+                kwargs["ConfigurationSetName"] = settings.SES_CONFIGURATION_SET
 
-        await aiosmtplib.send(
-            message,
-            hostname=settings.SMTP_HOST,
-            port=settings.SMTP_PORT,
-            username=settings.SMTP_USER,
-            password=settings.SMTP_PASSWORD,
-            use_tls=True,
-        )
+            await ses.send_email(**kwargs)
+
         logger.info(f"Email sent to {to}: {subject}")
         return True
     except Exception as e:

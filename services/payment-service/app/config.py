@@ -6,6 +6,9 @@ class PaymentSettings(BaseServiceSettings):
     SERVICE_NAME: str = "payment-service"
     PORT: int = 8005
     RIDE_SERVICE_URL: str = "http://ride-service:8003"
+    USER_SERVICE_URL: str = "http://user-service:8002"
+    LOCATION_SERVICE_URL: str = "http://location-service:8004"
+    PLATFORM_COMMISSION_PERCENT: float = 0.20  # 20%
     WITHDRAWAL_FEE_PERCENT: float = 0.015  # 1.5%
     MIN_WITHDRAWAL_AMOUNT: float = 10.00
     DEFAULT_CURRENCY: str = "CAD"

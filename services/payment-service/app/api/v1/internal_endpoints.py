@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -212,3 +213,138 @@ async def revenue_summary(
         "period_days": days,
         "trend": trend,
     }
+
+
+# --- Fleet Revenue Endpoints ---
+
+
+class FleetEarningsBreakdownRequest(BaseModel):
+    business_ids: list[UUID]
+    days: int = 30
+
+
+@router.get(
+    "/internal/payments/fleet-revenue-summary",
+    dependencies=[Depends(_verify_internal)],
+)
+async def fleet_revenue_summary(
+    business_id: Optional[UUID] = Query(None),
+    days: int = Query(default=30, ge=1, le=365),
+    session: AsyncSession = Depends(get_db),
+):
+    """Revenue summary filterable by business_id (fleet)."""
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+
+    conditions = [FareBreakdown.created_at >= since]
+    if business_id:
+        conditions.append(FareBreakdown.business_id == business_id)
+
+    result = await session.execute(
+        select(
+            func.coalesce(func.sum(FareBreakdown.total_fare), 0).label("total_revenue"),
+            func.coalesce(func.sum(FareBreakdown.driver_earnings), 0).label("total_driver_earnings"),
+            func.coalesce(func.sum(FareBreakdown.platform_fee), 0).label("total_platform_fees"),
+            func.count().label("fare_count"),
+        ).where(*conditions)
+    )
+    row = result.one()
+
+    return {
+        "total_revenue": float(row.total_revenue),
+        "total_driver_earnings": float(row.total_driver_earnings),
+        "total_platform_fees": float(row.total_platform_fees),
+        "fare_count": row.fare_count,
+        "period_days": days,
+    }
+
+
+@router.get(
+    "/internal/payments/fleet-revenue-trend",
+    dependencies=[Depends(_verify_internal)],
+)
+async def fleet_revenue_trend(
+    business_id: Optional[UUID] = Query(None),
+    days: int = Query(default=30, ge=1, le=365),
+    session: AsyncSession = Depends(get_db),
+):
+    """Daily revenue trend filterable by business_id."""
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+
+    conditions = [FareBreakdown.created_at >= since]
+    if business_id:
+        conditions.append(FareBreakdown.business_id == business_id)
+
+    trend_result = await session.execute(
+        select(
+            cast(FareBreakdown.created_at, Date).label("date"),
+            func.sum(FareBreakdown.total_fare).label("revenue"),
+            func.count().label("count"),
+        )
+        .where(*conditions)
+        .group_by(cast(FareBreakdown.created_at, Date))
+        .order_by(cast(FareBreakdown.created_at, Date))
+    )
+
+    trend = [
+        {"date": str(r.date), "revenue": float(r.revenue), "count": r.count}
+        for r in trend_result.all()
+    ]
+
+    return {"trend": trend, "period_days": days}
+
+
+@router.post(
+    "/internal/payments/fleet-earnings-breakdown",
+    dependencies=[Depends(_verify_internal)],
+)
+async def fleet_earnings_breakdown(
+    body: FleetEarningsBreakdownRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Batch earnings breakdown by business_ids."""
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=body.days)
+
+    result = await session.execute(
+        select(
+            FareBreakdown.business_id,
+            func.count().label("trips"),
+            func.coalesce(func.sum(FareBreakdown.total_fare), 0).label("revenue"),
+            func.coalesce(func.sum(FareBreakdown.platform_fee), 0).label("commission"),
+            func.coalesce(func.sum(FareBreakdown.driver_earnings), 0).label("net_earnings"),
+        )
+        .where(
+            FareBreakdown.created_at >= since,
+            FareBreakdown.business_id.in_(body.business_ids),
+        )
+        .group_by(FareBreakdown.business_id)
+    )
+
+    breakdowns = {}
+    for row in result.all():
+        bid = str(row.business_id)
+        trips = row.trips
+        revenue = float(row.revenue)
+        breakdowns[bid] = {
+            "trips": trips,
+            "revenue": revenue,
+            "commission": float(row.commission),
+            "net_earnings": float(row.net_earnings),
+            "avg_per_trip": round(revenue / trips, 2) if trips > 0 else 0.0,
+        }
+
+    # Add empty entries for business_ids with no data
+    for bid in body.business_ids:
+        bid_str = str(bid)
+        if bid_str not in breakdowns:
+            breakdowns[bid_str] = {
+                "trips": 0,
+                "revenue": 0.0,
+                "commission": 0.0,
+                "net_earnings": 0.0,
+                "avg_per_trip": 0.0,
+            }
+
+    return {"breakdowns": breakdowns}

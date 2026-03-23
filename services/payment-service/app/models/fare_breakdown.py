@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, func
+from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,3 +37,11 @@ class FareBreakdown(Base):
     is_dialysis_rate: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
     dialysis_plan_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
     rate_card_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Fleet tracking columns
+    business_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True, index=True)
+    driver_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True, index=True)
+
+    # Denormalized for admin dashboard analytics (avoids cross-DB joins)
+    ride_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    pickup_city: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)

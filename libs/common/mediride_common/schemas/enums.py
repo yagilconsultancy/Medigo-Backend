@@ -175,3 +175,61 @@ class BusinessAssignmentStatus(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     EXPIRED = "expired"
+
+
+class FleetApplicationStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    MORE_INFO_REQUESTED = "more_info_requested"
+
+
+class VehicleStatus(StrEnum):
+    ACTIVE = "active"
+    MAINTENANCE = "maintenance"
+    INACTIVE = "inactive"
+
+
+class VehicleCategory(StrEnum):
+    STANDARD = "standard"
+    WHEELCHAIR_ACCESSIBLE = "wheelchair_accessible"
+    ASSISTED_RIDE = "assisted_ride"
+
+
+class FleetDocumentType(StrEnum):
+    BUSINESS_LICENSE = "business_license"
+    INSURANCE_CERTIFICATE = "insurance_certificate"
+    VEHICLE_FLEET_LIST = "vehicle_fleet_list"
+    DRIVER_CERTIFICATIONS = "driver_certifications"
+    OTHER = "other"
+
+
+class RefundRequestStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class RefundCategory(StrEnum):
+    DRIVER_NO_SHOW = "driver_no_show"
+    WRONG_PICKUP = "wrong_pickup"
+    SERVICE_ISSUE = "service_issue"
+    OVERCHARGED = "overcharged"
+    CANCELLED_BY_SYSTEM = "cancelled_by_system"
+    OTHER = "other"
+
+
+class CaregiverSpecialty(StrEnum):
+    PSW = "psw"
+    RPN = "rpn"
+    RN = "rn"
+    HCA = "hca"
+    PARAMEDIC = "paramedic"
+    OTHER = "other"
+
+
+class PayoutStatus(StrEnum):
+    PENDING = "pending"
+    SCHEDULED = "scheduled"
+    COMPLETED = "completed"
+    FAILED = "failed"
