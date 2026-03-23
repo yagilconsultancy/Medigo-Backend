@@ -189,6 +189,62 @@ class AuthService:
 
         return token_pair
 
+    async def admin_login(
+        self, email: str | None, phone: str | None, password: str
+    ) -> TokenPair:
+        """Authenticate admin user. Rejects non-admin roles."""
+        credential = await self.credential_repo.get_by_email_or_phone(email, phone)
+        if not credential:
+            raise AuthenticationError("Invalid credentials")
+
+        # Check if account is locked
+        if credential.locked_until and credential.locked_until > utc_now():
+            raise AuthenticationError(
+                "Account is temporarily locked. Please try again later."
+            )
+
+        if not credential.is_active:
+            raise AuthenticationError("Account is deactivated")
+
+        # Verify password
+        if not verify_password(password, credential.password_hash):
+            await self.credential_repo.increment_failed_attempts(credential.id)
+            if credential.failed_attempts + 1 >= settings.MAX_LOGIN_ATTEMPTS:
+                locked_until = utc_now() + timedelta(
+                    minutes=settings.LOCKOUT_DURATION_MINUTES
+                )
+                await self.credential_repo.lock_account(credential.id, locked_until)
+            raise AuthenticationError("Invalid credentials")
+
+        if not credential.is_verified:
+            raise AuthenticationError("Account not verified. Please verify your OTP.")
+
+        # Admin-only check
+        if credential.role != UserRole.ADMIN:
+            raise AuthenticationError("Access denied. Admin credentials required.")
+
+        # Reset failed attempts
+        await self.credential_repo.reset_failed_attempts(credential.id)
+
+        # Create tokens
+        token_pair = self.jwt_handler.create_token_pair(
+            user_id=str(credential.id),
+            role=credential.role,
+            business_id=str(credential.business_id) if credential.business_id else None,
+            email=credential.email,
+        )
+
+        # Store refresh token
+        refresh_token_record = RefreshToken(
+            user_id=credential.id,
+            token_hash=hash_token(token_pair.refresh_token),
+            expires_at=utc_now()
+            + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+        await self.token_repo.create(refresh_token_record)
+
+        return token_pair
+
     async def refresh_token(self, refresh_token: str) -> TokenPair:
         """Refresh access token using refresh token."""
         # Decode refresh token to get user ID

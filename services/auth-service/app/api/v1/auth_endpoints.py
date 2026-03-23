@@ -122,6 +122,26 @@ async def login(
     )
 
 
+@router.post("/admin/login", response_model=StandardResponse[TokenResponse])
+async def admin_login(
+    request: LoginRequest,
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    token_pair = await auth_service.admin_login(
+        email=request.email,
+        phone=request.phone,
+        password=request.password,
+    )
+    return StandardResponse(
+        data=TokenResponse(
+            access_token=token_pair.access_token,
+            refresh_token=token_pair.refresh_token,
+            expires_in=token_pair.expires_in,
+        ),
+        message="Admin login successful",
+    )
+
+
 @router.post("/refresh", response_model=StandardResponse[TokenResponse])
 async def refresh_token(
     request: RefreshTokenRequest,

@@ -32,6 +32,7 @@ PUBLIC_PATHS = {
     "/auth/resend-otp",
     "/auth/forgot-password",
     "/auth/reset-password",
+    "/auth/admin/login",
     "/auth/driver/verify-invite",
     "/auth/driver/register",
     "/payments/webhooks/stripe",
