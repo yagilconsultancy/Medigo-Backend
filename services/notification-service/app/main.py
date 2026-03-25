@@ -37,7 +37,24 @@ app = FastAPI(
     openapi_url="/notifications/openapi.json",
     redoc_url="/notifications/redoc",
     root_path="/api/v1",
+    swagger_ui_parameters={"persistAuthorization": True},
 )
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    from fastapi.openapi.utils import get_openapi
+    schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    schema.setdefault("components", {}).setdefault("securitySchemes", {})["BearerAuth"] = {
+        "type": "http", "scheme": "bearer", "bearerFormat": "JWT",
+    }
+    schema["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = custom_openapi
 
 app.add_middleware(CorrelationIdMiddleware)
 register_error_handlers(app)
