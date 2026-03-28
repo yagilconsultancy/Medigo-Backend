@@ -5,6 +5,7 @@ from app.api.v1.admin_refund_endpoints import router as admin_refund_router
 from app.api.v1.admin_revenue_endpoints import router as admin_revenue_router
 from app.api.v1.admin_transaction_endpoints import router as admin_tx_router
 from app.api.v1.earnings_endpoints import router as earnings_router
+from app.api.v1.fare_estimate_endpoints import router as fare_estimate_router
 from app.api.v1.payment_method_endpoints import router as pm_router
 from app.api.v1.rate_card_endpoints import router as rate_card_router
 from app.api.v1.receipt_endpoints import router as receipt_router
@@ -13,6 +14,7 @@ from app.api.v1.withdrawal_endpoints import router as withdrawal_router
 
 router = APIRouter()
 
+router.include_router(fare_estimate_router, tags=["Fare Estimate"])
 router.include_router(earnings_router, prefix="/earnings", tags=["Earnings"])
 router.include_router(withdrawal_router, prefix="/withdrawals", tags=["Withdrawals"])
 router.include_router(pm_router, prefix="/payment-methods", tags=["Payment Methods"])

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ---- Rate Card Config Sub-Schemas ----
@@ -112,6 +112,37 @@ class FareEstimateRequest(BaseModel):
     is_dialysis_trip: bool = False
 
 
+class RiderFareEstimateRequest(BaseModel):
+    """Fare estimate request for riders — auto-calculates distance via Google Maps."""
+
+    pickup_address: str | None = None
+    pickup_latitude: float | None = None
+    pickup_longitude: float | None = None
+
+    destination_address: str | None = None
+    destination_latitude: float | None = None
+    destination_longitude: float | None = None
+
+    scheduled_at: datetime | None = None  # defaults to now
+    use_highway_407: bool = False
+    highway_407_route: str | None = None
+    is_dialysis_trip: bool = False
+
+    @model_validator(mode="after")
+    def validate_locations(self):
+        has_pickup = bool(self.pickup_address) or (
+            self.pickup_latitude is not None and self.pickup_longitude is not None
+        )
+        has_dest = bool(self.destination_address) or (
+            self.destination_latitude is not None and self.destination_longitude is not None
+        )
+        if not has_pickup:
+            raise ValueError("Provide pickup_address or pickup_latitude + pickup_longitude")
+        if not has_dest:
+            raise ValueError("Provide destination_address or destination_latitude + destination_longitude")
+        return self
+
+
 # ---- Response Schemas ----
 
 class RateCardResponse(BaseModel):
@@ -196,3 +227,26 @@ class FareEstimateResponse(BaseModel):
     driver_earnings: float
     is_dialysis_rate: bool
     rate_card_version: int
+
+
+class RiderFareEstimateResponse(BaseModel):
+    """Fare estimate response for riders — includes distance and duration."""
+
+    distance_km: float
+    distance_miles: float
+    duration_minutes: float
+
+    base_fare: float
+    distance_charge: float
+    surcharges_total: float
+    surcharges_capped: float
+    surcharge_details: list[dict]
+    highway_407_toll: float
+    insurance_gateway_fee: float
+    flat_surcharge: float
+    total_fare: float
+    is_dialysis_rate: bool
+    rate_card_version: int
+
+    currency: str = "CAD"
+    estimated_at: datetime
