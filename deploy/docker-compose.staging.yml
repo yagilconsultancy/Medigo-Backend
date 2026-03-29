@@ -235,10 +235,10 @@ services:
       <<: *service-env
       DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_notifications
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      SMTP_HOST: ${SMTP_HOST}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
       SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@getmedigo.com}
     depends_on:
       postgres:

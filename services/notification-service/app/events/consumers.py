@@ -47,6 +47,7 @@ class AuthEventConsumer(BaseEventConsumer):
                 to=payload.email,
                 fleet_name=payload.fleet_name,
                 invite_token=payload.invite_token,
+                temporary_password=payload.temporary_password,
             )
             logger.info(f"Driver invite email sent to {payload.email}")
 

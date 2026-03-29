@@ -43,6 +43,7 @@ class DriverInviteSentPayload(BaseModel):
     fleet_name: str
     email: str
     invite_token: str
+    temporary_password: str | None = None
 
 
 # User event payloads

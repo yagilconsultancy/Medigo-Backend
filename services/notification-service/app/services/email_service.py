@@ -67,22 +67,33 @@ async def send_otp_email(to: str, otp_code: str) -> bool:
 
 
 async def send_driver_invite_email(
-    to: str, fleet_name: str, invite_token: str
+    to: str, fleet_name: str, invite_token: str, temporary_password: str | None = None
 ) -> bool:
-    """Send driver invitation email."""
+    """Send driver invitation email with login credentials."""
     try:
         template = _template_env.get_template("driver_invite.html")
         html = template.render(
             fleet_name=fleet_name,
             invite_token=invite_token,
+            email=to,
+            temporary_password=temporary_password,
         )
     except Exception:
         # Fallback if template not found
+        password_section = ""
+        if temporary_password:
+            password_section = f"""
+            <h3>Your Login Credentials</h3>
+            <p><strong>Email:</strong> {to}</p>
+            <p><strong>Password:</strong> {temporary_password}</p>
+            <p style="color: #e74c3c;">Please change your password after your first login.</p>
+            """
         html = f"""
         <html>
         <body>
             <h2>You're Invited to Drive with MediRide!</h2>
             <p><strong>{fleet_name}</strong> has invited you to join their driver network.</p>
+            {password_section}
             <p>Download the MediRide Driver app and use this invitation code to sign up:</p>
             <h3 style="color: #3B5998;">{invite_token}</h3>
             <p>This invitation expires in 7 days.</p>

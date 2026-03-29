@@ -27,6 +27,15 @@
             <div class="feature"><span class="feature-icon">&#10003;</span> Professional Network</div>
         </div>
 
+        {% if temporary_password %}
+        <p class="message" style="margin-top: 20px;"><strong>Your Login Credentials:</strong></p>
+        <div class="highlight" style="text-align: left;">
+            <p style="margin: 5px 0;"><strong>Email:</strong> {{ email }}</p>
+            <p style="margin: 5px 0;"><strong>Password:</strong> {{ temporary_password }}</p>
+        </div>
+        <p class="message" style="color: #e74c3c;"><strong>Important:</strong> Please change your password after your first login.</p>
+        {% endif %}
+
         <p class="message">Download the MediRide Driver app and use this invitation code to register:</p>
 
         <div class="highlight">
