@@ -145,14 +145,15 @@ class AdminDriverService:
         self, admin_id: UUID, request: CreateDriverRequest
     ) -> AdminDriverDetailResponse:
         # Create credential in auth-service
-        cred_result = await self.auth_client.create_driver_credential(
-            email=request.email,
-            phone=request.phone,
-            password=request.password,
-            business_id=request.fleet_id,
-        )
-        if not cred_result:
-            raise ConflictError("Failed to create driver credential — email may already exist")
+        try:
+            cred_result = await self.auth_client.create_driver_credential(
+                email=request.email,
+                phone=request.phone,
+                password=request.password,
+                business_id=request.fleet_id,
+            )
+        except RuntimeError as e:
+            raise ValidationError(str(e))
 
         user_id = UUID(cred_result["user_id"])
 
