@@ -134,6 +134,9 @@ class AdminDriverDetailResponse(BaseModel):
     ratings: list[AdminDriverRatingItem] = []
     suspension_history: list[SuspensionLogItem] = []
 
+    # Invitation (populated on create only)
+    invite_token: str | None = None
+
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

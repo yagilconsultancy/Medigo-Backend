@@ -1,10 +1,16 @@
 import asyncio
 import logging
+import secrets
+from datetime import timedelta
 from uuid import UUID
 
 from app.clients.auth_service_client import AuthServiceClient
 from app.clients.ride_service_client import RideServiceClient
+from app.config import settings
+from app.models.driver_invitation import DriverInvitation
 from app.repositories.admin_driver_repo import AdminDriverRepository
+from app.repositories.fleet_repo import FleetRepository
+from app.repositories.invitation_repo import InvitationRepository
 from app.schemas.admin_driver import (
     AdminDriverDetailResponse,
     AdminDriverDocumentKPIs,
@@ -26,6 +32,7 @@ from app.schemas.admin_driver import (
 )
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
+from mediride_common.events.schemas import DriverInviteSentPayload
 from mediride_common.exceptions import ConflictError, NotFoundError, ValidationError
 from mediride_common.utils import utc_now
 
@@ -39,11 +46,15 @@ class AdminDriverService:
         publisher: EventPublisher,
         auth_client: AuthServiceClient,
         ride_client: RideServiceClient,
+        invitation_repo: InvitationRepository | None = None,
+        fleet_repo: FleetRepository | None = None,
     ):
         self.repo = repo
         self.publisher = publisher
         self.auth_client = auth_client
         self.ride_client = ride_client
+        self.invitation_repo = invitation_repo
+        self.fleet_repo = fleet_repo
 
     async def get_driver_kpis(self, fleet_id: UUID | None = None) -> AdminDriverKPIs:
         data = await self.repo.get_driver_kpis(fleet_id)
@@ -204,8 +215,44 @@ class AdminDriverService:
             },
         )
 
+        # Create invitation and send email to driver
+        invite_token = None
+        if self.invitation_repo and self.fleet_repo:
+            try:
+                fleet = await self.fleet_repo.get_by_id(request.fleet_id)
+                fleet_name = fleet.name if fleet else "MediRide"
+
+                token = secrets.token_urlsafe(32)
+                invitation = DriverInvitation(
+                    business_id=request.fleet_id,
+                    email=request.email,
+                    invited_by=admin_id,
+                    token=token,
+                    expires_at=utc_now() + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS),
+                )
+                await self.invitation_repo.create(invitation)
+
+                await self.publisher.publish(
+                    Exchanges.AUTH,
+                    RoutingKeys.DRIVER_INVITE_SENT,
+                    DriverInviteSentPayload(
+                        invitation_id=invitation.id,
+                        business_id=request.fleet_id,
+                        fleet_name=fleet_name,
+                        email=request.email,
+                        invite_token=token,
+                    ).model_dump(mode="json"),
+                )
+
+                invite_token = token
+                logger.info(f"Driver invitation created for {request.email}")
+            except Exception as e:
+                logger.warning(f"Failed to create driver invitation: {e}")
+
         logger.info(f"Admin created driver: {user_id}")
-        return await self.get_driver_detail(user_id)
+        detail = await self.get_driver_detail(user_id)
+        detail.invite_token = invite_token
+        return detail
 
     async def update_driver(
         self, driver_user_id: UUID, request: UpdateDriverRequest

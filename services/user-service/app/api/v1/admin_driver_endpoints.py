@@ -8,6 +8,8 @@ from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_publisher
 from app.repositories.admin_driver_repo import AdminDriverRepository
+from app.repositories.fleet_repo import FleetRepository
+from app.repositories.invitation_repo import InvitationRepository
 from app.schemas.admin_driver import (
     AdminDriverDetailResponse,
     AdminDriverDocumentOverview,
@@ -37,6 +39,8 @@ def _get_service(
         publisher=publisher,
         auth_client=AuthServiceClient(settings.AUTH_SERVICE_URL),
         ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
+        invitation_repo=InvitationRepository(session),
+        fleet_repo=FleetRepository(session),
     )
 
 

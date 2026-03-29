@@ -6,11 +6,17 @@ class NotificationSettings(BaseServiceSettings):
     SERVICE_NAME: str = "notification-service"
     PORT: int = 8007
 
-    # AWS SES
+    # AWS SES (legacy)
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
     SES_CONFIGURATION_SET: str = ""
+
+    # SMTP (Gmail)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""  # Gmail App Password
     EMAIL_FROM: str = "noreply@mediride.com"
 
 
