@@ -37,7 +37,9 @@ class CredentialRepository:
         self, email: str | None, phone: str | None
     ) -> UserCredential | None:
         if email:
-            return await self.get_by_email(email)
+            found = await self.get_by_email(email)
+            if found:
+                return found
         if phone:
             return await self.get_by_phone(phone)
         return None

@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, EmailStr
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
@@ -49,7 +50,9 @@ async def create_driver_credential(
 
     existing = await repo.get_by_email_or_phone(request.email, request.phone)
     if existing:
-        raise HTTPException(status_code=409, detail="Account with this email already exists")
+        if existing.email == request.email:
+            raise HTTPException(status_code=409, detail="Account with this email already exists")
+        raise HTTPException(status_code=409, detail="Account with this phone number already exists")
 
     validate_password_strength(request.password)
 
@@ -61,7 +64,15 @@ async def create_driver_credential(
         business_id=request.business_id,
         is_verified=True,
     )
-    await repo.create(credential)
+    try:
+        await repo.create(credential)
+    except IntegrityError as e:
+        error_str = str(e.orig) if e.orig else str(e)
+        if "ix_user_credentials_phone" in error_str or "phone" in error_str:
+            raise HTTPException(status_code=409, detail="Account with this phone number already exists")
+        if "ix_user_credentials_email" in error_str or "email" in error_str:
+            raise HTTPException(status_code=409, detail="Account with this email already exists")
+        raise HTTPException(status_code=409, detail="Account with this email or phone already exists")
 
     logger.info(f"Driver credential created internally: {credential.id}")
     return {
