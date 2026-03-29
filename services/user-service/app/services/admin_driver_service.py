@@ -254,6 +254,51 @@ class AdminDriverService:
         detail.invite_token = invite_token
         return detail
 
+    async def resend_invitation(self, driver_user_id: UUID, admin_id: UUID) -> str:
+        """Revoke any existing pending invitation and create a new one. Returns the new invite token."""
+        detail = await self.repo.get_driver_detail(driver_user_id)
+        if not detail:
+            raise NotFoundError("Driver not found")
+
+        if not self.invitation_repo or not self.fleet_repo:
+            raise ValidationError("Invitation service not available")
+
+        email = detail["email"]
+        fleet_id = detail["fleet_id"]
+        fleet_name = detail.get("fleet_name") or "MediRide"
+
+        # Revoke any existing pending invitation for this email + fleet
+        existing = await self.invitation_repo.get_by_email_and_fleet(email, fleet_id)
+        if existing:
+            await self.invitation_repo.revoke(existing.id)
+
+        # Create new invitation
+        token = secrets.token_urlsafe(32)
+        invitation = DriverInvitation(
+            business_id=fleet_id,
+            email=email,
+            invited_by=admin_id,
+            token=token,
+            expires_at=utc_now() + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS),
+        )
+        await self.invitation_repo.create(invitation)
+
+        # Publish event to send email
+        await self.publisher.publish(
+            Exchanges.AUTH,
+            RoutingKeys.DRIVER_INVITE_SENT,
+            DriverInviteSentPayload(
+                invitation_id=invitation.id,
+                business_id=fleet_id,
+                fleet_name=fleet_name,
+                email=email,
+                invite_token=token,
+            ).model_dump(mode="json"),
+        )
+
+        logger.info(f"Resent invitation for driver {driver_user_id} to {email}")
+        return token
+
     async def update_driver(
         self, driver_user_id: UUID, request: UpdateDriverRequest
     ) -> AdminDriverDetailResponse:

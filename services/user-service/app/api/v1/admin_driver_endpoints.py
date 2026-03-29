@@ -186,6 +186,20 @@ async def reactivate_driver(
     return StandardResponse(data=result, message="Driver reactivated")
 
 
+@router.post("/{driver_id}/resend-invite", response_model=StandardResponse)
+async def resend_invitation(
+    driver_id: UUID,
+    admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminDriverService = Depends(_get_service),
+):
+    """Resend invitation email to a driver. Returns the new invite token."""
+    token = await service.resend_invitation(driver_id, admin.id)
+    return StandardResponse(
+        data={"invite_token": token},
+        message="Invitation resent successfully",
+    )
+
+
 @router.put("/{driver_id}/reassign-fleet", response_model=StandardResponse[AdminDriverDetailResponse])
 async def reassign_fleet(
     driver_id: UUID,
