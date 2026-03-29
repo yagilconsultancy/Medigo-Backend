@@ -12,6 +12,8 @@ from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_stripe_client, get_publisher
 from app.models.fare_breakdown import FareBreakdown
+from app.models.payment_method import PaymentMethod
+from app.models.transaction import Transaction
 from app.repositories.dialysis_rate_plan_repo import DialysisRatePlanRepository
 from app.repositories.earnings_period_repo import EarningsPeriodRepository
 from app.repositories.earnings_repo import EarningsRepository
@@ -348,3 +350,66 @@ async def fleet_earnings_breakdown(
             }
 
     return {"breakdowns": breakdowns}
+
+
+# --- Rider Endpoints (for admin rider management) ---
+
+
+@router.get(
+    "/internal/riders/{rider_id}/spending",
+    dependencies=[Depends(_verify_internal)],
+)
+async def get_rider_spending(
+    rider_id: UUID,
+    session: AsyncSession = Depends(get_db),
+):
+    """Rider spending summary. Called by user-service for admin rider detail."""
+    result = await session.execute(
+        select(
+            func.count().label("trip_count"),
+            func.coalesce(func.sum(Transaction.amount), 0).label("total_spent"),
+        ).where(
+            Transaction.user_id == rider_id,
+            Transaction.transaction_type == "ride_payment",
+            Transaction.status == "completed",
+        )
+    )
+    row = result.one()
+    trip_count = row.trip_count
+    total_spent = float(row.total_spent)
+    avg_per_trip = round(total_spent / trip_count, 2) if trip_count > 0 else 0.0
+
+    return {
+        "total_spent": total_spent,
+        "avg_per_trip": avg_per_trip,
+        "trip_count": trip_count,
+    }
+
+
+@router.get(
+    "/internal/riders/{rider_id}/payment-methods",
+    dependencies=[Depends(_verify_internal)],
+)
+async def get_rider_payment_methods(
+    rider_id: UUID,
+    session: AsyncSession = Depends(get_db),
+):
+    """Rider payment methods. Called by user-service for admin rider profiles."""
+    result = await session.execute(
+        select(PaymentMethod).where(
+            PaymentMethod.user_id == rider_id,
+            PaymentMethod.is_active.is_(True),
+            PaymentMethod.deleted_at.is_(None),
+        ).order_by(PaymentMethod.is_default.desc())
+    )
+    methods = list(result.scalars().all())
+
+    return [
+        {
+            "brand": m.brand,
+            "last_four": m.last_four,
+            "is_default": m.is_default,
+            "method_type": m.method_type,
+        }
+        for m in methods
+    ]

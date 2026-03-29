@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.v1.internal_endpoints import router as internal_router
 from app.api.v1.router import router as v1_router
 from app.config import settings
 from app.dependencies import get_broker, get_db, init_db, init_broker
@@ -56,4 +57,5 @@ register_error_handlers(app)
 
 # Routes
 app.include_router(v1_router, prefix="/auth")
+app.include_router(internal_router, tags=["Internal"])
 app.include_router(create_health_router(get_db=get_db))

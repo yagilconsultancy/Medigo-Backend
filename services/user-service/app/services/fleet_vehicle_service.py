@@ -1,18 +1,36 @@
 import logging
+from datetime import date
 from uuid import UUID
 
 from app.models.vehicle import Vehicle
+from app.models.vehicle_document import VehicleDocument
 from app.models.vehicle_maintenance_log import VehicleMaintenanceLog
-from app.repositories.business_repo import BusinessRepository
+from app.repositories.fleet_repo import FleetRepository
 from app.repositories.driver_repo import DriverRepository
 from app.repositories.maintenance_log_repo import VehicleMaintenanceLogRepository
 from app.repositories.user_repo import UserRepository
+from app.repositories.vehicle_category_config_repo import VehicleCategoryConfigRepository
+from app.repositories.vehicle_document_repo import VehicleDocumentRepository
 from app.repositories.vehicle_repo import VehicleRepository
 from app.schemas.fleet_vehicle import (
     MaintenanceLogResponse,
     VehicleDetailResponse,
     VehicleKPIs,
+    VehicleProfileResponse,
     VehicleResponse,
+)
+from app.schemas.vehicle_category import (
+    VehicleCategoryConfigResponse,
+    VehicleCategoryConfigUpdate,
+    VehicleCategoryFleetComposition,
+)
+from app.schemas.vehicle_document import (
+    VehicleDocumentKPIs,
+    VehicleDocumentOverview,
+    VehicleDocumentOverviewItem,
+    VehicleDocumentMatrixItem,
+    VehicleDocumentResponse,
+    VehicleDocumentUploadResponse,
 )
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
@@ -26,23 +44,27 @@ class FleetVehicleService:
         self,
         vehicle_repo: VehicleRepository,
         maintenance_repo: VehicleMaintenanceLogRepository,
-        business_repo: BusinessRepository,
+        fleet_repo: FleetRepository,
         driver_repo: DriverRepository,
         user_repo: UserRepository,
         publisher: EventPublisher,
+        vehicle_doc_repo: VehicleDocumentRepository | None = None,
+        category_config_repo: VehicleCategoryConfigRepository | None = None,
     ):
         self.vehicle_repo = vehicle_repo
         self.maintenance_repo = maintenance_repo
-        self.business_repo = business_repo
+        self.fleet_repo = fleet_repo
         self.driver_repo = driver_repo
         self.user_repo = user_repo
         self.publisher = publisher
+        self.vehicle_doc_repo = vehicle_doc_repo
+        self.category_config_repo = category_config_repo
 
     async def create_vehicle(self, admin_id: UUID, **kwargs) -> VehicleResponse:
         business_id = kwargs.get("business_id")
-        business = await self.business_repo.get_by_id(business_id)
-        if not business:
-            raise ValueError(f"Business {business_id} not found")
+        fleet = await self.fleet_repo.get_by_id(business_id)
+        if not fleet:
+            raise ValueError(f"Fleet {business_id} not found")
 
         # Check unique plate
         existing = await self.vehicle_repo.get_by_plate(kwargs["plate_number"])
@@ -106,6 +128,10 @@ class FleetVehicleService:
             maintenance_logs=[
                 MaintenanceLogResponse.model_validate(log)
                 for log in (vehicle.maintenance_logs or [])
+            ],
+            documents=[
+                VehicleDocumentResponse.model_validate(doc)
+                for doc in (vehicle.documents or [])
             ],
         )
 
@@ -184,7 +210,13 @@ class FleetVehicleService:
         return await self._to_response(vehicle)
 
     async def schedule_maintenance(
-        self, vehicle_id: UUID, scheduled_date, admin_id: UUID, notes: str | None = None
+        self,
+        vehicle_id: UUID,
+        scheduled_date,
+        admin_id: UUID,
+        notes: str | None = None,
+        service_type: str | None = None,
+        technician_notes: str | None = None,
     ) -> VehicleMaintenanceLog:
         vehicle = await self.vehicle_repo.get_by_id(vehicle_id)
         if not vehicle:
@@ -193,7 +225,9 @@ class FleetVehicleService:
         log = VehicleMaintenanceLog(
             vehicle_id=vehicle_id,
             scheduled_date=scheduled_date,
+            service_type=service_type,
             notes=notes,
+            technician_notes=technician_notes,
             created_by=admin_id,
         )
         log = await self.maintenance_repo.create(log)
@@ -205,6 +239,7 @@ class FleetVehicleService:
                 "vehicle_id": str(vehicle_id),
                 "business_id": str(vehicle.business_id),
                 "scheduled_date": str(scheduled_date),
+                "service_type": service_type,
                 "notes": notes,
             },
         )
@@ -223,14 +258,220 @@ class FleetVehicleService:
         await self.vehicle_repo.soft_delete(vehicle_id)
         logger.info(f"Vehicle {vehicle_id} soft deleted")
 
+    # --- Vehicle Documents ---
+
+    async def upload_vehicle_document(
+        self,
+        vehicle_id: UUID,
+        document_type: str,
+        file_key: str,
+        file_name: str,
+        file_size: int,
+        mime_type: str,
+        admin_id: UUID,
+        expires_at: date | None = None,
+        notes: str | None = None,
+    ) -> VehicleDocumentUploadResponse:
+        vehicle = await self.vehicle_repo.get_by_id(vehicle_id)
+        if not vehicle:
+            raise ValueError(f"Vehicle {vehicle_id} not found")
+
+        doc = VehicleDocument(
+            vehicle_id=vehicle_id,
+            document_type=document_type,
+            file_key=file_key,
+            file_name=file_name,
+            file_size=file_size,
+            mime_type=mime_type,
+            expires_at=expires_at,
+            status="valid",
+            uploaded_by=admin_id,
+            notes=notes,
+        )
+        doc = await self.vehicle_doc_repo.create(doc)
+
+        await self.publisher.publish(
+            exchange_name=Exchanges.USERS,
+            routing_key=RoutingKeys.VEHICLE_DOCUMENT_UPLOADED,
+            payload={
+                "vehicle_id": str(vehicle_id),
+                "document_type": document_type,
+                "document_id": str(doc.id),
+            },
+        )
+
+        logger.info(f"Document uploaded for vehicle {vehicle_id}: {document_type}")
+        return VehicleDocumentUploadResponse.model_validate(doc)
+
+    async def replace_vehicle_document(
+        self,
+        vehicle_id: UUID,
+        doc_id: UUID,
+        file_key: str,
+        file_name: str,
+        file_size: int,
+        mime_type: str,
+        admin_id: UUID,
+        expires_at: date | None = None,
+        notes: str | None = None,
+    ) -> VehicleDocumentUploadResponse:
+        vehicle = await self.vehicle_repo.get_by_id(vehicle_id)
+        if not vehicle:
+            raise ValueError(f"Vehicle {vehicle_id} not found")
+
+        old_doc = await self.vehicle_doc_repo.get_by_id(doc_id)
+        if not old_doc or old_doc.vehicle_id != vehicle_id:
+            raise ValueError(f"Document {doc_id} not found for vehicle {vehicle_id}")
+
+        new_doc = VehicleDocument(
+            vehicle_id=vehicle_id,
+            document_type=old_doc.document_type,
+            file_key=file_key,
+            file_name=file_name,
+            file_size=file_size,
+            mime_type=mime_type,
+            expires_at=expires_at,
+            status="valid",
+            uploaded_by=admin_id,
+            notes=notes,
+        )
+        new_doc = await self.vehicle_doc_repo.create(new_doc)
+
+        await self.publisher.publish(
+            exchange_name=Exchanges.USERS,
+            routing_key=RoutingKeys.VEHICLE_DOCUMENT_REPLACED,
+            payload={
+                "vehicle_id": str(vehicle_id),
+                "old_document_id": str(doc_id),
+                "new_document_id": str(new_doc.id),
+                "document_type": old_doc.document_type,
+            },
+        )
+
+        logger.info(f"Document replaced for vehicle {vehicle_id}: {old_doc.document_type}")
+        return VehicleDocumentUploadResponse.model_validate(new_doc)
+
+    async def get_vehicle_documents(self, vehicle_id: UUID) -> list[VehicleDocumentResponse]:
+        vehicle = await self.vehicle_repo.get_by_id(vehicle_id)
+        if not vehicle:
+            raise ValueError(f"Vehicle {vehicle_id} not found")
+
+        docs = await self.vehicle_doc_repo.list_by_vehicle(vehicle_id)
+        return [VehicleDocumentResponse.model_validate(d) for d in docs]
+
+    async def get_vehicle_document_overview(
+        self,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 20,
+    ) -> VehicleDocumentOverview:
+        offset = (page - 1) * limit
+        kpis_data = await self.vehicle_doc_repo.get_document_kpis()
+        kpis = VehicleDocumentKPIs(**kpis_data)
+
+        vehicles_data, total = await self.vehicle_doc_repo.get_document_overview(
+            search=search, offset=offset, limit=limit
+        )
+
+        vehicles = [
+            VehicleDocumentOverviewItem(
+                vehicle_id=v["vehicle_id"],
+                vehicle_name=v["vehicle_name"],
+                make=v["make"],
+                model=v["model"],
+                plate_number=v["plate_number"],
+                fleet_name=v["fleet_name"],
+                documents=[VehicleDocumentMatrixItem(**d) for d in v["documents"]],
+            )
+            for v in vehicles_data
+        ]
+
+        return VehicleDocumentOverview(
+            kpis=kpis,
+            vehicles=vehicles,
+            total=total,
+            page=page,
+            limit=limit,
+            total_pages=(total + limit - 1) // limit if total > 0 else 0,
+        )
+
+    # --- Vehicle Categories ---
+
+    async def list_category_configs(self) -> list[VehicleCategoryConfigResponse]:
+        configs = await self.category_config_repo.list_all()
+        return [VehicleCategoryConfigResponse.model_validate(c) for c in configs]
+
+    async def update_category_config(
+        self, category: str, updates: VehicleCategoryConfigUpdate
+    ) -> VehicleCategoryConfigResponse:
+        config = await self.category_config_repo.get_by_category(category)
+        if not config:
+            raise ValueError(f"Category config '{category}' not found")
+
+        update_data = updates.model_dump(exclude_unset=True)
+        if update_data:
+            await self.category_config_repo.update(config.id, **update_data)
+
+        config = await self.category_config_repo.get_by_category(category)
+
+        await self.publisher.publish(
+            exchange_name=Exchanges.USERS,
+            routing_key=RoutingKeys.VEHICLE_CATEGORY_UPDATED,
+            payload={"category": category},
+        )
+
+        logger.info(f"Vehicle category config updated: {category}")
+        return VehicleCategoryConfigResponse.model_validate(config)
+
+    async def get_fleet_composition(self) -> VehicleCategoryFleetComposition:
+        data = await self.category_config_repo.get_fleet_composition()
+        return VehicleCategoryFleetComposition(**data)
+
+    # --- Vehicle Profiles ---
+
+    async def get_vehicle_profiles(
+        self,
+        search: str | None = None,
+        category: str | None = None,
+        fleet_id: UUID | None = None,
+        page: int = 1,
+        limit: int = 20,
+    ) -> tuple[list[VehicleProfileResponse], int]:
+        offset = (page - 1) * limit
+        vehicles, total = await self.vehicle_repo.list_all(
+            business_id=fleet_id,
+            category_filter=category,
+            search=search,
+            offset=offset,
+            limit=limit,
+        )
+
+        profiles = []
+        for v in vehicles:
+            base = await self._to_response(v)
+            profiles.append(
+                VehicleProfileResponse(
+                    **base.model_dump(),
+                    maintenance_logs=[
+                        MaintenanceLogResponse.model_validate(log)
+                        for log in (v.maintenance_logs or [])
+                    ],
+                    documents=[
+                        VehicleDocumentResponse.model_validate(doc)
+                        for doc in (v.documents or [])
+                    ],
+                )
+            )
+        return profiles, total
+
     async def _to_response(self, vehicle: Vehicle) -> VehicleResponse:
-        """Enrich vehicle with business name and driver name."""
-        business_name = None
+        """Enrich vehicle with fleet name and driver name."""
+        fleet_name = None
         driver_name = None
 
-        business = await self.business_repo.get_by_id(vehicle.business_id)
-        if business:
-            business_name = business.name
+        fleet = await self.fleet_repo.get_by_id(vehicle.business_id)
+        if fleet:
+            fleet_name = fleet.name
 
         if vehicle.driver_profile_id:
             user = await self.user_repo.get_by_id(vehicle.driver_profile_id)
@@ -254,7 +495,13 @@ class FleetVehicleService:
             mileage=vehicle.mileage,
             insurance_expiry=vehicle.insurance_expiry,
             registration_expiry=vehicle.registration_expiry,
+            passenger_capacity=vehicle.passenger_capacity,
+            special_equipment=vehicle.special_equipment,
+            insurance_provider=vehicle.insurance_provider,
+            registration_authority=vehicle.registration_authority,
+            last_inspection_date=vehicle.last_inspection_date,
+            internal_notes=vehicle.internal_notes,
             created_at=vehicle.created_at,
-            business_name=business_name,
+            fleet_name=fleet_name,
             driver_name=driver_name,
         )

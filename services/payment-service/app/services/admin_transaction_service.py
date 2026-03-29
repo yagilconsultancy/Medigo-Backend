@@ -2,11 +2,34 @@ import asyncio
 import logging
 from uuid import UUID
 
+from app.clients.ride_service_client import RideServiceClient
 from app.clients.user_service_client import UserServiceClient
 from app.repositories.admin_transaction_repo import AdminTransactionRepository
 from app.repositories.fare_repo import FareBreakdownRepository
 
 logger = logging.getLogger(__name__)
+
+_PM_DISPLAY_NAMES = {
+    "credit_card": "Credit Card",
+    "debit_card": "Debit Card",
+    "bank_account": "Direct Pay",
+    "medicare": "Medicare",
+    "medicaid": "Medicaid",
+    "private_insurance": "Insurance",
+}
+
+
+def _format_payment_method(pm) -> str | None:
+    if not pm:
+        return None
+    if pm.brand and pm.last_four:
+        return f"{pm.brand} **{pm.last_four}"
+    display = _PM_DISPLAY_NAMES.get(pm.method_type)
+    if display and pm.last_four:
+        return f"{display} **{pm.last_four}"
+    if display:
+        return display
+    return pm.method_type.replace("_", " ").title() if pm.method_type else None
 
 
 class AdminTransactionService:
@@ -15,10 +38,12 @@ class AdminTransactionService:
         tx_repo: AdminTransactionRepository,
         fare_repo: FareBreakdownRepository,
         user_client: UserServiceClient,
+        ride_client: RideServiceClient | None = None,
     ):
         self.tx_repo = tx_repo
         self.fare_repo = fare_repo
         self.user_client = user_client
+        self.ride_client = ride_client
 
     async def get_transaction_kpis(self) -> dict:
         return await self.tx_repo.get_transaction_kpis()
@@ -45,9 +70,6 @@ class AdminTransactionService:
         user_ids: set[UUID] = set()
         for tx in transactions:
             user_ids.add(tx.user_id)
-            if tx.ride_id:
-                # We'll enrich ride info from fare breakdown
-                pass
 
         # Fetch user profiles concurrently
         user_map: dict[str, dict] = {}
@@ -58,6 +80,9 @@ class AdminTransactionService:
                 user_map[str(uid)] = profile
 
         await asyncio.gather(*[_fetch_user(uid) for uid in user_ids])
+
+        # Batch fetch default payment methods for all riders
+        pm_map = await self.tx_repo.get_default_payment_methods_batch(list(user_ids))
 
         # Fetch fare breakdowns for ride_type info
         fare_map: dict[str, dict] = {}
@@ -94,6 +119,9 @@ class AdminTransactionService:
                 driver_name = f"{dp.get('first_name', '')} {dp.get('last_name', '')}".strip() or None
             ride_type = fb_data.get("ride_type")
 
+            pm = pm_map.get(tx.user_id)
+            payment_method_str = _format_payment_method(pm)
+
             items.append({
                 "id": tx.id,
                 "ride_id": tx.ride_id,
@@ -101,10 +129,89 @@ class AdminTransactionService:
                 "driver_name": driver_name,
                 "ride_type": ride_type,
                 "amount": float(tx.amount),
-                "payment_method": None,
+                "payment_method": payment_method_str,
                 "status": tx.status,
                 "transaction_type": tx.transaction_type,
                 "created_at": tx.created_at,
             })
 
         return items, total
+
+    async def get_transaction_detail(self, tx_id: UUID) -> dict | None:
+        tx = await self.tx_repo.get_by_id(tx_id)
+        if not tx:
+            return None
+
+        # Get fare breakdown for ride info
+        fb = None
+        if tx.ride_id:
+            fb = await self.fare_repo.get_by_ride_id(tx.ride_id)
+
+        driver_id = fb.driver_id if fb and fb.driver_id else None
+
+        # Fetch rider profile, driver profile, and ride details concurrently
+        async def _get_rider():
+            return await self.user_client.get_user_profile(tx.user_id)
+
+        async def _get_driver():
+            if driver_id:
+                return await self.user_client.get_user_profile(driver_id)
+            return None
+
+        async def _get_ride():
+            if tx.ride_id and self.ride_client:
+                return await self.ride_client.get_ride(tx.ride_id)
+            return None
+
+        rider_profile, driver_profile, ride_data = await asyncio.gather(
+            _get_rider(), _get_driver(), _get_ride()
+        )
+
+        # Get payment method for this rider
+        pm = await self.tx_repo.get_payment_method_for_user(tx.user_id)
+
+        # Build names
+        rider_name = "Unknown"
+        if rider_profile:
+            rider_name = f"{rider_profile.get('first_name', '')} {rider_profile.get('last_name', '')}".strip() or "Unknown"
+
+        driver_name = None
+        if driver_profile:
+            driver_name = f"{driver_profile.get('first_name', '')} {driver_profile.get('last_name', '')}".strip() or None
+
+        # Build ride description
+        ride_type = fb.ride_type if fb else None
+        ride_description = None
+        if ride_type:
+            parts = [ride_type.replace("_", " ").title()]
+            if fb and fb.distance_km:
+                parts.append(f"{float(fb.distance_km)} km")
+            ride_description = " - ".join(parts)
+
+        # Route addresses from ride-service
+        pickup_address = None
+        destination_address = None
+        booking_ref = None
+        if ride_data:
+            pickup_address = ride_data.get("pickup_address")
+            destination_address = ride_data.get("destination_address")
+            ride_id_str = str(ride_data.get("id", tx.ride_id or ""))
+            if ride_id_str:
+                booking_ref = f"BK-{abs(hash(ride_id_str)) % 100000:05d}"
+
+        return {
+            "id": tx.id,
+            "ride_id": tx.ride_id,
+            "rider_name": rider_name,
+            "driver_name": driver_name,
+            "ride_type": ride_type,
+            "ride_description": ride_description,
+            "amount": float(tx.amount),
+            "payment_method": _format_payment_method(pm),
+            "status": tx.status,
+            "transaction_type": tx.transaction_type,
+            "pickup_address": pickup_address,
+            "destination_address": destination_address,
+            "created_at": tx.created_at,
+            "booking_ref": booking_ref,
+        }

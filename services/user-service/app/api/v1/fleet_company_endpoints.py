@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.payment_service_client import PaymentServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_publisher, get_s3_client
-from app.repositories.business_repo import BusinessRepository
+from app.repositories.fleet_repo import FleetRepository
 from app.repositories.driver_repo import DriverRepository
 from app.repositories.fleet_company_repo import FleetCompanyRepository
 from app.repositories.fleet_document_repo import FleetDocumentRepository
@@ -19,7 +19,7 @@ from app.schemas.fleet_company import (
     ToggleStatusRequest,
     UpdateFleetProfileRequest,
 )
-from app.schemas.business import BusinessResponse
+from app.schemas.fleet import FleetResponse
 from app.schemas.driver import DriverProfileResponse
 from app.services.fleet_company_service import FleetCompanyService
 from mediride_common.auth.dependencies import require_role
@@ -37,8 +37,8 @@ def _get_service(
     publisher: EventPublisher = Depends(get_publisher),
 ) -> FleetCompanyService:
     return FleetCompanyService(
-        fleet_repo=FleetCompanyRepository(session),
-        business_repo=BusinessRepository(session),
+        fleet_company_repo=FleetCompanyRepository(session),
+        fleet_repo=FleetRepository(session),
         driver_repo=DriverRepository(session),
         doc_repo=FleetDocumentRepository(session),
         payment_client=PaymentServiceClient(settings.PAYMENT_SERVICE_URL),
@@ -88,7 +88,7 @@ async def list_fleets(
 
 @router.post(
     "/admin/fleet/companies",
-    response_model=StandardResponse[BusinessResponse],
+    response_model=StandardResponse[FleetResponse],
     status_code=201,
 )
 async def add_fleet_partner(
@@ -96,12 +96,12 @@ async def add_fleet_partner(
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetCompanyService = Depends(_get_service),
 ):
-    business = await service.add_fleet_partner(
+    fleet = await service.add_fleet_partner(
         admin_id=user.id,
         **body.model_dump(),
     )
     return StandardResponse(
-        data=BusinessResponse.model_validate(business),
+        data=FleetResponse.model_validate(fleet),
         message="Fleet partner added",
     )
 
@@ -124,7 +124,7 @@ async def get_fleet_detail(
 
 @router.put(
     "/admin/fleet/companies/{business_id}",
-    response_model=StandardResponse[BusinessResponse],
+    response_model=StandardResponse[FleetResponse],
 )
 async def update_fleet_profile(
     business_id: UUID,
@@ -132,19 +132,19 @@ async def update_fleet_profile(
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetCompanyService = Depends(_get_service),
 ):
-    business = await service.update_fleet_profile(
-        business_id=business_id,
+    fleet = await service.update_fleet_profile(
+        fleet_id=business_id,
         **body.model_dump(exclude_unset=True),
     )
     return StandardResponse(
-        data=BusinessResponse.model_validate(business),
+        data=FleetResponse.model_validate(fleet),
         message="Fleet profile updated",
     )
 
 
 @router.put(
     "/admin/fleet/companies/{business_id}/status",
-    response_model=StandardResponse[BusinessResponse],
+    response_model=StandardResponse[FleetResponse],
 )
 async def toggle_fleet_status(
     business_id: UUID,
@@ -152,13 +152,13 @@ async def toggle_fleet_status(
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetCompanyService = Depends(_get_service),
 ):
-    business = await service.toggle_fleet_status(
-        business_id=business_id,
+    fleet = await service.toggle_fleet_status(
+        fleet_id=business_id,
         is_active=body.is_active,
         admin_id=user.id,
     )
     return StandardResponse(
-        data=BusinessResponse.model_validate(business),
+        data=FleetResponse.model_validate(fleet),
         message=f"Fleet status updated to {'active' if body.is_active else 'suspended'}",
     )
 
@@ -173,7 +173,7 @@ async def list_fleet_documents(
     session: AsyncSession = Depends(get_db),
 ):
     doc_repo = FleetDocumentRepository(session)
-    docs = await doc_repo.list_by_business(business_id)
+    docs = await doc_repo.list_by_fleet(business_id)
     return StandardResponse(
         data=[FleetDocumentResponse.model_validate(d) for d in docs],
     )
@@ -203,7 +203,7 @@ async def upload_fleet_document(
     )
 
     doc = await service.upload_document(
-        business_id=business_id,
+        fleet_id=business_id,
         document_type=document_type,
         file_key=file_key,
         file_name=file.filename or "document",
@@ -230,8 +230,8 @@ async def list_fleet_drivers(
 ):
     offset = (page - 1) * limit
     driver_repo = DriverRepository(session)
-    drivers, total = await driver_repo.list_by_business(
-        business_id=business_id, offset=offset, limit=limit
+    drivers, total = await driver_repo.list_by_fleet(
+        fleet_id=business_id, offset=offset, limit=limit
     )
     return PaginatedResponse(
         data=[DriverProfileResponse.model_validate(d) for d in drivers],

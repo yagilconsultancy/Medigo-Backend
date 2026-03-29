@@ -4,13 +4,7 @@ from mediride_common.schemas.enums import RideStatus
 
 VALID_TRANSITIONS: dict[str, list[str]] = {
     RideStatus.REQUESTED: [
-        RideStatus.PENDING_BUSINESS_ASSIGNMENT,  # Admin assigns to fleet
-        RideStatus.CONFIRMED,                     # Admin handles directly (ambulatory)
-        RideStatus.CANCELLED,
-    ],
-    RideStatus.PENDING_BUSINESS_ASSIGNMENT: [
-        RideStatus.CONFIRMED,   # Business accepted
-        RideStatus.REQUESTED,   # Business rejected -> back to admin queue
+        RideStatus.CONFIRMED,
         RideStatus.CANCELLED,
     ],
     RideStatus.CONFIRMED: [RideStatus.DRIVER_ASSIGNED, RideStatus.CANCELLED],
@@ -24,7 +18,6 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
 }
 
 STATUS_ROUTING_KEYS: dict[str, str] = {
-    RideStatus.PENDING_BUSINESS_ASSIGNMENT: RoutingKeys.RIDE_ASSIGNED_TO_BUSINESS,
     RideStatus.CONFIRMED: RoutingKeys.RIDE_CONFIRMED,
     RideStatus.DRIVER_ASSIGNED: RoutingKeys.RIDE_DRIVER_ASSIGNED,
     RideStatus.DRIVER_EN_ROUTE: RoutingKeys.RIDE_DRIVER_EN_ROUTE,

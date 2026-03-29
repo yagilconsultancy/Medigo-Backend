@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from sqlalchemy import Integer, extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,12 +107,26 @@ class AdminPayoutRepository:
     async def get_driver_earnings_list(
         self,
         driver_ids: list | None = None,
+        business_id: UUID | None = None,
         offset: int = 0,
         limit: int = 20,
     ) -> tuple[list[dict], int]:
         conditions = [DriverEarnings.total_earned > 0]
         if driver_ids is not None:
             conditions.append(DriverEarnings.driver_id.in_(driver_ids))
+
+        # If business_id filter, get driver_ids from fare_breakdowns
+        if business_id is not None:
+            fleet_driver_result = await self.session.execute(
+                select(FareBreakdown.driver_id).where(
+                    FareBreakdown.business_id == business_id,
+                    FareBreakdown.driver_id.isnot(None),
+                ).distinct()
+            )
+            fleet_driver_ids = [r[0] for r in fleet_driver_result.all()]
+            if not fleet_driver_ids:
+                return [], 0
+            conditions.append(DriverEarnings.driver_id.in_(fleet_driver_ids))
 
         base_query = select(DriverEarnings).where(*conditions)
 
@@ -189,6 +204,8 @@ class AdminPayoutRepository:
             "rn": "Registered Nurse",
             "hca": "Health Care Aide",
             "paramedic": "Paramedic",
+            "ot": "Occupational Therapist",
+            "pt": "Physical Therapist",
             "other": "Other",
         }
         for specialty, driver_ids in specialty_driver_map.items():
@@ -209,3 +226,17 @@ class AdminPayoutRepository:
             })
         results.sort(key=lambda x: x["amount"], reverse=True)
         return results
+
+    async def get_all_earning_driver_ids(self) -> list[UUID]:
+        """Get all driver IDs with earnings > 0."""
+        result = await self.session.execute(
+            select(DriverEarnings.driver_id).where(DriverEarnings.total_earned > 0)
+        )
+        return [r[0] for r in result.all()]
+
+    async def get_driver_trip_count(self, driver_id: UUID) -> int:
+        """Get actual trip count for a driver from fare breakdowns."""
+        result = await self.session.execute(
+            select(func.count()).where(FareBreakdown.driver_id == driver_id)
+        )
+        return result.scalar_one()

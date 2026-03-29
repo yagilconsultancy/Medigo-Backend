@@ -63,23 +63,10 @@ class CreateRecurringRideRequest(BaseModel):
     end_date: date | None = None
 
 
-# Admin & Business request schemas
-
-class AssignBusinessRequest(BaseModel):
-    business_id: UUID
-    expiry_minutes: int = 30
-
+# Admin request schemas
 
 class AdminAssignDriverRequest(BaseModel):
     driver_id: UUID
-
-
-class BusinessAssignDriverRequest(BaseModel):
-    driver_id: UUID
-
-
-class BusinessRejectRequest(BaseModel):
-    reason: str | None = None
 
 
 # ---- Response Schemas ----
@@ -89,10 +76,6 @@ class RideResponse(BaseModel):
     rider_id: UUID
     driver_id: UUID | None = None
     business_id: UUID | None = None
-    assigned_to_business_id: UUID | None = None
-    assigned_by_admin_id: UUID | None = None
-    assigned_to_business_at: datetime | None = None
-    business_accepted_at: datetime | None = None
     ride_type: str
     trip_type: str
     trip_structure: str
@@ -120,10 +103,6 @@ class RideDetailResponse(BaseModel):
     rider_id: UUID
     driver_id: UUID | None = None
     business_id: UUID | None = None
-    assigned_to_business_id: UUID | None = None
-    assigned_by_admin_id: UUID | None = None
-    assigned_to_business_at: datetime | None = None
-    business_accepted_at: datetime | None = None
     ride_type: str
     trip_type: str
     trip_structure: str

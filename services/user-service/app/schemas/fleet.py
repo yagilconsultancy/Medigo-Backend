@@ -3,7 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 
-class BusinessCreate(BaseModel):
+class FleetCreate(BaseModel):
     name: str = Field(..., max_length=255)
     type: str | None = Field(None, max_length=50)
     tax_id: str | None = Field(None, max_length=50)
@@ -15,7 +15,7 @@ class BusinessCreate(BaseModel):
     email: str | None = None
 
 
-class BusinessUpdate(BaseModel):
+class FleetUpdate(BaseModel):
     name: str | None = Field(None, max_length=255)
     type: str | None = Field(None, max_length=50)
     address: str | None = None
@@ -26,7 +26,7 @@ class BusinessUpdate(BaseModel):
     email: str | None = None
 
 
-class BusinessResponse(BaseModel):
+class FleetResponse(BaseModel):
     id: UUID
     name: str
     type: str | None = None

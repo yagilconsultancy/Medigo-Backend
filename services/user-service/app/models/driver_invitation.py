@@ -34,4 +34,4 @@ class DriverInvitation(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    business = relationship("Business", back_populates="invitations")
+    fleet = relationship("Fleet", back_populates="invitations")

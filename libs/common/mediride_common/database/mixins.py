@@ -28,7 +28,7 @@ class SoftDeleteMixin:
 
 
 class TenantMixin:
-    """For models that belong to a business (multi-tenant isolation)."""
+    """For models that belong to a fleet (multi-tenant isolation)."""
 
     business_id: Mapped[str | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True, index=True

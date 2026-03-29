@@ -1,12 +1,16 @@
 """Internal API endpoints for inter-service communication."""
 import logging
+from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import func, select
+
 from app.dependencies import get_db
+from app.models.ride_rating import RideRating
 from app.repositories.ride_repo import RideRepository
 from app.schemas.ride import RideResponse
 
@@ -136,3 +140,124 @@ async def update_ride_fare(
         raise HTTPException(status_code=404, detail="Ride not found")
     await repo.update(ride_id, final_fare=request.final_fare)
     return {"updated": True, "ride_id": str(ride_id), "final_fare": request.final_fare}
+
+
+@router.get("/drivers/{driver_id}/stats")
+async def get_driver_stats_internal(
+    driver_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get driver trip stats. Called by user-service for admin driver detail."""
+    repo = RideRepository(session)
+    stats = await repo.get_driver_stats(driver_id)
+    return stats
+
+
+@router.get("/drivers/{driver_id}/ratings")
+async def get_driver_ratings_internal(
+    driver_id: UUID,
+    limit: int = 10,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get driver ratings. Called by user-service for admin driver detail."""
+    # Get individual ratings
+    result = await session.execute(
+        select(RideRating)
+        .where(
+            RideRating.rated_user_id == driver_id,
+            RideRating.rating_type == "rider_to_driver",
+        )
+        .order_by(RideRating.created_at.desc())
+        .limit(limit)
+    )
+    ratings = list(result.scalars().all())
+
+    # Get aggregate
+    agg_result = await session.execute(
+        select(
+            func.avg(RideRating.rating),
+            func.count(RideRating.id),
+        ).where(
+            RideRating.rated_user_id == driver_id,
+            RideRating.rating_type == "rider_to_driver",
+        )
+    )
+    row = agg_result.one()
+    avg_rating = float(row[0]) if row[0] else 0.0
+    total_ratings = row[1]
+
+    return {
+        "ratings": [
+            {
+                "ride_id": str(r.ride_id),
+                "rated_by_user_id": str(r.rated_by_user_id),
+                "rating": r.rating,
+                "comment": r.comment,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in ratings
+        ],
+        "average_rating": round(avg_rating, 2),
+        "total_ratings": total_ratings,
+    }
+
+
+# ---- Rider Endpoints (for admin rider management) ----
+
+
+@router.get("/riders/{rider_id}/stats")
+async def get_rider_stats_internal(
+    rider_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get rider trip stats. Called by user-service for admin rider detail."""
+    repo = RideRepository(session)
+    stats = await repo.get_rider_stats(rider_id)
+    return stats
+
+
+@router.get("/riders/{rider_id}/rides")
+async def get_rider_rides_internal(
+    rider_id: UUID,
+    page: int = 1,
+    limit: int = 20,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get rider completed ride history. Called by user-service for admin rider detail."""
+    repo = RideRepository(session)
+    offset = (page - 1) * limit
+    rides, total = await repo.get_rider_completed_rides(rider_id, offset, limit)
+    return {
+        "rides": [
+            {
+                "ride_id": str(r.id),
+                "date": r.dropoff_at.isoformat() if r.dropoff_at else None,
+                "pickup": r.pickup_address,
+                "destination": r.destination_address,
+                "status": r.status,
+                "fare": float(r.final_fare) if r.final_fare else None,
+            }
+            for r in rides
+        ],
+        "total": total,
+    }
+
+
+class BatchRiderActivityRequest(BaseModel):
+    rider_ids: List[UUID]
+
+
+@router.post("/riders/batch-activity")
+async def get_batch_rider_activity_internal(
+    body: BatchRiderActivityRequest,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Batch rider activity metrics. Called by user-service for admin rider activity page."""
+    repo = RideRepository(session)
+    result = await repo.get_batch_rider_activity(body.rider_ids)
+    return result

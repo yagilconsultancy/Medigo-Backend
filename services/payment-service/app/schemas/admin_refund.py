@@ -17,6 +17,7 @@ class RefundRequestListItem(BaseModel):
     rider_name: str = "Unknown"
     driver_name: str | None = None
     category: str
+    reason: str | None = None
     amount: float
     status: str
     created_at: datetime

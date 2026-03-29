@@ -22,9 +22,9 @@ class FleetDocumentRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_by_business(self, business_id: UUID) -> list[FleetDocument]:
+    async def list_by_fleet(self, fleet_id: UUID) -> list[FleetDocument]:
         result = await self.session.execute(
-            select(FleetDocument).where(FleetDocument.business_id == business_id)
+            select(FleetDocument).where(FleetDocument.business_id == fleet_id)
         )
         return list(result.scalars().all())
 

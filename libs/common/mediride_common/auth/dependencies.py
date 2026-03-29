@@ -50,17 +50,3 @@ def require_role(allowed_roles: list[UserRole]) -> Callable:
     return _check
 
 
-def require_business_access() -> Callable:
-    """Ensures the caller belongs to the specified business or is an admin."""
-
-    async def _check(
-        business_id: UUID,
-        user: UserClaims = Depends(get_current_user),
-    ) -> UserClaims:
-        if user.role == UserRole.ADMIN:
-            return user
-        if user.business_id != business_id:
-            raise AuthorizationError("Access denied to this business")
-        return user
-
-    return _check

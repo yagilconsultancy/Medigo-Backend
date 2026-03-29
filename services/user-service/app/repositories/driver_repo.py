@@ -21,15 +21,15 @@ class DriverRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_by_business(
+    async def list_by_fleet(
         self,
-        business_id: UUID,
+        fleet_id: UUID,
         offset: int = 0,
         limit: int = 20,
         is_online: bool | None = None,
         is_approved: bool | None = None,
     ) -> tuple[list[DriverProfile], int]:
-        query = select(DriverProfile).where(DriverProfile.business_id == business_id)
+        query = select(DriverProfile).where(DriverProfile.business_id == fleet_id)
 
         if is_online is not None:
             query = query.where(DriverProfile.is_online == is_online)

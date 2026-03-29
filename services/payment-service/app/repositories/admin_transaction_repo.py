@@ -33,8 +33,8 @@ class AdminTransactionRepository:
                     0,
                 ).label("total_collected"),
                 func.count()
-                .filter(Transaction.transaction_type == "refund")
-                .label("refund_count"),
+                .filter(Transaction.status == "completed")
+                .label("settled_count"),
                 func.count()
                 .filter(Transaction.status.in_(["pending", "processing"]))
                 .label("pending_count"),
@@ -44,7 +44,7 @@ class AdminTransactionRepository:
         return {
             "total_transactions": row.total,
             "total_collected": float(row.total_collected),
-            "refund_count": row.refund_count,
+            "settled_count": row.settled_count,
             "pending_count": row.pending_count,
         }
 
@@ -115,3 +115,36 @@ class AdminTransactionRepository:
             base_query.offset(offset).limit(limit).order_by(Transaction.created_at.desc())
         )
         return list(result.scalars().all()), total
+
+    async def get_by_id(self, tx_id: UUID) -> Transaction | None:
+        result = await self.session.execute(
+            select(Transaction).where(Transaction.id == tx_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_default_payment_methods_batch(
+        self, user_ids: list[UUID]
+    ) -> dict[UUID, PaymentMethod]:
+        if not user_ids:
+            return {}
+        result = await self.session.execute(
+            select(PaymentMethod).where(
+                PaymentMethod.user_id.in_(user_ids),
+                PaymentMethod.is_default.is_(True),
+                PaymentMethod.is_active.is_(True),
+                PaymentMethod.deleted_at.is_(None),
+            )
+        )
+        methods = result.scalars().all()
+        return {m.user_id: m for m in methods}
+
+    async def get_payment_method_for_user(self, user_id: UUID) -> PaymentMethod | None:
+        result = await self.session.execute(
+            select(PaymentMethod).where(
+                PaymentMethod.user_id == user_id,
+                PaymentMethod.is_default.is_(True),
+                PaymentMethod.is_active.is_(True),
+                PaymentMethod.deleted_at.is_(None),
+            ).limit(1)
+        )
+        return result.scalar_one_or_none()

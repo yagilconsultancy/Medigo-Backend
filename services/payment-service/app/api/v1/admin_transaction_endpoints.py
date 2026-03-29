@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends, Query
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clients.ride_service_client import RideServiceClient
 from app.clients.user_service_client import UserServiceClient
 from app.config import settings
 from app.dependencies import get_db
 from app.repositories.admin_transaction_repo import AdminTransactionRepository
 from app.repositories.fare_repo import FareBreakdownRepository
 from app.schemas.admin_transaction import (
+    AdminTransactionDetailResponse,
     AdminTransactionResponse,
     PaymentMethodBreakdownItem,
     TransactionKPIsResponse,
@@ -25,6 +29,7 @@ def _get_service(session: AsyncSession = Depends(get_db)) -> AdminTransactionSer
         tx_repo=AdminTransactionRepository(session),
         fare_repo=FareBreakdownRepository(session),
         user_client=UserServiceClient(settings.USER_SERVICE_URL),
+        ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
     )
 
 
@@ -76,3 +81,19 @@ async def get_all_transactions(
         limit=limit,
         total_pages=(total + limit - 1) // limit if total > 0 else 0,
     )
+
+
+@router.get(
+    "/transactions/{transaction_id}",
+    response_model=StandardResponse[AdminTransactionDetailResponse],
+)
+async def get_transaction_detail(
+    transaction_id: UUID,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminTransactionService = Depends(_get_service),
+):
+    """Get transaction detail for modal view."""
+    data = await service.get_transaction_detail(transaction_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return StandardResponse(data=AdminTransactionDetailResponse(**data))

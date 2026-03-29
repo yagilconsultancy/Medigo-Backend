@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
-from app.repositories.business_repo import BusinessRepository
+from app.repositories.fleet_repo import FleetRepository
 from app.repositories.invitation_repo import InvitationRepository
 from mediride_common.utils import utc_now
 
@@ -42,7 +42,7 @@ async def verify_invitation(
 ):
     """Verify a driver invitation token. Called by auth-service."""
     invitation_repo = InvitationRepository(session)
-    business_repo = BusinessRepository(session)
+    fleet_repo = FleetRepository(session)
 
     invitation = await invitation_repo.get_by_token(token)
     if not invitation:
@@ -54,13 +54,13 @@ async def verify_invitation(
     if invitation.expires_at < utc_now():
         raise HTTPException(status_code=400, detail="Invitation has expired")
 
-    business = await business_repo.get_by_id(invitation.business_id)
-    business_name = business.name if business else "Unknown Business"
+    fleet = await fleet_repo.get_by_id(invitation.business_id)
+    fleet_name = fleet.name if fleet else "Unknown Fleet"
 
     return {
         "valid": True,
         "business_id": str(invitation.business_id),
-        "business_name": business_name,
+        "fleet_name": fleet_name,
         "email": invitation.email,
         "invitation_id": str(invitation.id),
     }
@@ -164,40 +164,40 @@ async def update_driver_stats_internal(
     return {"updated": True, "driver_id": str(driver_id)}
 
 
-@router.get("/businesses/{business_id}")
-async def get_business_internal(
-    business_id: UUID,
+@router.get("/fleets/{fleet_id}")
+async def get_fleet_internal(
+    fleet_id: UUID,
     _service: str = Depends(_require_internal_service),
     session: AsyncSession = Depends(get_db),
 ):
-    """Get business details. Called by ride-service for assignment validation."""
-    business_repo = BusinessRepository(session)
-    business = await business_repo.get_by_id(business_id)
-    if not business:
-        raise HTTPException(status_code=404, detail="Business not found")
+    """Get fleet details. Called by ride-service for assignment validation."""
+    fleet_repo = FleetRepository(session)
+    fleet = await fleet_repo.get_by_id(fleet_id)
+    if not fleet:
+        raise HTTPException(status_code=404, detail="Fleet not found")
 
     return {
-        "id": str(business.id),
-        "name": business.name,
-        "type": business.type,
-        "is_active": business.is_active,
-        "email": business.email,
-        "phone": business.phone,
+        "id": str(fleet.id),
+        "name": fleet.name,
+        "type": fleet.type,
+        "is_active": fleet.is_active,
+        "email": fleet.email,
+        "phone": fleet.phone,
     }
 
 
-@router.get("/businesses/{business_id}/drivers")
-async def get_business_drivers_internal(
-    business_id: UUID,
+@router.get("/fleets/{fleet_id}/drivers")
+async def get_fleet_drivers_internal(
+    fleet_id: UUID,
     _service: str = Depends(_require_internal_service),
     session: AsyncSession = Depends(get_db),
 ):
-    """Get approved drivers for a business. Called by ride-service for driver assignment."""
+    """Get approved drivers for a fleet. Called by ride-service for driver assignment."""
     from app.repositories.driver_repo import DriverRepository
 
     driver_repo = DriverRepository(session)
-    drivers, _ = await driver_repo.list_by_business(
-        business_id, offset=0, limit=500, is_approved=True
+    drivers, _ = await driver_repo.list_by_fleet(
+        fleet_id, offset=0, limit=500, is_approved=True
     )
     return {
         "drivers": [
@@ -264,21 +264,22 @@ async def get_drivers_with_details(
     ids = [UUID(d.strip()) for d in driver_ids.split(",") if d.strip()]
     driver_repo = DriverRepository(session)
     user_repo = UserRepository(session)
-    business_repo = BusinessRepository(session)
+    fleet_repo = FleetRepository(session)
 
     drivers = []
     for driver_id in ids:
         user = await user_repo.get_by_id(driver_id)
         driver = await driver_repo.get_by_user_id(driver_id)
         if user and driver:
-            business = await business_repo.get_by_id(driver.business_id) if driver.business_id else None
+            fleet = await fleet_repo.get_by_id(driver.business_id) if driver.business_id else None
             drivers.append({
                 "driver_id": str(driver_id),
                 "first_name": user.first_name,
                 "last_name": user.last_name,
                 "avatar_url": user.avatar_url,
                 "specialty": getattr(driver, "specialty", None),
-                "fleet_name": business.name if business else None,
+                "account_status": getattr(driver, "account_status", None),
+                "fleet_name": fleet.name if fleet else None,
                 "business_id": str(driver.business_id) if driver.business_id else None,
             })
 

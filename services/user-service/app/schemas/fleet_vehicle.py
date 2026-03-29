@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.vehicle_document import VehicleDocumentResponse
+
 
 class VehicleCreate(BaseModel):
     business_id: UUID
@@ -17,6 +19,12 @@ class VehicleCreate(BaseModel):
     mileage: int | None = None
     insurance_expiry: date | None = None
     registration_expiry: date | None = None
+    passenger_capacity: int | None = None
+    special_equipment: list[str] | None = None
+    insurance_provider: str | None = Field(None, max_length=255)
+    registration_authority: str | None = Field(None, max_length=255)
+    last_inspection_date: date | None = None
+    internal_notes: str | None = None
 
 
 class VehicleUpdate(BaseModel):
@@ -31,6 +39,12 @@ class VehicleUpdate(BaseModel):
     mileage: int | None = None
     insurance_expiry: date | None = None
     registration_expiry: date | None = None
+    passenger_capacity: int | None = None
+    special_equipment: list[str] | None = None
+    insurance_provider: str | None = Field(None, max_length=255)
+    registration_authority: str | None = Field(None, max_length=255)
+    last_inspection_date: date | None = None
+    internal_notes: str | None = None
 
 
 class ChangeVehicleStatusRequest(BaseModel):
@@ -43,14 +57,18 @@ class AssignDriverToVehicleRequest(BaseModel):
 
 class ScheduleMaintenanceRequest(BaseModel):
     scheduled_date: date
+    service_type: str | None = Field(None, max_length=50)
     notes: str | None = None
+    technician_notes: str | None = None
 
 
 class MaintenanceLogResponse(BaseModel):
     id: UUID
     scheduled_date: date
     completed_date: date | None = None
+    service_type: str | None = None
     notes: str | None = None
+    technician_notes: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -73,8 +91,14 @@ class VehicleResponse(BaseModel):
     mileage: int | None = None
     insurance_expiry: date | None = None
     registration_expiry: date | None = None
+    passenger_capacity: int | None = None
+    special_equipment: list[str] | None = None
+    insurance_provider: str | None = None
+    registration_authority: str | None = None
+    last_inspection_date: date | None = None
+    internal_notes: str | None = None
     created_at: datetime
-    business_name: str | None = None
+    fleet_name: str | None = None
     driver_name: str | None = None
 
     model_config = {"from_attributes": True}
@@ -82,6 +106,12 @@ class VehicleResponse(BaseModel):
 
 class VehicleDetailResponse(VehicleResponse):
     maintenance_logs: list[MaintenanceLogResponse] = []
+    documents: list[VehicleDocumentResponse] = []
+
+
+class VehicleProfileResponse(VehicleResponse):
+    maintenance_logs: list[MaintenanceLogResponse] = []
+    documents: list[VehicleDocumentResponse] = []
 
 
 class VehicleKPIs(BaseModel):

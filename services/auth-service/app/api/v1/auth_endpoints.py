@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.user_service_client import UserServiceClient
@@ -26,6 +26,7 @@ from app.schemas.auth import (
     OTPVerifyResponse,
 )
 from app.services.auth_service import AuthService
+from app.services.login_history_service import LoginHistoryService
 from app.services.otp_service import OTPService
 from mediride_common.auth.jwt_handler import JWTHandler
 from mediride_common.auth.dependencies import get_current_user
@@ -52,6 +53,7 @@ def _get_auth_service(
         refresh_token_expire_days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS,
     )
     user_service_client = UserServiceClient(settings.USER_SERVICE_URL)
+    login_history_service = LoginHistoryService(session)
     return AuthService(
         credential_repo=credential_repo,
         token_repo=token_repo,
@@ -60,6 +62,7 @@ def _get_auth_service(
         publisher=publisher,
         password_reset_repo=password_reset_repo,
         user_service_client=user_service_client,
+        login_history_service=login_history_service,
     )
 
 
@@ -125,12 +128,17 @@ async def login(
 @router.post("/admin/login", response_model=StandardResponse[TokenResponse])
 async def admin_login(
     request: LoginRequest,
+    raw_request: Request,
     auth_service: AuthService = Depends(_get_auth_service),
 ):
+    ip_address = raw_request.headers.get("x-forwarded-for", raw_request.client.host if raw_request.client else "unknown")
+    user_agent = raw_request.headers.get("user-agent", "")
     token_pair = await auth_service.admin_login(
         email=request.email,
         phone=request.phone,
         password=request.password,
+        ip_address=ip_address,
+        user_agent=user_agent,
     )
     return StandardResponse(
         data=TokenResponse(
@@ -232,7 +240,7 @@ async def verify_driver_invite(
     return StandardResponse(
         data=InviteVerifyResponse(
             valid=True,
-            business_name=result.get("business_name"),
+            fleet_name=result.get("fleet_name"),
             email=result.get("email"),
         ),
         message="Invitation is valid",

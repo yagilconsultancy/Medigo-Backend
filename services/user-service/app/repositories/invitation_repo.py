@@ -23,23 +23,23 @@ class InvitationRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_by_email_and_business(
-        self, email: str, business_id: UUID
+    async def get_by_email_and_fleet(
+        self, email: str, fleet_id: UUID
     ) -> DriverInvitation | None:
         result = await self.session.execute(
             select(DriverInvitation).where(
                 DriverInvitation.email == email,
-                DriverInvitation.business_id == business_id,
+                DriverInvitation.business_id == fleet_id,
                 DriverInvitation.status == InvitationStatus.PENDING,
             )
         )
         return result.scalar_one_or_none()
 
-    async def list_by_business(
-        self, business_id: UUID, offset: int = 0, limit: int = 20
+    async def list_by_fleet(
+        self, fleet_id: UUID, offset: int = 0, limit: int = 20
     ) -> tuple[list[DriverInvitation], int]:
         query = select(DriverInvitation).where(
-            DriverInvitation.business_id == business_id
+            DriverInvitation.business_id == fleet_id
         )
         count_result = await self.session.execute(
             select(func.count()).select_from(query.subquery())

@@ -43,5 +43,5 @@ class FleetApplication(Base):
     )
 
     # Relationships
-    business = relationship("Business", backref="fleet_applications")
+    fleet = relationship("Fleet", backref="fleet_applications")
     documents = relationship("FleetDocument", back_populates="application", lazy="selectin")

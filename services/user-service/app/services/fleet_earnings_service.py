@@ -2,7 +2,7 @@ import logging
 from uuid import UUID
 
 from app.clients.payment_service_client import PaymentServiceClient
-from app.repositories.business_repo import BusinessRepository
+from app.repositories.fleet_repo import FleetRepository
 from app.schemas.fleet_earnings import (
     FleetEarningsBreakdownRow,
     FleetEarningsKPIs,
@@ -17,18 +17,18 @@ class FleetEarningsService:
     def __init__(
         self,
         payment_client: PaymentServiceClient,
-        business_repo: BusinessRepository,
+        fleet_repo: FleetRepository,
     ):
         self.payment_client = payment_client
-        self.business_repo = business_repo
+        self.fleet_repo = fleet_repo
 
     async def get_earnings_kpis(
-        self, business_id: UUID | None = None, days: int = 30
+        self, fleet_id: UUID | None = None, days: int = 30
     ) -> FleetEarningsKPIs:
         # Current period
-        current = await self.payment_client.get_fleet_revenue(business_id, days)
+        current = await self.payment_client.get_fleet_revenue(fleet_id, days)
         # Previous period for trend comparison
-        previous = await self.payment_client.get_fleet_revenue(business_id, days * 2)
+        previous = await self.payment_client.get_fleet_revenue(fleet_id, days * 2)
 
         current_revenue = float(current.get("total_revenue", 0)) if current else 0.0
         current_payouts = float(current.get("total_driver_earnings", 0)) if current else 0.0
@@ -53,9 +53,9 @@ class FleetEarningsService:
         )
 
     async def get_revenue_trend(
-        self, business_id: UUID | None = None, days: int = 30
+        self, fleet_id: UUID | None = None, days: int = 30
     ) -> FleetRevenueTrendResponse:
-        trend_data = await self.payment_client.get_fleet_revenue_trend(business_id, days)
+        trend_data = await self.payment_client.get_fleet_revenue_trend(fleet_id, days)
         return FleetRevenueTrendResponse(
             period_days=days,
             trend=[
@@ -66,39 +66,39 @@ class FleetEarningsService:
 
     async def get_earnings_breakdown(
         self,
-        business_id: UUID | None = None,
+        fleet_id: UUID | None = None,
         days: int = 30,
         offset: int = 0,
         limit: int = 20,
     ) -> tuple[list[FleetEarningsBreakdownRow], int]:
-        # Get all businesses from local DB
-        businesses, total = await self.business_repo.list_all(offset=0, limit=1000)
+        # Get all fleets from local DB
+        fleets, total = await self.fleet_repo.list_all(offset=0, limit=1000)
 
-        if business_id:
-            businesses = [b for b in businesses if b.id == business_id]
-            total = len(businesses)
+        if fleet_id:
+            fleets = [f for f in fleets if f.id == fleet_id]
+            total = len(fleets)
 
-        # Build business_id -> name map
-        biz_map = {b.id: b.name for b in businesses}
-        business_ids = list(biz_map.keys())
+        # Build fleet_id -> name map
+        fleet_map = {f.id: f.name for f in fleets}
+        fleet_ids = list(fleet_map.keys())
 
-        if not business_ids:
+        if not fleet_ids:
             return [], 0
 
         # Batch query payment-service
         breakdowns = await self.payment_client.get_fleet_earnings_breakdown(
-            business_ids, days
+            fleet_ids, days
         )
 
         # Build response rows
         rows = []
-        for bid, name in biz_map.items():
-            bid_str = str(bid)
-            data = breakdowns.get(bid_str, {})
+        for fid, name in fleet_map.items():
+            fid_str = str(fid)
+            data = breakdowns.get(fid_str, {})
             rows.append(
                 FleetEarningsBreakdownRow(
-                    business_id=bid,
-                    business_name=name,
+                    fleet_id=fid,
+                    fleet_name=name,
                     trips=data.get("trips", 0),
                     revenue=data.get("revenue", 0.0),
                     commission=data.get("commission", 0.0),

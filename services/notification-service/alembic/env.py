@@ -10,7 +10,8 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.models import (  # noqa: F401
-    Conversation, HelpArticle, Message, MessageReaction, Notification, SupportTicket,
+    AdminBroadcast, ContactLog, Conversation, HelpArticle, Message,
+    MessageReaction, Notification, SupportTicket,
 )
 from mediride_common.database.base import Base
 

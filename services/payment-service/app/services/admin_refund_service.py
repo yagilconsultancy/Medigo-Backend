@@ -81,6 +81,7 @@ class AdminRefundService:
                 "rider_name": rider_name,
                 "driver_name": driver_name,
                 "category": r.category,
+                "reason": r.reason,
                 "amount": float(r.amount),
                 "status": r.status,
                 "created_at": r.created_at,

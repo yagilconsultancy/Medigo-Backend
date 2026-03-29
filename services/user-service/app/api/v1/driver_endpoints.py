@@ -76,13 +76,13 @@ async def list_drivers(
     ),
     service: DriverService = Depends(_get_driver_service),
 ):
-    # Business users can only see their own drivers
+    # Fleet managers can only see their own drivers
     if user.role == UserRole.BUSINESS:
         business_id = user.business_id
 
     if not business_id:
         from mediride_common.exceptions import ValidationError
-        raise ValidationError("business_id is required")
+        raise ValidationError("fleet_id is required")
 
     offset = (page - 1) * limit
     drivers, total = await service.list_drivers(

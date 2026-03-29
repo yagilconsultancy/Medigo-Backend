@@ -47,6 +47,8 @@ class DriverEarningsRow(BaseModel):
 class PayoutConfirmationResponse(BaseModel):
     driver_id: UUID
     driver_name: str
+    fleet_name: str | None = None
+    specialty: str | None = None
     net_payout: float
     trips: int
     gross_earned: float

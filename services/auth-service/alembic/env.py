@@ -9,7 +9,10 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.models import UserCredential, OTPRecord, RefreshToken, PasswordResetToken, UserSession  # noqa: F401
+from app.models import (  # noqa: F401
+    ActivityLog, LoginRecord, OTPRecord, PasswordResetToken,
+    RefreshToken, SecuritySettings, UserCredential, UserSession,
+)
 from mediride_common.database.base import Base
 
 config = context.config

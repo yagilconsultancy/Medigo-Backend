@@ -80,3 +80,39 @@ class PaymentServiceClient:
         except httpx.RequestError as e:
             logger.error(f"Payment service fleet breakdown error: {e}")
             return {}
+
+    # --- Rider methods ---
+
+    async def get_rider_spending(self, rider_id: UUID) -> dict | None:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/riders/{rider_id}/spending",
+                    headers={"X-Internal-Service": "user-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(
+                    f"Payment service rider spending returned {resp.status_code}"
+                )
+                return None
+        except httpx.RequestError as e:
+            logger.error(f"Payment service rider spending error: {e}")
+            return None
+
+    async def get_rider_payment_methods(self, rider_id: UUID) -> list[dict]:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/riders/{rider_id}/payment-methods",
+                    headers={"X-Internal-Service": "user-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(
+                    f"Payment service rider payment methods returned {resp.status_code}"
+                )
+                return []
+        except httpx.RequestError as e:
+            logger.error(f"Payment service rider payment methods error: {e}")
+            return []

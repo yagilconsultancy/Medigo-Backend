@@ -109,14 +109,8 @@ async def get_payouts_by_specialty(
     service: AdminPayoutService = Depends(_get_service),
 ):
     """Get payouts grouped by caregiver specialty."""
-    # Fetch all drivers with details to build specialty map
-    user_client = UserServiceClient(settings.USER_SERVICE_URL)
-    # Get driver_ids from earnings first, then enrich
-    from collections import defaultdict
-    specialty_map: dict[str, list] = defaultdict(list)
-
-    # For now, return the specialty breakdown from what we know
-    data = await service.get_payouts_by_specialty(dict(specialty_map))
+    specialty_map = await service.build_specialty_map()
+    data = await service.get_payouts_by_specialty(specialty_map)
     return StandardResponse(data=[SpecialtyPayoutItem(**item) for item in data])
 
 
@@ -129,6 +123,8 @@ async def get_driver_earnings_list(
     search: str | None = Query(default=None),
     is_caregiver: bool = Query(False),
     specialty: str | None = Query(default=None),
+    fleet_id: UUID | None = Query(default=None),
+    status: str | None = Query(default=None),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
@@ -139,6 +135,8 @@ async def get_driver_earnings_list(
         search=search,
         is_caregiver=is_caregiver,
         specialty=specialty,
+        fleet_id=fleet_id,
+        account_status=status,
         page=page,
         limit=limit,
     )

@@ -74,13 +74,13 @@ async def send_otp_email(to: str, otp_code: str) -> bool:
 
 
 async def send_driver_invite_email(
-    to: str, business_name: str, invite_token: str
+    to: str, fleet_name: str, invite_token: str
 ) -> bool:
     """Send driver invitation email."""
     try:
         template = _template_env.get_template("driver_invite.html")
         html = template.render(
-            business_name=business_name,
+            fleet_name=fleet_name,
             invite_token=invite_token,
         )
     except Exception:
@@ -89,14 +89,14 @@ async def send_driver_invite_email(
         <html>
         <body>
             <h2>You're Invited to Drive with MediRide!</h2>
-            <p><strong>{business_name}</strong> has invited you to join their driver network.</p>
+            <p><strong>{fleet_name}</strong> has invited you to join their driver network.</p>
             <p>Download the MediRide Driver app and use this invitation code to sign up:</p>
             <h3 style="color: #3B5998;">{invite_token}</h3>
             <p>This invitation expires in 7 days.</p>
         </body>
         </html>
         """
-    return await send_email(to, f"MediRide - Driver Invitation from {business_name}", html)
+    return await send_email(to, f"MediRide - Driver Invitation from {fleet_name}", html)
 
 
 async def send_password_reset_email(to: str, reset_token: str) -> bool:

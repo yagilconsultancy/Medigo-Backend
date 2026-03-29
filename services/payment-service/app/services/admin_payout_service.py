@@ -35,12 +35,6 @@ class AdminPayoutService:
         self.user_client = user_client
         self.publisher = publisher
 
-    async def _get_caregiver_driver_ids(self) -> list[UUID]:
-        """Fetch driver IDs who have a specialty (caregivers) from user-service."""
-        # Get all drivers with earnings, then filter by specialty via user-service
-        # This is called when is_caregiver=True
-        return []  # Populated by caller via user enrichment
-
     async def get_payout_kpis(self, is_caregiver: bool = False, caregiver_ids: list | None = None) -> dict:
         driver_ids = caregiver_ids if is_caregiver and caregiver_ids else None
         return await self.payout_repo.get_payout_kpis(driver_ids=driver_ids)
@@ -59,18 +53,38 @@ class AdminPayoutService:
     async def get_payouts_by_specialty(self, specialty_driver_map: dict[str, list]) -> list[dict]:
         return await self.payout_repo.get_payouts_by_specialty(specialty_driver_map)
 
+    async def build_specialty_map(self) -> dict[str, list]:
+        """Fetch all earning drivers, enrich with user-service, group by specialty."""
+        driver_ids = await self.payout_repo.get_all_earning_driver_ids()
+        if not driver_ids:
+            return {}
+
+        driver_details = await self.user_client.get_drivers_with_details(driver_ids)
+        specialty_map: dict[str, list] = defaultdict(list)
+        for d in driver_details:
+            specialty = d.get("specialty")
+            if specialty:
+                did = d.get("driver_id")
+                if did:
+                    specialty_map[specialty].append(UUID(did) if isinstance(did, str) else did)
+
+        return dict(specialty_map)
+
     async def get_driver_earnings_list(
         self,
         search: str | None,
         is_caregiver: bool,
         specialty: str | None,
+        fleet_id: UUID | None,
+        account_status: str | None,
         page: int,
         limit: int,
     ) -> tuple[list[dict], int]:
         offset = (page - 1) * limit
 
-        # Get base earnings list from repo (may be filtered by caregiver_ids)
+        # Get base earnings list from repo (may be filtered by business_id)
         items, total = await self.payout_repo.get_driver_earnings_list(
+            business_id=fleet_id,
             offset=offset,
             limit=limit,
         )
@@ -90,11 +104,14 @@ class AdminPayoutService:
 
             driver_name = f"{details.get('first_name', '')} {details.get('last_name', '')}".strip() or "Unknown"
             driver_specialty = details.get("specialty")
+            driver_account_status = details.get("account_status")
 
             # Filter by caregiver/specialty if requested
             if is_caregiver and not driver_specialty:
                 continue
             if specialty and driver_specialty != specialty:
+                continue
+            if account_status and driver_account_status != account_status:
                 continue
             if search:
                 search_lower = search.lower()
@@ -115,19 +132,29 @@ class AdminPayoutService:
         if not balance:
             return {}
 
-        # Get user details
-        user_profile = await self.user_client.get_user_profile(driver_id)
+        # Get user details + driver enrichment concurrently
+        user_profile, driver_details_list = await asyncio.gather(
+            self.user_client.get_user_profile(driver_id),
+            self.user_client.get_drivers_with_details([driver_id]),
+        )
+
         name = "Unknown"
         if user_profile:
             name = f"{user_profile.get('first_name', '')} {user_profile.get('last_name', '')}".strip() or "Unknown"
+
+        fleet_name = None
+        driver_specialty = None
+        if driver_details_list:
+            d = driver_details_list[0]
+            fleet_name = d.get("fleet_name")
+            driver_specialty = d.get("specialty")
 
         gross = float(balance.total_earned)
         commission = round(gross * 0.20, 2)
         net = float(balance.available_balance)
 
-        # Get trip count
-        from sqlalchemy import func as sa_func, select
-        from app.models.fare_breakdown import FareBreakdown
+        # Get actual trip count
+        trips = await self.payout_repo.get_driver_trip_count(driver_id)
 
         # Get default payment method
         pm = await self.pm_repo.get_default(driver_id)
@@ -136,8 +163,10 @@ class AdminPayoutService:
         return {
             "driver_id": driver_id,
             "driver_name": name,
+            "fleet_name": fleet_name,
+            "specialty": driver_specialty,
             "net_payout": net,
-            "trips": balance.total_earned and int(gross / 15) or 0,  # Approximate
+            "trips": trips,
             "gross_earned": gross,
             "commission": commission,
             "commission_percent": 20.0,

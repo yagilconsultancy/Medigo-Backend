@@ -7,7 +7,7 @@ from pydantic import BaseModel
 class TransactionKPIsResponse(BaseModel):
     total_transactions: int
     total_collected: float
-    refund_count: int
+    settled_count: int
     pending_count: int
 
 
@@ -29,5 +29,24 @@ class AdminTransactionResponse(BaseModel):
     status: str
     transaction_type: str
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AdminTransactionDetailResponse(BaseModel):
+    id: UUID
+    ride_id: UUID | None = None
+    rider_name: str = "Unknown"
+    driver_name: str | None = None
+    ride_type: str | None = None
+    ride_description: str | None = None
+    amount: float
+    payment_method: str | None = None
+    status: str
+    transaction_type: str
+    pickup_address: str | None = None
+    destination_address: str | None = None
+    created_at: datetime
+    booking_ref: str | None = None
 
     model_config = {"from_attributes": True}

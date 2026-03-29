@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.business import Business
+from app.models.fleet import Fleet
 from app.models.driver_profile import DriverProfile
 from app.models.vehicle import Vehicle
 
@@ -12,48 +12,48 @@ class FleetCompanyRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def list_businesses_with_counts(
+    async def list_fleets_with_counts(
         self,
         status_filter: str | None = None,
         search: str | None = None,
         offset: int = 0,
         limit: int = 20,
     ) -> tuple[list[dict], int]:
-        conditions = [Business.deleted_at.is_(None)]
+        conditions = [Fleet.deleted_at.is_(None)]
 
         if status_filter == "active":
-            conditions.append(Business.is_active.is_(True))
+            conditions.append(Fleet.is_active.is_(True))
         elif status_filter == "inactive":
-            conditions.append(Business.is_active.is_(False))
+            conditions.append(Fleet.is_active.is_(False))
 
         if search:
             pattern = f"%{search}%"
             conditions.append(
                 or_(
-                    Business.name.ilike(pattern),
-                    Business.contact_person.ilike(pattern),
-                    Business.email.ilike(pattern),
-                    Business.city.ilike(pattern),
+                    Fleet.name.ilike(pattern),
+                    Fleet.contact_person.ilike(pattern),
+                    Fleet.email.ilike(pattern),
+                    Fleet.city.ilike(pattern),
                 )
             )
 
         # Subqueries for counts
         vehicle_count_sq = (
             select(func.count())
-            .where(Vehicle.business_id == Business.id, Vehicle.deleted_at.is_(None))
-            .correlate(Business)
+            .where(Vehicle.business_id == Fleet.id, Vehicle.deleted_at.is_(None))
+            .correlate(Fleet)
             .scalar_subquery()
         )
         driver_count_sq = (
             select(func.count())
-            .where(DriverProfile.business_id == Business.id)
-            .correlate(Business)
+            .where(DriverProfile.business_id == Fleet.id)
+            .correlate(Fleet)
             .scalar_subquery()
         )
 
         base_query = (
             select(
-                Business,
+                Fleet,
                 vehicle_count_sq.label("vehicle_count"),
                 driver_count_sq.label("driver_count"),
             )
@@ -62,7 +62,7 @@ class FleetCompanyRepository:
 
         # Count total
         count_query = select(func.count()).select_from(
-            select(Business.id).where(*conditions).subquery()
+            select(Fleet.id).where(*conditions).subquery()
         )
         count_result = await self.session.execute(count_query)
         total = count_result.scalar_one()
@@ -70,14 +70,14 @@ class FleetCompanyRepository:
         # Paginated results
         result = await self.session.execute(
             base_query
-            .order_by(desc(Business.created_at))
+            .order_by(desc(Fleet.created_at))
             .offset(offset)
             .limit(limit)
         )
         rows = result.all()
         return [
             {
-                "business": row[0],
+                "fleet": row[0],
                 "vehicle_count": row[1] or 0,
                 "driver_count": row[2] or 0,
             }
@@ -89,8 +89,8 @@ class FleetCompanyRepository:
         fleet_result = await self.session.execute(
             select(
                 func.count().label("total_fleets"),
-                func.count().filter(Business.is_active.is_(True)).label("active_fleets"),
-            ).where(Business.deleted_at.is_(None))
+                func.count().filter(Fleet.is_active.is_(True)).label("active_fleets"),
+            ).where(Fleet.deleted_at.is_(None))
         )
         fleet_row = fleet_result.one()
 
@@ -113,40 +113,40 @@ class FleetCompanyRepository:
             "fleet_drivers": total_drivers,
         }
 
-    async def get_business_detail_with_counts(self, business_id: UUID) -> dict | None:
+    async def get_fleet_detail_with_counts(self, fleet_id: UUID) -> dict | None:
         vehicle_count_sq = (
             select(func.count())
-            .where(Vehicle.business_id == Business.id, Vehicle.deleted_at.is_(None))
-            .correlate(Business)
+            .where(Vehicle.business_id == Fleet.id, Vehicle.deleted_at.is_(None))
+            .correlate(Fleet)
             .scalar_subquery()
         )
         driver_count_sq = (
             select(func.count())
-            .where(DriverProfile.business_id == Business.id)
-            .correlate(Business)
+            .where(DriverProfile.business_id == Fleet.id)
+            .correlate(Fleet)
             .scalar_subquery()
         )
 
         result = await self.session.execute(
             select(
-                Business,
+                Fleet,
                 vehicle_count_sq.label("vehicle_count"),
                 driver_count_sq.label("driver_count"),
-            ).where(Business.id == business_id, Business.deleted_at.is_(None))
+            ).where(Fleet.id == fleet_id, Fleet.deleted_at.is_(None))
         )
         row = result.one_or_none()
         if not row:
             return None
         return {
-            "business": row[0],
+            "fleet": row[0],
             "vehicle_count": row[1] or 0,
             "driver_count": row[2] or 0,
         }
 
-    async def get_avg_driver_rating(self, business_id: UUID) -> float:
+    async def get_avg_driver_rating(self, fleet_id: UUID) -> float:
         result = await self.session.execute(
             select(func.avg(DriverProfile.rating)).where(
-                DriverProfile.business_id == business_id
+                DriverProfile.business_id == fleet_id
             )
         )
         avg = result.scalar_one()

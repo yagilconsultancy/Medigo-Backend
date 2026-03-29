@@ -13,7 +13,6 @@ from app.repositories.ride_request_repo import RideRequestRepository
 from app.repositories.status_log_repo import StatusLogRepository
 from app.schemas.ride import (
     AdminAssignDriverRequest,
-    AssignBusinessRequest,
     RideResponse,
 )
 from app.services.ride_service import RideService
@@ -59,25 +58,6 @@ async def get_pending_rides(
         total_pages=(total + limit - 1) // limit if total > 0 else 0,
     )
 
-
-@router.put(
-    "/rides/{ride_id}/assign-business",
-    response_model=StandardResponse[RideResponse],
-)
-async def assign_ride_to_business(
-    ride_id: UUID,
-    body: AssignBusinessRequest,
-    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
-    service: RideService = Depends(_get_ride_service),
-):
-    """Assign a ride to a business fleet for fulfillment."""
-    ride = await service.assign_ride_to_business(
-        ride_id, body.business_id, user.id, body.expiry_minutes
-    )
-    return StandardResponse(
-        data=RideResponse.model_validate(ride),
-        message="Ride assigned to business",
-    )
 
 
 @router.put(

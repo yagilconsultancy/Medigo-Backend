@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.dependencies import get_db, get_publisher, get_s3_client
-from app.repositories.business_repo import BusinessRepository
+from app.repositories.fleet_repo import FleetRepository
 from app.repositories.fleet_application_repo import FleetApplicationRepository
 from app.repositories.fleet_document_repo import FleetDocumentRepository
 from app.schemas.fleet_application import (
@@ -35,7 +35,7 @@ def _get_service(
     return FleetApplicationService(
         app_repo=FleetApplicationRepository(session),
         doc_repo=FleetDocumentRepository(session),
-        business_repo=BusinessRepository(session),
+        fleet_repo=FleetRepository(session),
         publisher=publisher,
     )
 

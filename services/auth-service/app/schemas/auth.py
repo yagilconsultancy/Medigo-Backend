@@ -90,5 +90,5 @@ class OTPVerifyResponse(BaseModel):
 
 class InviteVerifyResponse(BaseModel):
     valid: bool
-    business_name: str | None = None
+    fleet_name: str | None = None
     email: str | None = None

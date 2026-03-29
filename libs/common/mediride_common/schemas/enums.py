@@ -10,7 +10,6 @@ class UserRole(StrEnum):
 
 class RideStatus(StrEnum):
     REQUESTED = "requested"
-    PENDING_BUSINESS_ASSIGNMENT = "pending_business_assignment"
     CONFIRMED = "confirmed"
     DRIVER_ASSIGNED = "driver_assigned"
     DRIVER_EN_ROUTE = "driver_en_route"
@@ -170,13 +169,6 @@ class MessageType(StrEnum):
     SYSTEM = "system"
 
 
-class BusinessAssignmentStatus(StrEnum):
-    PENDING = "pending"
-    ACCEPTED = "accepted"
-    REJECTED = "rejected"
-    EXPIRED = "expired"
-
-
 class FleetApplicationStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
@@ -194,6 +186,7 @@ class VehicleCategory(StrEnum):
     STANDARD = "standard"
     WHEELCHAIR_ACCESSIBLE = "wheelchair_accessible"
     ASSISTED_RIDE = "assisted_ride"
+    STRETCHER_TRANSPORT = "stretcher_transport"
 
 
 class FleetDocumentType(StrEnum):
@@ -232,4 +225,201 @@ class PayoutStatus(StrEnum):
     PENDING = "pending"
     SCHEDULED = "scheduled"
     COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class DriverAccountStatus(StrEnum):
+    PENDING = "pending"
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    DEACTIVATED = "deactivated"
+
+
+class ServiceCapability(StrEnum):
+    AMBULATORY = "ambulatory"
+    WHEELCHAIR = "wheelchair"
+    STRETCHER = "stretcher"
+
+
+class VehicleDocumentType(StrEnum):
+    REGISTRATION = "registration"
+    INSURANCE_CERTIFICATE = "insurance_certificate"
+    SAFETY_INSPECTION = "safety_inspection"
+
+
+class VehicleDocumentStatus(StrEnum):
+    VALID = "valid"
+    EXPIRING_SOON = "expiring_soon"
+    EXPIRED = "expired"
+    MISSING = "missing"
+
+
+class RiderAccountStatus(StrEnum):
+    ACTIVE = "active"
+    SUSPENDED = "suspended"
+    INACTIVE = "inactive"
+
+
+class RiderIssueStatus(StrEnum):
+    OPEN = "open"
+    UNDER_REVIEW = "under_review"
+    RESOLVED = "resolved"
+
+
+class RiderIssueType(StrEnum):
+    SUPPORT_TICKET = "support_ticket"
+    COMPLAINT = "complaint"
+    REFUND_REQUEST = "refund_request"
+    NO_SHOW = "no_show"
+    APP_ISSUE = "app_issue"
+    VEHICLE_COMPLAINT = "vehicle_complaint"
+
+
+class RiderIssuePriority(StrEnum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+# ── Phase 12: Safety & Incidents + Admin Notifications ──
+
+
+class IncidentType(StrEnum):
+    DRIVER_COMPLAINT = "driver_complaint"
+    RIDER_COMPLAINT = "rider_complaint"
+    ACCIDENT = "accident"
+
+
+class IncidentSeverity(StrEnum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class IncidentStatus(StrEnum):
+    UNDER_INVESTIGATION = "under_investigation"
+    DISCIPLINARY_ACTION = "disciplinary_action"
+    RESOLVED = "resolved"
+    CLOSED = "closed"
+
+
+class AlertCategory(StrEnum):
+    ROUTE_DEVIATION = "route_deviation"
+    LATE_ARRIVAL = "late_arrival"
+    UNEXPECTED_STOP = "unexpected_stop"
+    SPEED_VIOLATION = "speed_violation"
+    IDLE_VEHICLE = "idle_vehicle"
+
+
+class AlertSeverity(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class AlertStatus(StrEnum):
+    ACTIVE = "active"
+    ACKNOWLEDGED = "acknowledged"
+    RESOLVED = "resolved"
+
+
+class InvestigationStatus(StrEnum):
+    IN_PROGRESS = "in_progress"
+    UNASSIGNED = "unassigned"
+    COMPLETED = "completed"
+    CLOSED = "closed"
+
+
+class DisciplinaryActionType(StrEnum):
+    ACCOUNT_SUSPENSION = "account_suspension"
+    DRIVING_SUSPENSION = "driving_suspension"
+    WRITTEN_WARNING = "written_warning"
+
+
+class DisciplinaryActionStatus(StrEnum):
+    ACTIVE = "active"
+    ISSUED = "issued"
+    EXPIRED = "expired"
+    REINSTATED = "reinstated"
+
+
+class BroadcastType(StrEnum):
+    SYSTEM = "system"
+    RIDER = "rider"
+    DRIVER = "driver"
+    FLEET = "fleet"
+
+
+class BroadcastNotificationType(StrEnum):
+    # System
+    MAINTENANCE = "maintenance"
+    SECURITY_ALERT = "security_alert"
+    PLATFORM_UPDATE = "platform_update"
+    POLICY_CHANGE = "policy_change"
+    # Rider
+    ANNOUNCEMENT = "announcement"
+    PROMOTION = "promotion"
+    SERVICE_UPDATE = "service_update"
+    FEATURE_LAUNCH = "feature_launch"
+    # Driver
+    SURGE_ALERT = "surge_alert"
+    PAYOUT_NOTICE = "payout_notice"
+    TRAINING_UPDATE = "training_update"
+    COMPLIANCE_REMINDER = "compliance_reminder"
+    # Fleet
+    REVENUE_REPORT = "revenue_report"
+    FLEET_POLICY_UPDATE = "fleet_policy_update"
+    VEHICLE_ALERT = "vehicle_alert"
+    PARTNERSHIP_UPDATE = "partnership_update"
+
+
+# ── Phase 13: Support & Service + System Logs ──
+
+
+class SupportTicketType(StrEnum):
+    RIDER_COMPLAINT = "rider_complaint"
+    DRIVER_COMPLAINT = "driver_complaint"
+    RIDE_DISPUTE = "ride_dispute"
+
+
+class SupportTicketStatus(StrEnum):
+    OPEN = "open"
+    UNDER_REVIEW = "under_review"
+    RESOLVED = "resolved"
+
+
+class ContactChannel(StrEnum):
+    PHONE_CALL = "phone_call"
+    LIVE_CHAT = "live_chat"
+    EMAIL = "email"
+
+
+class ContactRole(StrEnum):
+    RIDER = "rider"
+    DRIVER = "driver"
+    FLEET_PARTNER = "fleet_partner"
+
+
+class ActivityLogCategory(StrEnum):
+    ADMIN = "admin"
+    FLEET = "fleet"
+    DRIVER = "driver"
+    FINANCE = "finance"
+    SUPPORT = "support"
+    SETTINGS = "settings"
+    SAFETY = "safety"
+    NOTIFICATION = "notification"
+    BOOKING = "booking"
+    DISPATCH = "dispatch"
+
+
+class ActivityLogSeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
+class LoginStatus(StrEnum):
+    SUCCESS = "success"
     FAILED = "failed"

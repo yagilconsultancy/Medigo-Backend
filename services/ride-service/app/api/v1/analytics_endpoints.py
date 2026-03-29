@@ -30,8 +30,8 @@ def _analytics_service(session: AsyncSession) -> AnalyticsService:
     )
 
 
-def _resolve_business_id(user: UserClaims) -> str | None:
-    """ADMIN sees all data; BUSINESS sees only their fleet."""
+def _resolve_fleet_id(user: UserClaims) -> str | None:
+    """ADMIN sees all data; fleet managers see only their fleet."""
     if user.role == UserRole.BUSINESS:
         return user.business_id
     return None
@@ -44,7 +44,7 @@ async def get_dashboard_overview(
 ):
     """Dashboard KPI cards: total trips, active drivers, pending bookings, revenue."""
     svc = _analytics_service(session)
-    kpis = await svc.get_dashboard_kpis(business_id=_resolve_business_id(user))
+    kpis = await svc.get_dashboard_kpis(business_id=_resolve_fleet_id(user))
     return StandardResponse(data=kpis)
 
 
@@ -57,7 +57,7 @@ async def get_trip_volume_trend(
     """Trip volume trend for the last N days (7, 30, or 90)."""
     svc = _analytics_service(session)
     trend = await svc.get_trip_volume_trend(
-        days=days, business_id=_resolve_business_id(user)
+        days=days, business_id=_resolve_fleet_id(user)
     )
     return StandardResponse(data=trend)
 
@@ -70,7 +70,7 @@ async def get_trip_status_distribution(
     """Trip status distribution (pie chart data)."""
     svc = _analytics_service(session)
     dist = await svc.get_trip_status_distribution(
-        business_id=_resolve_business_id(user)
+        business_id=_resolve_fleet_id(user)
     )
     return StandardResponse(data=dist)
 
@@ -85,7 +85,7 @@ async def get_top_drivers(
     """Top performing drivers ranked by completed trips with average rating."""
     svc = _analytics_service(session)
     top = await svc.get_top_drivers(
-        days=days, limit=limit, business_id=_resolve_business_id(user)
+        days=days, limit=limit, business_id=_resolve_fleet_id(user)
     )
     return StandardResponse(data=top)
 
@@ -99,6 +99,6 @@ async def get_recent_activity(
     """Recent activity feed (latest status transitions across all rides)."""
     svc = _analytics_service(session)
     activity = await svc.get_recent_activity(
-        limit=limit, business_id=_resolve_business_id(user)
+        limit=limit, business_id=_resolve_fleet_id(user)
     )
     return StandardResponse(data=activity)

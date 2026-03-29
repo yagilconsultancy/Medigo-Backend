@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from mediride_common.database.base import Base
 
 
-class Business(Base):
+class Fleet(Base):
     __tablename__ = "businesses"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -40,5 +40,5 @@ class Business(Base):
     )
 
     # Relationships
-    drivers = relationship("DriverProfile", back_populates="business", lazy="selectin")
-    invitations = relationship("DriverInvitation", back_populates="business", lazy="selectin")
+    drivers = relationship("DriverProfile", back_populates="fleet", lazy="selectin")
+    invitations = relationship("DriverInvitation", back_populates="fleet", lazy="selectin")

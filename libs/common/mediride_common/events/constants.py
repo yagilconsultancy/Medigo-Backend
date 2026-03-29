@@ -24,8 +24,8 @@ class RoutingKeys:
     DRIVER_SUSPENDED = "driver.suspended"
     DRIVER_ONLINE = "driver.online"
     DRIVER_OFFLINE = "driver.offline"
-    BUSINESS_CREATED = "business.created"
-    BUSINESS_UPDATED = "business.updated"
+    FLEET_CREATED = "fleet.created"
+    FLEET_UPDATED = "fleet.updated"
     DRIVER_DOCUMENT_UPLOADED = "driver.document.uploaded"
 
     # Ride events
@@ -41,12 +41,6 @@ class RoutingKeys:
     RIDE_REQUEST_SENT = "ride.request.sent"
     RIDE_REQUEST_ACCEPTED = "ride.request.accepted"
     RIDE_REQUEST_DECLINED = "ride.request.declined"
-
-    # Ride assignment events (2-level dispatch)
-    RIDE_ASSIGNED_TO_BUSINESS = "ride.assigned_to_business"
-    RIDE_BUSINESS_ACCEPTED = "ride.business_accepted"
-    RIDE_BUSINESS_REJECTED = "ride.business_rejected"
-    RIDE_BUSINESS_ASSIGNMENT_EXPIRED = "ride.business_assignment_expired"
 
     # Rating events
     RIDE_RATING_SUBMITTED = "ride.rating.submitted"
@@ -88,6 +82,21 @@ class RoutingKeys:
     FLEET_VEHICLE_CREATED = "fleet.vehicle.created"
     FLEET_VEHICLE_STATUS_CHANGED = "fleet.vehicle.status_changed"
     FLEET_VEHICLE_MAINTENANCE_SCHEDULED = "fleet.vehicle.maintenance_scheduled"
+    VEHICLE_DOCUMENT_UPLOADED = "fleet.vehicle.document.uploaded"
+    VEHICLE_DOCUMENT_REPLACED = "fleet.vehicle.document.replaced"
+    VEHICLE_CATEGORY_UPDATED = "fleet.vehicle.category.updated"
+
+    # Driver management events
+    DRIVER_ACCOUNT_CREATED = "driver.account.created"
+    DRIVER_REACTIVATED = "driver.reactivated"
+    DRIVER_DEACTIVATED = "driver.deactivated"
+    DRIVER_PROFILE_UPDATED = "driver.profile.updated"
+
+    # Rider management events
+    RIDER_SUSPENDED = "rider.suspended"
+    RIDER_REINSTATED = "rider.reinstated"
+    RIDER_ISSUE_CREATED = "rider.issue.created"
+    RIDER_ISSUE_STATUS_CHANGED = "rider.issue.status_changed"
 
 
 class Queues:

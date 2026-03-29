@@ -50,6 +50,7 @@ class AuthService:
         publisher: EventPublisher,
         password_reset_repo: PasswordResetRepository | None = None,
         user_service_client=None,
+        login_history_service=None,
     ):
         self.credential_repo = credential_repo
         self.token_repo = token_repo
@@ -58,6 +59,7 @@ class AuthService:
         self.publisher = publisher
         self.password_reset_repo = password_reset_repo
         self.user_service_client = user_service_client
+        self.login_history_service = login_history_service
 
     async def register(
         self,
@@ -190,20 +192,57 @@ class AuthService:
         return token_pair
 
     async def admin_login(
-        self, email: str | None, phone: str | None, password: str
+        self,
+        email: str | None,
+        phone: str | None,
+        password: str,
+        ip_address: str = "unknown",
+        user_agent: str = "",
     ) -> TokenPair:
         """Authenticate admin user. Rejects non-admin roles."""
+        device_info = self._parse_device_info(user_agent)
+
         credential = await self.credential_repo.get_by_email_or_phone(email, phone)
         if not credential:
+            await self._record_login(
+                user_id=None,
+                admin_name="Unknown",
+                admin_email=email or "unknown",
+                ip_address=ip_address,
+                device_info=device_info,
+                success=False,
+                failure_reason="Invalid credentials",
+            )
             raise AuthenticationError("Invalid credentials")
+
+        admin_name = credential.email or "Admin"
+        admin_email = credential.email or ""
 
         # Check if account is locked
         if credential.locked_until and credential.locked_until > utc_now():
+            await self._record_login(
+                user_id=credential.id,
+                admin_name=admin_name,
+                admin_email=admin_email,
+                ip_address=ip_address,
+                device_info=device_info,
+                success=False,
+                failure_reason="Account locked",
+            )
             raise AuthenticationError(
                 "Account is temporarily locked. Please try again later."
             )
 
         if not credential.is_active:
+            await self._record_login(
+                user_id=credential.id,
+                admin_name=admin_name,
+                admin_email=admin_email,
+                ip_address=ip_address,
+                device_info=device_info,
+                success=False,
+                failure_reason="Account deactivated",
+            )
             raise AuthenticationError("Account is deactivated")
 
         # Verify password
@@ -214,13 +253,40 @@ class AuthService:
                     minutes=settings.LOCKOUT_DURATION_MINUTES
                 )
                 await self.credential_repo.lock_account(credential.id, locked_until)
+            await self._record_login(
+                user_id=credential.id,
+                admin_name=admin_name,
+                admin_email=admin_email,
+                ip_address=ip_address,
+                device_info=device_info,
+                success=False,
+                failure_reason="Invalid password",
+            )
             raise AuthenticationError("Invalid credentials")
 
         if not credential.is_verified:
+            await self._record_login(
+                user_id=credential.id,
+                admin_name=admin_name,
+                admin_email=admin_email,
+                ip_address=ip_address,
+                device_info=device_info,
+                success=False,
+                failure_reason="Account not verified",
+            )
             raise AuthenticationError("Account not verified. Please verify your OTP.")
 
         # Admin-only check
         if credential.role != UserRole.ADMIN:
+            await self._record_login(
+                user_id=credential.id,
+                admin_name=admin_name,
+                admin_email=admin_email,
+                ip_address=ip_address,
+                device_info=device_info,
+                success=False,
+                failure_reason="Non-admin role",
+            )
             raise AuthenticationError("Access denied. Admin credentials required.")
 
         # Reset failed attempts
@@ -243,7 +309,74 @@ class AuthService:
         )
         await self.token_repo.create(refresh_token_record)
 
+        # Record successful login
+        await self._record_login(
+            user_id=credential.id,
+            admin_name=admin_name,
+            admin_email=admin_email,
+            ip_address=ip_address,
+            device_info=device_info,
+            success=True,
+        )
+
         return token_pair
+
+    async def _record_login(
+        self,
+        user_id,
+        admin_name: str,
+        admin_email: str,
+        ip_address: str,
+        device_info: str,
+        success: bool,
+        failure_reason: str | None = None,
+    ) -> None:
+        """Record admin login attempt if login_history_service is available."""
+        if not self.login_history_service:
+            return
+        try:
+            from uuid import uuid4
+
+            uid = user_id or uuid4()
+            await self.login_history_service.record_login(
+                user_id=uid,
+                admin_name=admin_name,
+                admin_email=admin_email,
+                ip_address=ip_address,
+                device_info=device_info,
+                success=success,
+                failure_reason=failure_reason,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to record login attempt: {e}")
+
+    @staticmethod
+    def _parse_device_info(user_agent: str) -> str:
+        """Parse user-agent into a readable device string."""
+        if not user_agent:
+            return "Unknown device"
+        ua = user_agent.lower()
+        browser = "Unknown"
+        if "chrome" in ua and "edg" not in ua:
+            browser = "Chrome"
+        elif "firefox" in ua:
+            browser = "Firefox"
+        elif "safari" in ua and "chrome" not in ua:
+            browser = "Safari"
+        elif "edg" in ua:
+            browser = "Edge"
+        os_name = "Unknown"
+        if "windows" in ua:
+            os_name = "Windows"
+        elif "macintosh" in ua or "mac os" in ua:
+            os_name = "macOS"
+        elif "linux" in ua:
+            os_name = "Linux"
+        elif "iphone" in ua or "ipad" in ua:
+            os_name = "iOS"
+        elif "android" in ua:
+            os_name = "Android"
+        return f"{browser} · {os_name}"
 
     async def refresh_token(self, refresh_token: str) -> TokenPair:
         """Refresh access token using refresh token."""

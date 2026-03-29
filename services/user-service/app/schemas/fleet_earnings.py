@@ -23,8 +23,8 @@ class FleetRevenueTrendResponse(BaseModel):
 
 
 class FleetEarningsBreakdownRow(BaseModel):
-    business_id: UUID
-    business_name: str
+    fleet_id: UUID
+    fleet_name: str
     trips: int
     revenue: float
     commission: float

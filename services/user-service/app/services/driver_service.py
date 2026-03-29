@@ -118,6 +118,6 @@ class DriverService:
         is_online: bool | None = None,
         is_approved: bool | None = None,
     ) -> tuple[list[DriverProfile], int]:
-        return await self.driver_repo.list_by_business(
+        return await self.driver_repo.list_by_fleet(
             business_id, offset, limit, is_online, is_approved
         )

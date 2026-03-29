@@ -29,6 +29,19 @@ class User(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # Insurance (rider)
+    insurance_provider: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    insurance_policy_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # Suspension (rider)
+    suspended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    suspension_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    suspended_by: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), nullable=True
+    )
+
     # Consent fields
     consent_emergency_services: Mapped[bool] = mapped_column(Boolean, default=False)
     consent_privacy_policy: Mapped[bool] = mapped_column(Boolean, default=False)

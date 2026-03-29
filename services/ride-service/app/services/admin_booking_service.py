@@ -443,11 +443,7 @@ class AdminBookingService:
         if not ride:
             raise NotFoundError("Booking not found")
 
-        # If ride is assigned to a business, get that business's drivers
-        if ride.assigned_to_business_id:
-            drivers = await self.user_client.get_business_drivers(ride.assigned_to_business_id)
-        else:
-            drivers = await self.user_client.get_available_drivers()
+        drivers = await self.user_client.get_available_drivers()
 
         return [
             AvailableDriverResponse(

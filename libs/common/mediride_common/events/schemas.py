@@ -40,7 +40,7 @@ class PasswordResetRequestedPayload(BaseModel):
 class DriverInviteSentPayload(BaseModel):
     invitation_id: UUID
     business_id: UUID
-    business_name: str
+    fleet_name: str
     email: str
     invite_token: str
 
@@ -65,8 +65,8 @@ class DriverStatusPayload(BaseModel):
     business_id: UUID
 
 
-class BusinessCreatedPayload(BaseModel):
-    business_id: UUID
+class FleetCreatedPayload(BaseModel):
+    fleet_id: UUID
     name: str
     created_by: UUID
 
@@ -154,26 +154,6 @@ class RideETAUpdatedPayload(BaseModel):
     driver_id: UUID
     eta_minutes: float
     distance_miles: float
-
-
-# Ride assignment event payloads (2-level dispatch)
-class RideAssignedToBusinessPayload(BaseModel):
-    ride_id: UUID
-    rider_id: UUID
-    business_id: UUID
-    assigned_by_admin_id: UUID
-    ride_type: str
-    pickup_address: str
-    destination_address: str
-    scheduled_at: datetime
-    expires_at: datetime | None = None
-
-
-class RideBusinessResponsePayload(BaseModel):
-    ride_id: UUID
-    rider_id: UUID
-    business_id: UUID
-    reason: str | None = None
 
 
 # Chat event payloads
