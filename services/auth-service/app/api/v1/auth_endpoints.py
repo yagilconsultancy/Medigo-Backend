@@ -26,6 +26,7 @@ from app.schemas.auth import (
     OTPVerifyResponse,
 )
 from app.services.auth_service import AuthService
+from mediride_common.auth.models import TokenPair
 from app.services.login_history_service import LoginHistoryService
 from app.services.otp_service import OTPService
 from mediride_common.auth.jwt_handler import JWTHandler
@@ -249,16 +250,30 @@ async def verify_driver_invite(
 
 @router.post(
     "/driver/register",
-    response_model=StandardResponse[RegisterResponse],
 )
 async def register_driver(
     request: DriverRegisterRequest,
     auth_service: AuthService = Depends(_get_auth_service),
 ):
-    user_id, otp_code = await auth_service.register_driver(
+    result = await auth_service.register_driver(
         invite_token=request.invite_token,
         password=request.password,
     )
+
+    # If credential was pre-created by admin, result is a TokenPair (login)
+    if isinstance(result, TokenPair):
+        return StandardResponse(
+            data=TokenResponse(
+                access_token=result.access_token,
+                refresh_token=result.refresh_token,
+                token_type=result.token_type,
+                expires_in=result.expires_in,
+            ),
+            message="Login successful",
+        )
+
+    # Otherwise it's a new registration (user_id, otp_code)
+    user_id, otp_code = result
     message = "Driver registration successful. Please verify your account."
     if settings.ENVIRONMENT != "production":
         message += f" [DEV] OTP: {otp_code}"

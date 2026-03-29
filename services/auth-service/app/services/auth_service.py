@@ -533,8 +533,12 @@ class AuthService:
 
     async def register_driver(
         self, invite_token: str, password: str
-    ) -> tuple[UUID, str]:
-        """Register a driver using an invitation token."""
+    ) -> tuple[UUID, str] | TokenPair:
+        """Register a driver using an invitation token.
+
+        If the credential was already created by admin, verify password and
+        return tokens (login flow) instead of creating a new account.
+        """
         if not self.user_service_client:
             raise ValidationError("Driver registration is not configured")
 
@@ -543,10 +547,39 @@ class AuthService:
         email = invite_data["email"]
         business_id = UUID(invite_data["business_id"])
 
-        # Check if user already exists
+        # Check if user already exists (admin-created driver)
         existing = await self.credential_repo.get_by_email_or_phone(email, None)
         if existing:
-            raise ConflictError("An account with this email already exists")
+            # Credential was pre-created by admin — verify password and log in
+            if not verify_password(password, existing.password_hash):
+                raise AuthenticationError("Invalid credentials")
+
+            # Accept the invitation in user-service
+            await self.user_service_client.accept_invitation(
+                invite_token, str(existing.id)
+            )
+
+            # Ensure account is verified
+            if not existing.is_verified:
+                await self.credential_repo.update_verified(existing.id, True)
+
+            # Create tokens (login)
+            token_pair = self.jwt_handler.create_token_pair(
+                user_id=str(existing.id),
+                role=existing.role,
+                business_id=str(existing.business_id) if existing.business_id else None,
+                email=existing.email,
+            )
+            refresh_token_record = RefreshToken(
+                user_id=existing.id,
+                token_hash=hash_token(token_pair.refresh_token),
+                expires_at=utc_now()
+                + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS),
+            )
+            await self.token_repo.create(refresh_token_record)
+
+            logger.info(f"Admin-created driver logged in via register: {existing.id}")
+            return token_pair
 
         validate_password_strength(password)
 
