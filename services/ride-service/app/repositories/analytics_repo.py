@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.ride import Ride
 from app.models.ride_rating import RideRating
 from app.models.ride_status_log import RideStatusLog
-from mediride_common.schemas.enums import RideStatus
+from mediride_common.schemas.enums import RideStatus, RideType
 from mediride_common.utils import utc_now
 
 
@@ -257,6 +257,132 @@ class AnalyticsRepository:
                 "to_status": row.to_status,
                 "timestamp": row.timestamp,
                 "notes": row.notes,
+            }
+            for row in result.all()
+        ]
+
+    # ---- Transport Type Distribution ----
+
+    async def get_transport_type_distribution(
+        self, days: int = 30, business_id: UUID | None = None
+    ) -> list[dict]:
+        now = utc_now()
+        since = now - timedelta(days=days)
+        conditions = [
+            Ride.deleted_at.is_(None),
+            Ride.created_at >= since,
+        ]
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+
+        display_type = case(
+            (Ride.ride_type == RideType.WHEELCHAIR, "Wheelchair Accessible"),
+            (Ride.ride_type == RideType.STRETCHER, "Stretcher Transport"),
+            else_="Ambulatory",
+        ).label("transport_type")
+
+        result = await self.session.execute(
+            select(display_type, func.count().label("count"))
+            .where(*conditions)
+            .group_by(display_type)
+            .order_by(desc("count"))
+        )
+        return [
+            {"transport_type": row.transport_type, "count": row.count}
+            for row in result.all()
+        ]
+
+    async def get_booking_source_split(
+        self, days: int = 30, business_id: UUID | None = None
+    ) -> dict:
+        now = utc_now()
+        since = now - timedelta(days=days)
+        conditions = [
+            Ride.deleted_at.is_(None),
+            Ride.created_at >= since,
+        ]
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+
+        result = await self.session.execute(
+            select(
+                func.count().label("total"),
+                func.count().filter(
+                    Ride.facility_name.isnot(None),
+                    Ride.facility_name != "",
+                ).label("facility_count"),
+            ).where(*conditions)
+        )
+        row = result.one()
+        total = row.total or 0
+        facility = row.facility_count or 0
+        client = total - facility
+        return {
+            "total": total,
+            "client": client,
+            "facility": facility,
+        }
+
+    # ---- Top Fleet Partners ----
+
+    async def get_top_fleet_partners(
+        self, days: int = 30, limit: int = 6, business_id: UUID | None = None
+    ) -> list[dict]:
+        now = utc_now()
+        since = now - timedelta(days=days)
+        conditions = [
+            Ride.deleted_at.is_(None),
+            Ride.status == RideStatus.COMPLETED,
+            Ride.assigned_to_business_id.isnot(None),
+            Ride.dropoff_at >= since,
+        ]
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+
+        # Subquery: trip counts per fleet
+        trip_sub = (
+            select(
+                Ride.assigned_to_business_id.label("fleet_id"),
+                func.count().label("total_trips"),
+            )
+            .where(*conditions)
+            .group_by(Ride.assigned_to_business_id)
+            .subquery()
+        )
+
+        # Subquery: average rating per fleet (driver ratings for drivers in that fleet)
+        rating_conditions = [
+            Ride.deleted_at.is_(None),
+            Ride.assigned_to_business_id.isnot(None),
+            Ride.dropoff_at >= since,
+            RideRating.rating_type == "rider_to_driver",
+        ]
+        rating_sub = (
+            select(
+                Ride.assigned_to_business_id.label("fleet_id"),
+                func.round(func.avg(RideRating.rating), 1).label("avg_rating"),
+            )
+            .join(Ride, RideRating.ride_id == Ride.id)
+            .where(*rating_conditions)
+            .group_by(Ride.assigned_to_business_id)
+            .subquery()
+        )
+
+        result = await self.session.execute(
+            select(
+                trip_sub.c.fleet_id,
+                trip_sub.c.total_trips,
+                func.coalesce(rating_sub.c.avg_rating, 0.0).label("avg_rating"),
+            )
+            .outerjoin(rating_sub, trip_sub.c.fleet_id == rating_sub.c.fleet_id)
+            .order_by(desc(trip_sub.c.total_trips))
+            .limit(limit)
+        )
+        return [
+            {
+                "fleet_id": row.fleet_id,
+                "total_trips": row.total_trips,
+                "average_rating": float(row.avg_rating),
             }
             for row in result.all()
         ]

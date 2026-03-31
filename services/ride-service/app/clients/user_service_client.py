@@ -89,3 +89,27 @@ class UserServiceClient:
         except httpx.RequestError as e:
             logger.error(f"Error fetching available drivers: {e}")
             return []
+
+    async def get_fleets_with_vehicle_counts(
+        self, fleet_ids: list
+    ) -> dict:
+        """Batch get fleet names + vehicle counts for analytics."""
+        if not fleet_ids:
+            return {}
+        try:
+            ids_str = ",".join(str(fid) for fid in fleet_ids)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/fleets/with-vehicle-counts",
+                    params={"fleet_ids": ids_str},
+                    headers={"X-Internal-Service": "ride-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("fleets", {})
+                logger.warning(
+                    f"Failed to fetch fleet vehicle counts: {resp.status_code}"
+                )
+                return {}
+        except httpx.RequestError as e:
+            logger.error(f"Error fetching fleet vehicle counts: {e}")
+            return {}

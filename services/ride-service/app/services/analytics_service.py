@@ -8,12 +8,17 @@ from app.clients.user_service_client import UserServiceClient
 from app.repositories.analytics_repo import AnalyticsRepository
 from app.schemas.analytics import (
     ActivityEntry,
+    BookingSourceSplit,
     DashboardKPIs,
+    FleetPartnerEntry,
     KPIChange,
     RecentActivityResponse,
     StatusSlice,
     TopDriverEntry,
     TopDriversResponse,
+    TopFleetPartnersResponse,
+    TransportDistributionResponse,
+    TransportTypeSlice,
     TripStatusDistributionResponse,
     TripVolumePoint,
     TripVolumeTrendResponse,
@@ -175,6 +180,67 @@ class AnalyticsService:
                 timestamp=row["timestamp"],
             ))
         return RecentActivityResponse(activities=activities)
+
+    async def get_transport_distribution(
+        self, days: int = 30, business_id: UUID | None = None
+    ) -> TransportDistributionResponse:
+        rows = await self.repo.get_transport_type_distribution(
+            days=days, business_id=business_id
+        )
+        total = sum(r["count"] for r in rows)
+        distribution = [
+            TransportTypeSlice(
+                transport_type=r["transport_type"],
+                count=r["count"],
+                percentage=round((r["count"] / total * 100) if total else 0, 1),
+            )
+            for r in rows
+        ]
+
+        source = await self.repo.get_booking_source_split(
+            days=days, business_id=business_id
+        )
+        src_total = source["total"] or 1
+        booking_source = BookingSourceSplit(
+            client_bookings_percent=round(source["client"] / src_total * 100),
+            facility_bookings_percent=round(source["facility"] / src_total * 100),
+        )
+
+        return TransportDistributionResponse(
+            period_days=days,
+            total=total,
+            distribution=distribution,
+            booking_source=booking_source,
+        )
+
+    async def get_top_fleet_partners(
+        self, days: int = 30, limit: int = 6, business_id: UUID | None = None
+    ) -> TopFleetPartnersResponse:
+        rows = await self.repo.get_top_fleet_partners(
+            days=days, limit=limit, business_id=business_id
+        )
+        if not rows:
+            return TopFleetPartnersResponse(period_days=days, partners=[])
+
+        fleet_ids = [row["fleet_id"] for row in rows]
+        fleet_data = await self.user_client.get_fleets_with_vehicle_counts(fleet_ids)
+
+        partners = []
+        for i, row in enumerate(rows):
+            fid = str(row["fleet_id"])
+            info = fleet_data.get(fid, {})
+            partners.append(
+                FleetPartnerEntry(
+                    rank=i + 1,
+                    fleet_id=row["fleet_id"],
+                    fleet_name=info.get("name", "Unknown Fleet"),
+                    logo_url=info.get("logo_url"),
+                    vehicle_count=info.get("vehicle_count", 0),
+                    total_trips=row["total_trips"],
+                    average_rating=row["average_rating"],
+                )
+            )
+        return TopFleetPartnersResponse(period_days=days, partners=partners)
 
 
 def _build_kpi(total_value: float, current: float, previous: float) -> KPIChange:

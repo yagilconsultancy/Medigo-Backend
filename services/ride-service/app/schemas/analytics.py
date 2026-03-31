@@ -74,3 +74,40 @@ class ActivityEntry(BaseModel):
 
 class RecentActivityResponse(BaseModel):
     activities: list[ActivityEntry]
+
+
+# ---- Transport Type Distribution ----
+
+class TransportTypeSlice(BaseModel):
+    transport_type: str
+    count: int
+    percentage: float
+
+
+class BookingSourceSplit(BaseModel):
+    client_bookings_percent: float
+    facility_bookings_percent: float
+
+
+class TransportDistributionResponse(BaseModel):
+    period_days: int
+    total: int
+    distribution: list[TransportTypeSlice]
+    booking_source: BookingSourceSplit
+
+
+# ---- Top Fleet Partners ----
+
+class FleetPartnerEntry(BaseModel):
+    rank: int
+    fleet_id: UUID
+    fleet_name: str
+    logo_url: str | None = None
+    vehicle_count: int
+    total_trips: int
+    average_rating: float
+
+
+class TopFleetPartnersResponse(BaseModel):
+    period_days: int
+    partners: list[FleetPartnerEntry]

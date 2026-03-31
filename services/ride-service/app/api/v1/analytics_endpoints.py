@@ -10,6 +10,8 @@ from app.schemas.analytics import (
     DashboardKPIs,
     RecentActivityResponse,
     TopDriversResponse,
+    TopFleetPartnersResponse,
+    TransportDistributionResponse,
     TripStatusDistributionResponse,
     TripVolumeTrendResponse,
 )
@@ -102,3 +104,38 @@ async def get_recent_activity(
         limit=limit, business_id=_resolve_fleet_id(user)
     )
     return StandardResponse(data=activity)
+
+
+@router.get(
+    "/transport-distribution",
+    response_model=StandardResponse[TransportDistributionResponse],
+)
+async def get_transport_distribution(
+    days: int = Query(default=30, ge=7, le=90),
+    user: UserClaims = Depends(require_role([UserRole.ADMIN, UserRole.BUSINESS])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Transport type distribution (Wheelchair, Stretcher, Ambulatory) + booking source split."""
+    svc = _analytics_service(session)
+    dist = await svc.get_transport_distribution(
+        days=days, business_id=_resolve_fleet_id(user)
+    )
+    return StandardResponse(data=dist)
+
+
+@router.get(
+    "/top-fleet-partners",
+    response_model=StandardResponse[TopFleetPartnersResponse],
+)
+async def get_top_fleet_partners(
+    days: int = Query(default=30, ge=7, le=90),
+    limit: int = Query(default=6, ge=1, le=20),
+    user: UserClaims = Depends(require_role([UserRole.ADMIN, UserRole.BUSINESS])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Top fleet partners ranked by completed trips with vehicle count and rating."""
+    svc = _analytics_service(session)
+    top = await svc.get_top_fleet_partners(
+        days=days, limit=limit, business_id=_resolve_fleet_id(user)
+    )
+    return StandardResponse(data=top)

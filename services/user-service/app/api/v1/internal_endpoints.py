@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
@@ -284,6 +285,40 @@ async def get_drivers_with_details(
             })
 
     return {"drivers": drivers}
+
+
+@router.get("/fleets/with-vehicle-counts")
+async def get_fleets_with_vehicle_counts(
+    fleet_ids: str = "",
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Batch get fleet names + vehicle counts. Called by ride-service analytics."""
+    if not fleet_ids.strip():
+        return {"fleets": {}}
+
+    from app.models.vehicle import Vehicle
+
+    ids = [UUID(f.strip()) for f in fleet_ids.split(",") if f.strip()]
+    fleet_repo = FleetRepository(session)
+
+    result = {}
+    for fid in ids:
+        fleet = await fleet_repo.get_by_id(fid)
+        if fleet:
+            vehicle_count_result = await session.execute(
+                select(func.count()).select_from(Vehicle).where(
+                    Vehicle.business_id == fid,
+                    Vehicle.deleted_at.is_(None),
+                )
+            )
+            vehicle_count = vehicle_count_result.scalar_one()
+            result[str(fid)] = {
+                "name": fleet.name,
+                "logo_url": fleet.logo_url,
+                "vehicle_count": vehicle_count,
+            }
+    return {"fleets": result}
 
 
 @router.post("/invitations/accept")
