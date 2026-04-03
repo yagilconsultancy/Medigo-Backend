@@ -13,9 +13,9 @@ class KPIChange(BaseModel):
 
 
 class DashboardKPIs(BaseModel):
-    total_trips: KPIChange
-    active_drivers: KPIChange
-    pending_bookings: KPIChange
+    total_bookings: KPIChange
+    active_clients: KPIChange
+    registered_facilities: KPIChange
     revenue: KPIChange
 
 
@@ -111,3 +111,45 @@ class FleetPartnerEntry(BaseModel):
 class TopFleetPartnersResponse(BaseModel):
     period_days: int
     partners: list[FleetPartnerEntry]
+
+
+# ---- Booking Channels ----
+
+class BookingChannelEntry(BaseModel):
+    channel: str  # "Mobile App", "Website (Client)", "Website (Facility)"
+    count: int
+    percentage: float
+    growth_percent: float
+
+
+class BookingChannelsResponse(BaseModel):
+    period_days: int
+    total: int
+    channels: list[BookingChannelEntry]
+
+
+# ---- Service Quality Metrics ----
+
+class ServiceQualityResponse(BaseModel):
+    avg_pickup_time_minutes: float
+    avg_trip_distance_km: float
+    service_rating: float
+    completion_rate_percent: float
+
+
+# ---- Top Performing Facilities ----
+
+class TopFacilityEntry(BaseModel):
+    rank: int
+    facility_id: UUID
+    facility_name: str
+    facility_type: str | None = None
+    total_bookings: int
+    acceptance_rate: float
+
+
+class TopFacilitiesResponse(BaseModel):
+    period_days: int
+    total_facilities: int
+    type_counts: dict[str, int]  # {"Hospital": 5, "Care Home": 3, ...}
+    facilities: list[TopFacilityEntry]

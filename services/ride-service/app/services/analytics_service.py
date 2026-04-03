@@ -8,14 +8,19 @@ from app.clients.user_service_client import UserServiceClient
 from app.repositories.analytics_repo import AnalyticsRepository
 from app.schemas.analytics import (
     ActivityEntry,
+    BookingChannelEntry,
+    BookingChannelsResponse,
     BookingSourceSplit,
     DashboardKPIs,
     FleetPartnerEntry,
     KPIChange,
     RecentActivityResponse,
+    ServiceQualityResponse,
     StatusSlice,
     TopDriverEntry,
     TopDriversResponse,
+    TopFacilitiesResponse,
+    TopFacilityEntry,
     TopFleetPartnersResponse,
     TransportDistributionResponse,
     TransportTypeSlice,
@@ -61,18 +66,20 @@ class AnalyticsService:
         previous_period_start = now - timedelta(days=60)
 
         # Run DB queries sequentially (async session cannot handle concurrent queries)
-        total_trips = await self.repo.get_trip_count(business_id=business_id)
-        active_drivers = await self.repo.get_active_driver_count(
+        total_bookings = await self.repo.get_trip_count(business_id=business_id)
+        active_clients = await self.repo.get_unique_client_count(
             since=current_period_start, business_id=business_id
         )
-        pending_bookings = await self.repo.get_pending_booking_count(business_id=business_id)
         revenue = await self.repo.get_revenue(business_id=business_id)
 
+        # Facility count via user-service (HTTP call)
+        facility_count = await self.user_client.get_facility_count()
+
         # Previous period stats for comparison
-        prev_trips = await self.repo.get_trip_count(
+        prev_bookings = await self.repo.get_trip_count(
             since=previous_period_start, business_id=business_id
         )
-        prev_drivers = await self.repo.get_active_driver_count(
+        prev_clients = await self.repo.get_unique_client_count(
             since=previous_period_start, business_id=business_id
         )
         prev_revenue = await self.repo.get_revenue(
@@ -80,7 +87,7 @@ class AnalyticsService:
         )
 
         # Current period only
-        curr_trips = await self.repo.get_trip_count(
+        curr_bookings = await self.repo.get_trip_count(
             since=current_period_start, business_id=business_id
         )
         curr_revenue = await self.repo.get_revenue(
@@ -88,13 +95,14 @@ class AnalyticsService:
         )
 
         # Previous period only (subtract current from previous-60-day range)
-        prev_only_trips = prev_trips - curr_trips
+        prev_only_bookings = prev_bookings - curr_bookings
+        prev_only_clients = prev_clients - active_clients
         prev_only_revenue = prev_revenue - curr_revenue
 
         return DashboardKPIs(
-            total_trips=_build_kpi(total_trips, curr_trips, prev_only_trips),
-            active_drivers=_build_kpi(active_drivers, active_drivers, prev_drivers),
-            pending_bookings=_build_kpi(pending_bookings, 0, 0),
+            total_bookings=_build_kpi(total_bookings, curr_bookings, prev_only_bookings),
+            active_clients=_build_kpi(active_clients, active_clients, prev_only_clients),
+            registered_facilities=_build_kpi(facility_count, 0, 0),
             revenue=_build_kpi(
                 round(revenue, 2),
                 round(curr_revenue, 2),
@@ -241,6 +249,88 @@ class AnalyticsService:
                 )
             )
         return TopFleetPartnersResponse(period_days=days, partners=partners)
+
+    async def get_booking_channels(
+        self, days: int = 30, business_id: UUID | None = None
+    ) -> BookingChannelsResponse:
+        rows = await self.repo.get_booking_channel_breakdown(
+            days=days, business_id=business_id
+        )
+        total = sum(r["count"] for r in rows)
+        channels = [
+            BookingChannelEntry(
+                channel=r["channel"],
+                count=r["count"],
+                percentage=round((r["count"] / total * 100) if total else 0, 1),
+                growth_percent=r["growth_percent"],
+            )
+            for r in rows
+        ]
+        return BookingChannelsResponse(
+            period_days=days, total=total, channels=channels
+        )
+
+    async def get_service_quality(
+        self, business_id: UUID | None = None
+    ) -> ServiceQualityResponse:
+        avg_pickup = await self.repo.get_avg_pickup_time_minutes(
+            business_id=business_id
+        )
+        avg_distance = await self.repo.get_avg_trip_distance_km(
+            business_id=business_id
+        )
+        rating = await self.repo.get_service_rating_avg(business_id=business_id)
+        completion = await self.repo.get_completion_rate(business_id=business_id)
+
+        return ServiceQualityResponse(
+            avg_pickup_time_minutes=avg_pickup,
+            avg_trip_distance_km=avg_distance,
+            service_rating=rating,
+            completion_rate_percent=completion,
+        )
+
+    async def get_top_facilities(
+        self, days: int = 30, limit: int = 5, business_id: UUID | None = None
+    ) -> TopFacilitiesResponse:
+        rows = await self.repo.get_facility_booking_stats(
+            days=days, limit=limit, business_id=business_id
+        )
+        if not rows:
+            return TopFacilitiesResponse(
+                period_days=days,
+                total_facilities=0,
+                type_counts={},
+                facilities=[],
+            )
+
+        facility_ids = [row["facility_id"] for row in rows]
+        facility_data = await self.user_client.get_top_facilities(facility_ids)
+
+        facilities = []
+        type_counts: dict[str, int] = {}
+        for i, row in enumerate(rows):
+            fid = str(row["facility_id"])
+            info = facility_data.get(fid, {})
+            f_type = info.get("facility_type", "Unknown")
+            type_counts[f_type] = type_counts.get(f_type, 0) + 1
+            facilities.append(
+                TopFacilityEntry(
+                    rank=i + 1,
+                    facility_id=row["facility_id"],
+                    facility_name=info.get("name", "Unknown Facility"),
+                    facility_type=f_type,
+                    total_bookings=row["total_bookings"],
+                    acceptance_rate=row["acceptance_rate"],
+                )
+            )
+
+        total_facilities = await self.user_client.get_facility_count()
+        return TopFacilitiesResponse(
+            period_days=days,
+            total_facilities=total_facilities,
+            type_counts=type_counts,
+            facilities=facilities,
+        )
 
 
 def _build_kpi(total_value: float, current: float, previous: float) -> KPIChange:

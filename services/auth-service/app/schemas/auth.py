@@ -81,6 +81,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+    role: str
 
 
 class OTPVerifyResponse(BaseModel):

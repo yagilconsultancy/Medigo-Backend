@@ -7,9 +7,12 @@ from app.config import settings
 from app.dependencies import get_db
 from app.repositories.analytics_repo import AnalyticsRepository
 from app.schemas.analytics import (
+    BookingChannelsResponse,
     DashboardKPIs,
     RecentActivityResponse,
+    ServiceQualityResponse,
     TopDriversResponse,
+    TopFacilitiesResponse,
     TopFleetPartnersResponse,
     TransportDistributionResponse,
     TripStatusDistributionResponse,
@@ -139,3 +142,54 @@ async def get_top_fleet_partners(
         days=days, limit=limit, business_id=_resolve_fleet_id(user)
     )
     return StandardResponse(data=top)
+
+
+@router.get(
+    "/booking-channels",
+    response_model=StandardResponse[BookingChannelsResponse],
+)
+async def get_booking_channels(
+    days: int = Query(default=30, ge=7, le=90),
+    user: UserClaims = Depends(require_role([UserRole.ADMIN, UserRole.BUSINESS])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Booking channel breakdown (Mobile App, Website Client, Website Facility)."""
+    svc = _analytics_service(session)
+    channels = await svc.get_booking_channels(
+        days=days, business_id=_resolve_fleet_id(user)
+    )
+    return StandardResponse(data=channels)
+
+
+@router.get(
+    "/service-quality",
+    response_model=StandardResponse[ServiceQualityResponse],
+)
+async def get_service_quality(
+    user: UserClaims = Depends(require_role([UserRole.ADMIN, UserRole.BUSINESS])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Service quality metrics: avg pickup time, trip distance, rating, completion rate."""
+    svc = _analytics_service(session)
+    quality = await svc.get_service_quality(
+        business_id=_resolve_fleet_id(user)
+    )
+    return StandardResponse(data=quality)
+
+
+@router.get(
+    "/top-facilities",
+    response_model=StandardResponse[TopFacilitiesResponse],
+)
+async def get_top_facilities(
+    days: int = Query(default=30, ge=7, le=90),
+    limit: int = Query(default=5, ge=1, le=20),
+    user: UserClaims = Depends(require_role([UserRole.ADMIN, UserRole.BUSINESS])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Top performing facilities ranked by total bookings with acceptance rate."""
+    svc = _analytics_service(session)
+    facilities = await svc.get_top_facilities(
+        days=days, limit=limit, business_id=_resolve_fleet_id(user)
+    )
+    return StandardResponse(data=facilities)

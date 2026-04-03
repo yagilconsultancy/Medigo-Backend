@@ -6,6 +6,7 @@ class UserRole(StrEnum):
     BUSINESS = "business"
     DRIVER = "driver"
     RIDER = "rider"
+    FACILITY = "facility"
 
 
 class RideStatus(StrEnum):
@@ -424,3 +425,15 @@ class ActivityLogSeverity(StrEnum):
 class LoginStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
+
+
+class FacilityType(StrEnum):
+    HOSPITAL = "hospital"
+    CARE_HOME = "care_home"
+    REHAB_CENTER = "rehab_center"
+
+
+class BookingChannel(StrEnum):
+    MOBILE_APP = "mobile_app"
+    WEBSITE_CLIENT = "website_client"
+    WEBSITE_FACILITY = "website_facility"

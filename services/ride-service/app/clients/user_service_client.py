@@ -90,6 +90,43 @@ class UserServiceClient:
             logger.error(f"Error fetching available drivers: {e}")
             return []
 
+    async def get_facility_count(self) -> int:
+        """Get count of registered facility users."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/facilities/count",
+                    headers={"X-Internal-Service": "ride-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("count", 0)
+                return 0
+        except httpx.RequestError as e:
+            logger.error(f"Error fetching facility count: {e}")
+            return 0
+
+    async def get_top_facilities(self, facility_ids: list) -> dict:
+        """Batch get facility user details for analytics."""
+        if not facility_ids:
+            return {}
+        try:
+            ids_str = ",".join(str(fid) for fid in facility_ids)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/facilities/top",
+                    params={"facility_ids": ids_str},
+                    headers={"X-Internal-Service": "ride-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("facilities", {})
+                logger.warning(
+                    f"Failed to fetch facility details: {resp.status_code}"
+                )
+                return {}
+        except httpx.RequestError as e:
+            logger.error(f"Error fetching facility details: {e}")
+            return {}
+
     async def get_fleets_with_vehicle_counts(
         self, fleet_ids: list
     ) -> dict:

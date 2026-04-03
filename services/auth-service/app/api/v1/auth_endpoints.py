@@ -121,6 +121,7 @@ async def login(
             access_token=token_pair.access_token,
             refresh_token=token_pair.refresh_token,
             expires_in=token_pair.expires_in,
+            role=token_pair.role,
         ),
         message="Login successful",
     )
@@ -146,6 +147,7 @@ async def admin_login(
             access_token=token_pair.access_token,
             refresh_token=token_pair.refresh_token,
             expires_in=token_pair.expires_in,
+            role=token_pair.role,
         ),
         message="Admin login successful",
     )
@@ -162,6 +164,7 @@ async def refresh_token(
             access_token=token_pair.access_token,
             refresh_token=token_pair.refresh_token,
             expires_in=token_pair.expires_in,
+            role=token_pair.role,
         ),
         message="Token refreshed successfully",
     )
@@ -268,6 +271,7 @@ async def register_driver(
                 refresh_token=result.refresh_token,
                 token_type=result.token_type,
                 expires_in=result.expires_in,
+                role=result.role,
             ),
             message="Login successful",
         )

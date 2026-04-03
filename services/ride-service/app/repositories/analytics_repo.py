@@ -308,8 +308,7 @@ class AnalyticsRepository:
             select(
                 func.count().label("total"),
                 func.count().filter(
-                    Ride.facility_name.isnot(None),
-                    Ride.facility_name != "",
+                    Ride.facility_id.isnot(None),
                 ).label("facility_count"),
             ).where(*conditions)
         )
@@ -322,6 +321,248 @@ class AnalyticsRepository:
             "client": client,
             "facility": facility,
         }
+
+    # ---- Unique Client Count ----
+
+    async def get_unique_client_count(
+        self, since: datetime | None = None, business_id: UUID | None = None
+    ) -> int:
+        conditions = [Ride.deleted_at.is_(None)]
+        if since:
+            conditions.append(Ride.created_at >= since)
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+        result = await self.session.execute(
+            select(func.count(func.distinct(Ride.rider_id))).where(*conditions)
+        )
+        return result.scalar_one()
+
+    # ---- Booking Channel Breakdown ----
+
+    async def get_booking_channel_breakdown(
+        self, days: int = 30, business_id: UUID | None = None
+    ) -> list[dict]:
+        now = utc_now()
+        since = now - timedelta(days=days)
+        prev_since = now - timedelta(days=days * 2)
+        conditions = [
+            Ride.deleted_at.is_(None),
+            Ride.created_at >= since,
+        ]
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+
+        channel_label = case(
+            (Ride.booking_channel == "mobile_app", "Mobile App"),
+            (Ride.booking_channel == "website_client", "Website (Client)"),
+            (Ride.booking_channel == "website_facility", "Website (Facility)"),
+            else_="Other",
+        ).label("channel")
+
+        result = await self.session.execute(
+            select(channel_label, func.count().label("count"))
+            .where(*conditions)
+            .group_by(channel_label)
+            .order_by(desc("count"))
+        )
+        current = [{"channel": r.channel, "count": r.count} for r in result.all()]
+
+        # Previous period for growth calc
+        prev_conditions = [
+            Ride.deleted_at.is_(None),
+            Ride.created_at >= prev_since,
+            Ride.created_at < since,
+        ]
+        if business_id:
+            prev_conditions.append(Ride.assigned_to_business_id == business_id)
+
+        prev_result = await self.session.execute(
+            select(channel_label, func.count().label("count"))
+            .where(*prev_conditions)
+            .group_by(channel_label)
+        )
+        prev_map = {r.channel: r.count for r in prev_result.all()}
+
+        for item in current:
+            prev_count = prev_map.get(item["channel"], 0)
+            if prev_count > 0:
+                item["growth_percent"] = round(
+                    ((item["count"] - prev_count) / prev_count) * 100, 1
+                )
+            elif item["count"] > 0:
+                item["growth_percent"] = 100.0
+            else:
+                item["growth_percent"] = 0.0
+
+        return current
+
+    # ---- Service Quality Metrics ----
+
+    async def get_avg_pickup_time_minutes(
+        self, business_id: UUID | None = None
+    ) -> float:
+        """Average minutes from DRIVER_ASSIGNED to DRIVER_ARRIVED."""
+        assigned_sub = (
+            select(
+                RideStatusLog.ride_id,
+                func.min(RideStatusLog.timestamp).label("assigned_at"),
+            )
+            .where(RideStatusLog.to_status == RideStatus.DRIVER_ASSIGNED)
+            .group_by(RideStatusLog.ride_id)
+            .subquery()
+        )
+        arrived_sub = (
+            select(
+                RideStatusLog.ride_id,
+                func.min(RideStatusLog.timestamp).label("arrived_at"),
+            )
+            .where(RideStatusLog.to_status == RideStatus.DRIVER_ARRIVED)
+            .group_by(RideStatusLog.ride_id)
+            .subquery()
+        )
+        conditions = []
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+            conditions.append(Ride.deleted_at.is_(None))
+
+        q = (
+            select(
+                func.avg(
+                    func.extract(
+                        "epoch",
+                        arrived_sub.c.arrived_at - assigned_sub.c.assigned_at,
+                    )
+                    / 60
+                ).label("avg_minutes")
+            )
+            .select_from(assigned_sub)
+            .join(arrived_sub, assigned_sub.c.ride_id == arrived_sub.c.ride_id)
+        )
+        if conditions:
+            q = q.join(Ride, assigned_sub.c.ride_id == Ride.id).where(*conditions)
+
+        result = await self.session.execute(q)
+        val = result.scalar_one_or_none()
+        return round(float(val), 1) if val else 0.0
+
+    async def get_avg_trip_distance_km(
+        self, business_id: UUID | None = None
+    ) -> float:
+        conditions = [
+            Ride.deleted_at.is_(None),
+            Ride.status == RideStatus.COMPLETED,
+            Ride.actual_distance_miles.isnot(None),
+        ]
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+        result = await self.session.execute(
+            select(func.avg(Ride.actual_distance_miles * 1.60934)).where(*conditions)
+        )
+        val = result.scalar_one_or_none()
+        return round(float(val), 1) if val else 0.0
+
+    async def get_service_rating_avg(
+        self, business_id: UUID | None = None
+    ) -> float:
+        conditions = [RideRating.rating_type == "rider_to_driver"]
+        if business_id:
+            q = (
+                select(func.round(func.avg(RideRating.rating), 1))
+                .join(Ride, RideRating.ride_id == Ride.id)
+                .where(
+                    *conditions,
+                    Ride.assigned_to_business_id == business_id,
+                    Ride.deleted_at.is_(None),
+                )
+            )
+        else:
+            q = select(func.round(func.avg(RideRating.rating), 1)).where(*conditions)
+        result = await self.session.execute(q)
+        val = result.scalar_one_or_none()
+        return float(val) if val else 0.0
+
+    async def get_completion_rate(
+        self, business_id: UUID | None = None
+    ) -> float:
+        conditions = [Ride.deleted_at.is_(None)]
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+        total_result = await self.session.execute(
+            select(func.count()).where(*conditions)
+        )
+        total = total_result.scalar_one()
+        if total == 0:
+            return 0.0
+        completed_result = await self.session.execute(
+            select(func.count()).where(
+                *conditions, Ride.status == RideStatus.COMPLETED
+            )
+        )
+        completed = completed_result.scalar_one()
+        return round((completed / total) * 100, 1)
+
+    # ---- Top Facilities ----
+
+    async def get_facility_booking_stats(
+        self, days: int = 30, limit: int = 5, business_id: UUID | None = None
+    ) -> list[dict]:
+        now = utc_now()
+        since = now - timedelta(days=days)
+        conditions = [
+            Ride.deleted_at.is_(None),
+            Ride.facility_id.isnot(None),
+            Ride.created_at >= since,
+        ]
+        if business_id:
+            conditions.append(Ride.assigned_to_business_id == business_id)
+
+        total_sub = (
+            select(
+                Ride.facility_id,
+                func.count().label("total_bookings"),
+            )
+            .where(*conditions)
+            .group_by(Ride.facility_id)
+            .subquery()
+        )
+
+        completed_conditions = conditions + [Ride.status == RideStatus.COMPLETED]
+        completed_sub = (
+            select(
+                Ride.facility_id,
+                func.count().label("completed"),
+            )
+            .where(*completed_conditions)
+            .group_by(Ride.facility_id)
+            .subquery()
+        )
+
+        result = await self.session.execute(
+            select(
+                total_sub.c.facility_id,
+                total_sub.c.total_bookings,
+                func.coalesce(completed_sub.c.completed, 0).label("completed"),
+            )
+            .outerjoin(
+                completed_sub,
+                total_sub.c.facility_id == completed_sub.c.facility_id,
+            )
+            .order_by(desc(total_sub.c.total_bookings))
+            .limit(limit)
+        )
+        return [
+            {
+                "facility_id": row.facility_id,
+                "total_bookings": row.total_bookings,
+                "acceptance_rate": round(
+                    (row.completed / row.total_bookings * 100)
+                    if row.total_bookings > 0
+                    else 0,
+                    1,
+                ),
+            }
+            for row in result.all()
+        ]
 
     # ---- Top Fleet Partners ----
 

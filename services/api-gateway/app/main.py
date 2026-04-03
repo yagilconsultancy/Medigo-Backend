@@ -37,6 +37,7 @@ app.add_middleware(
 # Middleware
 app.add_middleware(CorrelationIdMiddleware)
 
+
 # Error handlers
 register_error_handlers(app)
 

@@ -17,6 +17,18 @@ class NotFoundError(MediRideError):
     message = "Resource not found"
 
 
+class MediError(Exception):
+
+    status_code: int = 500
+    error_code: str = "MEDI_ERROR"
+    message: str = "A MediRide specific error occurred"
+
+    def __init__(self,messge: str, detail: dict | None =None):
+        self.message = self.message
+        self.detail = detail
+        self.__init__(self)
+
+
 class ValidationError(MediRideError):
     status_code = 422
     error_code = "VALIDATION_ERROR"

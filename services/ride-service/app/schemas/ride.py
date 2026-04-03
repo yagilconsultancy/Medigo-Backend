@@ -37,6 +37,7 @@ class CreateRideRequest(BaseModel):
     use_highway_407: bool = False
     highway_407_route: str | None = None
     is_dialysis_trip: bool = False
+    booking_channel: str = "mobile_app"
 
 
 class StatusTransitionRequest(BaseModel):
@@ -90,6 +91,8 @@ class RideResponse(BaseModel):
     special_instructions: str | None = None
     visit_type: str | None = None
     facility_name: str | None = None
+    booking_channel: str = "mobile_app"
+    facility_id: UUID | None = None
     use_highway_407: bool = False
     highway_407_route: str | None = None
     is_dialysis_trip: bool = False
@@ -125,6 +128,8 @@ class RideDetailResponse(BaseModel):
     visit_type: str | None = None
     appointment_time: datetime | None = None
     facility_name: str | None = None
+    booking_channel: str = "mobile_app"
+    facility_id: UUID | None = None
     special_instructions: str | None = None
     mobility_level: str | None = None
     assistance_level: str | None = None

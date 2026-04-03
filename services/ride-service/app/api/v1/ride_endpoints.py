@@ -48,12 +48,20 @@ def _get_ride_service(
 @router.post("/", response_model=StandardResponse[RideResponse])
 async def create_ride(
     request: CreateRideRequest,
-    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.BUSINESS, UserRole.ADMIN])),
+    user: UserClaims = Depends(
+        require_role([UserRole.RIDER, UserRole.BUSINESS, UserRole.ADMIN, UserRole.FACILITY])
+    ),
     service: RideService = Depends(_get_ride_service),
 ):
+    data = request.model_dump()
+    # Auto-set facility fields when booked by a facility user
+    if user.role == UserRole.FACILITY:
+        data["facility_id"] = user.id
+        if data.get("booking_channel") == "mobile_app":
+            data["booking_channel"] = "website_facility"
     ride = await service.create_ride(
         rider_id=user.id,
-        **request.model_dump(),
+        **data,
     )
     return StandardResponse(
         data=RideResponse.model_validate(ride),

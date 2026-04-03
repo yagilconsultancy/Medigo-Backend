@@ -321,6 +321,53 @@ async def get_fleets_with_vehicle_counts(
     return {"fleets": result}
 
 
+@router.get("/facilities/count")
+async def get_facility_count(
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Count of users with FACILITY role. Called by ride-service analytics."""
+    from app.models.user import User
+
+    result = await session.execute(
+        select(func.count()).select_from(User).where(
+            User.role == "facility",
+            User.is_active.is_(True),
+        )
+    )
+    return {"count": result.scalar_one()}
+
+
+@router.get("/facilities/top")
+async def get_top_facilities(
+    facility_ids: str = "",
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Batch get facility user details. Called by ride-service analytics."""
+    if not facility_ids.strip():
+        return {"facilities": {}}
+
+    from app.models.user import User
+
+    ids = [UUID(f.strip()) for f in facility_ids.split(",") if f.strip()]
+    result = {}
+    for fid in ids:
+        user_result = await session.execute(
+            select(User).where(User.id == fid)
+        )
+        user = user_result.scalar_one_or_none()
+        if user:
+            result[str(fid)] = {
+                "name": f"{user.first_name or ''} {user.last_name or ''}".strip() or "Unknown Facility",
+                "facility_type": None,
+                "email": user.email,
+                "phone": user.phone,
+                "avatar_url": user.avatar_url,
+            }
+    return {"facilities": result}
+
+
 @router.post("/invitations/accept")
 async def accept_invitation(
     request: AcceptInvitationRequest,

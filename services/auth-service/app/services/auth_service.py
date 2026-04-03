@@ -179,6 +179,7 @@ class AuthService:
             business_id=str(credential.business_id) if credential.business_id else None,
             email=credential.email,
         )
+        token_pair.role = credential.role
 
         # Store refresh token
         refresh_token_record = RefreshToken(
@@ -299,6 +300,7 @@ class AuthService:
             business_id=str(credential.business_id) if credential.business_id else None,
             email=credential.email,
         )
+        token_pair.role = credential.role
 
         # Store refresh token
         refresh_token_record = RefreshToken(
@@ -410,6 +412,7 @@ class AuthService:
             business_id=str(credential.business_id) if credential.business_id else None,
             email=credential.email,
         )
+        new_token_pair.role = credential.role
 
         # Store new refresh token
         new_refresh_record = RefreshToken(
@@ -570,6 +573,7 @@ class AuthService:
                 business_id=str(existing.business_id) if existing.business_id else None,
                 email=existing.email,
             )
+            token_pair.role = existing.role
             refresh_token_record = RefreshToken(
                 user_id=existing.id,
                 token_hash=hash_token(token_pair.refresh_token),
