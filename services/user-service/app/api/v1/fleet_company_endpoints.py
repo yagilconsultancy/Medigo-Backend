@@ -106,6 +106,19 @@ async def add_fleet_partner(
     )
 
 
+@router.get(
+    "/admin/fleet/companies/all",
+    response_model=StandardResponse[list[FleetCompanyDetailResponse]],
+)
+async def get_all_fleet_details(
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: FleetCompanyService = Depends(_get_service),
+):
+    """All fleet company details in one list (with documents, rating, revenue)."""
+    details = await service.get_all_fleet_details()
+    return StandardResponse(data=details)
+
+
 # --- Dynamic routes ---
 
 

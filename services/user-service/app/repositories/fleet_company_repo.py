@@ -143,6 +143,38 @@ class FleetCompanyRepository:
             "driver_count": row[2] or 0,
         }
 
+    async def get_all_fleet_details_with_counts(self) -> list[dict]:
+        vehicle_count_sq = (
+            select(func.count())
+            .where(Vehicle.business_id == Fleet.id, Vehicle.deleted_at.is_(None))
+            .correlate(Fleet)
+            .scalar_subquery()
+        )
+        driver_count_sq = (
+            select(func.count())
+            .where(DriverProfile.business_id == Fleet.id)
+            .correlate(Fleet)
+            .scalar_subquery()
+        )
+
+        result = await self.session.execute(
+            select(
+                Fleet,
+                vehicle_count_sq.label("vehicle_count"),
+                driver_count_sq.label("driver_count"),
+            )
+            .where(Fleet.deleted_at.is_(None))
+            .order_by(desc(Fleet.created_at))
+        )
+        return [
+            {
+                "fleet": row[0],
+                "vehicle_count": row[1] or 0,
+                "driver_count": row[2] or 0,
+            }
+            for row in result.all()
+        ]
+
     async def get_avg_driver_rating(self, fleet_id: UUID) -> float:
         result = await self.session.execute(
             select(func.avg(DriverProfile.rating)).where(

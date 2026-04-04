@@ -150,6 +150,59 @@ class FleetCompanyService:
             updated_at=fleet.updated_at,
         )
 
+    async def get_all_fleet_details(self) -> list[FleetCompanyDetailResponse]:
+        rows = await self.fleet_company_repo.get_all_fleet_details_with_counts()
+
+        async def _build_detail(row: dict) -> FleetCompanyDetailResponse:
+            fleet = row["fleet"]
+            # Sequential DB queries per fleet
+            documents = await self.doc_repo.list_by_fleet(fleet.id)
+            avg_rating = await self.fleet_company_repo.get_avg_driver_rating(fleet.id)
+
+            # HTTP call for revenue
+            revenue_data = await self.payment_client.get_fleet_revenue(fleet.id)
+            total_revenue = float(revenue_data.get("total_revenue", 0)) if revenue_data else 0.0
+
+            return FleetCompanyDetailResponse(
+                id=fleet.id,
+                name=fleet.name,
+                contact_person=fleet.contact_person,
+                email=fleet.email,
+                phone=fleet.phone,
+                city=fleet.city,
+                state=fleet.state,
+                zip_code=fleet.zip_code,
+                address=fleet.address,
+                logo_url=fleet.logo_url,
+                is_active=fleet.is_active,
+                vehicle_count=row["vehicle_count"],
+                driver_count=row["driver_count"],
+                total_revenue=total_revenue,
+                avg_rating=avg_rating,
+                documents=[
+                    {
+                        "id": d.id,
+                        "document_type": d.document_type,
+                        "file_name": d.file_name,
+                        "file_size": d.file_size,
+                        "mime_type": d.mime_type,
+                        "verification_status": d.verification_status,
+                        "created_at": d.created_at,
+                    }
+                    for d in documents
+                ],
+                created_at=fleet.created_at,
+                updated_at=fleet.updated_at,
+            )
+
+        # DB queries must be sequential (same async session), but HTTP calls can be parallel
+        # Build details sequentially since docs + rating share the session
+        results = []
+        for row in rows:
+            detail = await _build_detail(row)
+            results.append(detail)
+        return results
+
     async def update_fleet_profile(self, fleet_id: UUID, **kwargs) -> Fleet:
         fleet = await self.fleet_repo.get_by_id(fleet_id)
         if not fleet:
