@@ -2,6 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.driver_profile import DriverProfile
 
@@ -42,7 +43,13 @@ class DriverRepository:
         total = count_result.scalar_one()
 
         result = await self.session.execute(
-            query.offset(offset).limit(limit).order_by(DriverProfile.created_at.desc())
+            query.options(
+                selectinload(DriverProfile.user),
+                selectinload(DriverProfile.fleet),
+            )
+            .offset(offset)
+            .limit(limit)
+            .order_by(DriverProfile.created_at.desc())
         )
         return list(result.scalars().all()), total
 

@@ -27,6 +27,33 @@ class DriverProfileResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class FleetDriverResponse(BaseModel):
+    user_id: UUID
+    business_id: UUID
+    first_name: str = ""
+    last_name: str = ""
+    email: str | None = None
+    phone: str | None = None
+    avatar_url: str | None = None
+    fleet_name: str | None = None
+    license_number: str | None = None
+    license_expiry: date | None = None
+    vehicle_type: str | None = None
+    vehicle_make: str | None = None
+    vehicle_model: str | None = None
+    vehicle_year: int | None = None
+    vehicle_plate: str | None = None
+    vehicle_color: str | None = None
+    vehicle_photo_url: str | None = None
+    background_check_status: str
+    account_status: str = "pending"
+    is_approved: bool
+    is_online: bool
+    rating: float
+    total_trips: int
+    specialty: str | None = None
+
+
 class UpdateDriverProfileRequest(BaseModel):
     license_number: str | None = Field(None, max_length=50)
     license_expiry: date | None = None

@@ -20,7 +20,7 @@ from app.schemas.fleet_company import (
     UpdateFleetProfileRequest,
 )
 from app.schemas.fleet import FleetResponse
-from app.schemas.driver import DriverProfileResponse
+from app.schemas.driver import FleetDriverResponse
 from app.services.fleet_company_service import FleetCompanyService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
@@ -219,7 +219,7 @@ async def upload_fleet_document(
 
 @router.get(
     "/admin/fleet/companies/{business_id}/drivers",
-    response_model=PaginatedResponse[DriverProfileResponse],
+    response_model=PaginatedResponse[FleetDriverResponse],
 )
 async def list_fleet_drivers(
     business_id: UUID,
@@ -233,8 +233,38 @@ async def list_fleet_drivers(
     drivers, total = await driver_repo.list_by_fleet(
         fleet_id=business_id, offset=offset, limit=limit
     )
+    data = []
+    for d in drivers:
+        u = d.user
+        f = d.fleet
+        data.append(FleetDriverResponse(
+            user_id=d.user_id,
+            business_id=d.business_id,
+            first_name=u.first_name if u else "",
+            last_name=u.last_name if u else "",
+            email=u.email if u else None,
+            phone=u.phone if u else None,
+            avatar_url=u.avatar_url if u else None,
+            fleet_name=f.name if f else None,
+            license_number=d.license_number,
+            license_expiry=d.license_expiry,
+            vehicle_type=d.vehicle_type,
+            vehicle_make=d.vehicle_make,
+            vehicle_model=d.vehicle_model,
+            vehicle_year=d.vehicle_year,
+            vehicle_plate=d.vehicle_plate,
+            vehicle_color=d.vehicle_color,
+            vehicle_photo_url=d.vehicle_photo_url,
+            background_check_status=d.background_check_status,
+            account_status=d.account_status,
+            is_approved=d.is_approved,
+            is_online=d.is_online,
+            rating=float(d.rating),
+            total_trips=d.total_trips,
+            specialty=d.specialty,
+        ))
     return PaginatedResponse(
-        data=[DriverProfileResponse.model_validate(d) for d in drivers],
+        data=data,
         total=total,
         page=page,
         limit=limit,
