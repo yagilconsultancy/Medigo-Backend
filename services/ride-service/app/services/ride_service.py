@@ -250,6 +250,64 @@ class RideService:
 
         return await self.ride_repo.get_by_id(ride_id)
 
+    async def admin_assign_caregiver(
+        self, ride_id: UUID, caregiver_id: UUID, admin_id: UUID
+    ) -> Ride:
+        """
+        Assign a caregiver (care assistant) to a ride.
+
+        Only permitted when:
+          - trip_type is TRANSPORT_CARE_ASSISTANT
+          - scheduled_at is strictly in the future (not an instant ride)
+          - ride status is REQUESTED or CONFIRMED
+          - the caregiver exists, is approved, and has a `specialty` set
+        """
+        ride = await self.get_ride(ride_id)
+
+        # Only TRANSPORT_CARE_ASSISTANT rides support caregivers
+        if ride.trip_type != TripType.TRANSPORT_CARE_ASSISTANT:
+            raise ValidationError(
+                "Caregivers can only be assigned to Transport + Care Assistant rides"
+            )
+
+        # Must be a scheduled (future) ride — not instant
+        if not ride.scheduled_at or ride.scheduled_at <= utc_now():
+            raise ValidationError(
+                "Caregivers can only be assigned to scheduled (future) rides"
+            )
+
+        if ride.status not in (RideStatus.REQUESTED, RideStatus.CONFIRMED):
+            raise ValidationError(
+                f"Can only assign caregiver in REQUESTED or CONFIRMED status. "
+                f"Current: {ride.status}"
+            )
+
+        # Validate caregiver exists and has a specialty (= is a caregiver)
+        caregiver_info = await self.user_client.get_driver_profile(caregiver_id)
+        if not caregiver_info:
+            raise NotFoundError("Caregiver not found")
+        if not caregiver_info.get("is_approved"):
+            raise ValidationError("Caregiver is not approved")
+        if not caregiver_info.get("specialty"):
+            raise ValidationError(
+                "Selected user is not a caregiver (no specialty set)"
+            )
+
+        await self.ride_repo.update(ride_id, caregiver_id=caregiver_id)
+
+        # Log the caregiver assignment as a status-log note, but keep the ride
+        # in its current state (driver assignment is tracked separately).
+        log = RideStatusLog(
+            ride_id=ride_id,
+            from_status=ride.status,
+            to_status=ride.status,
+            changed_by=admin_id,
+            notes=f"Admin assigned caregiver {caregiver_id}",
+        )
+        await self.status_log_repo.create(log)
+
+        return await self.ride_repo.get_by_id(ride_id)
+
     # ---- Admin Queries ----
 
     async def get_pending_admin_rides(

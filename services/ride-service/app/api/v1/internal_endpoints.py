@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, select
 
 from app.dependencies import get_db
+from app.models.ride import Ride
 from app.models.ride_rating import RideRating
 from app.repositories.ride_repo import RideRepository
 from app.schemas.ride import RideResponse
@@ -261,3 +262,45 @@ async def get_batch_rider_activity_internal(
     repo = RideRepository(session)
     result = await repo.get_batch_rider_activity(body.rider_ids)
     return result
+
+
+# ---- Driver Dashboard Stats (for admin service provider page) ----
+
+ACTIVE_RIDE_STATUSES = [
+    "driver_assigned", "driver_en_route", "driver_arrived", "in_progress",
+]
+
+
+@router.get("/drivers/dashboard-stats")
+async def get_driver_dashboard_stats(
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get on-trip driver count, on-trip driver IDs, and total mileage."""
+    # Drivers currently on a trip
+    on_trip_result = await session.execute(
+        select(Ride.driver_id)
+        .where(
+            Ride.status.in_(ACTIVE_RIDE_STATUSES),
+            Ride.driver_id.isnot(None),
+        )
+        .distinct()
+    )
+    on_trip_ids = [str(row[0]) for row in on_trip_result.all()]
+
+    # Total mileage from completed rides (use actual if available, fallback to estimated)
+    mileage_result = await session.execute(
+        select(
+            func.coalesce(
+                func.sum(func.coalesce(Ride.actual_distance_miles, Ride.estimated_distance_miles)),
+                0,
+            )
+        ).where(Ride.status == "completed")
+    )
+    total_mileage = float(mileage_result.scalar_one())
+
+    return {
+        "on_trip_count": len(on_trip_ids),
+        "on_trip_driver_ids": on_trip_ids,
+        "total_mileage_miles": round(total_mileage, 1),
+    }

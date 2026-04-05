@@ -12,6 +12,9 @@ class AdminDriverKPIs(BaseModel):
     suspended_count: int
     pending_count: int
     online_count: int
+    available_now: int = 0
+    on_trip: int = 0
+    total_mileage: float = 0.0
     approval_rate: float
 
 
@@ -32,6 +35,10 @@ class AdminDriverListItem(BaseModel):
     rating: float
     total_trips: int
     vehicle_type: str | None = None
+    vehicle_make: str | None = None
+    vehicle_model: str | None = None
+    vehicle_year: int | None = None
+    vehicle_plate: str | None = None
     specialty: str | None = None
     document_status: str = "unknown"
     created_at: datetime | None = None
@@ -106,9 +113,10 @@ class AdminDriverDetailResponse(BaseModel):
     vehicle_vin: str | None = None
     vehicle_photo_url: str | None = None
 
-    # License
+    # License & Certification
     license_number: str | None = None
     license_expiry: date | None = None
+    medical_transport_certification: str | None = None
 
     # Personal
     date_of_birth: date | None = None
@@ -148,25 +156,16 @@ class CreateDriverRequest(BaseModel):
     last_name: str
     email: EmailStr
     phone: str | None = None
-    password: str
     fleet_id: UUID
     license_number: str | None = None
     license_expiry: date | None = None
-    vehicle_type: str | None = None
-    vehicle_make: str | None = None
-    vehicle_model: str | None = None
-    vehicle_year: int | None = None
-    vehicle_plate: str | None = None
-    vehicle_color: str | None = None
+    medical_transport_certification: str | None = None
+    background_check_status: str = "pending"
+    vehicle_id: UUID | None = None
     service_capabilities: list[str] = []
     specialty: str | None = None
     date_of_birth: date | None = None
-    emergency_contact_name: str | None = None
-    emergency_contact_phone: str | None = None
-    address: str | None = None
-    city: str | None = None
-    province: str | None = None
-    postal_code: str | None = None
+    account_status: str = "pending"
 
 
 class UpdateDriverRequest(BaseModel):
@@ -176,12 +175,9 @@ class UpdateDriverRequest(BaseModel):
     fleet_id: UUID | None = None
     license_number: str | None = None
     license_expiry: date | None = None
-    vehicle_type: str | None = None
-    vehicle_make: str | None = None
-    vehicle_model: str | None = None
-    vehicle_year: int | None = None
-    vehicle_plate: str | None = None
-    vehicle_color: str | None = None
+    medical_transport_certification: str | None = None
+    background_check_status: str | None = None
+    vehicle_id: UUID | None = None
     service_capabilities: list[str] | None = None
     specialty: str | None = None
     date_of_birth: date | None = None
@@ -191,6 +187,7 @@ class UpdateDriverRequest(BaseModel):
     city: str | None = None
     province: str | None = None
     postal_code: str | None = None
+    account_status: str | None = None
     notes: str | None = None
 
 

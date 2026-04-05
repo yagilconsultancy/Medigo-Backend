@@ -18,6 +18,7 @@ from app.schemas.admin_booking import (
     AdminBookingDetailResponse,
     AdminNoteResponse,
     ApproveBookingRequest,
+    AssignCaregiverRequest,
     AssignDriverRequest,
     AvailableDriverResponse,
     CancelledTripResponse,
@@ -275,6 +276,29 @@ async def reassign_driver(
     return StandardResponse(
         data=RideResponse.model_validate(ride),
         message="Driver reassigned",
+    )
+
+
+@router.put("/bookings/{ride_id}/assign-caregiver", response_model=StandardResponse[RideResponse])
+async def assign_caregiver(
+    ride_id: UUID,
+    body: AssignCaregiverRequest,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminBookingService = Depends(_get_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Assign a caregiver (care assistant) to a booking.
+
+    Only permitted for scheduled (future) `TRANSPORT_CARE_ASSISTANT` rides
+    in REQUESTED or CONFIRMED status. The selected user must have a
+    caregiver specialty set on their driver profile.
+    """
+    ride = await service.assign_caregiver(ride_id, body.caregiver_id, user.id)
+    await session.commit()
+    return StandardResponse(
+        data=RideResponse.model_validate(ride),
+        message="Caregiver assigned",
     )
 
 

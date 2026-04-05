@@ -28,6 +28,10 @@ class AssignDriverRequest(BaseModel):
     driver_id: UUID
 
 
+class AssignCaregiverRequest(BaseModel):
+    caregiver_id: UUID
+
+
 class CancelTripRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
 

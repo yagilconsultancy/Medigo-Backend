@@ -69,6 +69,23 @@ class RideServiceClient:
             logger.error(f"Ride service driver completed rides error: {e}")
             return None
 
+    async def get_driver_dashboard_stats(self) -> dict | None:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/drivers/dashboard-stats",
+                    headers=HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(
+                    f"Ride service driver dashboard stats returned {resp.status_code}"
+                )
+                return None
+        except httpx.RequestError as e:
+            logger.error(f"Ride service driver dashboard stats error: {e}")
+            return None
+
     # --- Rider methods ---
 
     async def get_rider_stats(self, rider_id: UUID) -> dict | None:

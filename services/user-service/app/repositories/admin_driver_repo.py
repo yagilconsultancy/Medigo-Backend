@@ -10,6 +10,7 @@ from app.models.driver_profile import DriverProfile
 from app.models.driver_suspension_log import DriverSuspensionLog
 from app.models.fleet import Fleet
 from app.models.user import User
+from app.models.vehicle import Vehicle
 
 
 class AdminDriverRepository:
@@ -64,6 +65,21 @@ class AdminDriverRepository:
             "approval_rate": approval_rate,
         }
 
+    async def count_online_drivers_in_set(self, driver_ids: set[str]) -> int:
+        """Count how many online drivers are in the given set of driver IDs."""
+        uuid_ids = [uuid.UUID(did) for did in driver_ids]
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(DriverProfile)
+            .join(User, User.id == DriverProfile.user_id)
+            .where(
+                User.role == "driver",
+                DriverProfile.is_online.is_(True),
+                DriverProfile.user_id.in_(uuid_ids),
+            )
+        )
+        return result.scalar_one()
+
     async def list_drivers_for_admin(
         self,
         search: str | None = None,
@@ -75,9 +91,10 @@ class AdminDriverRepository:
         limit: int = 20,
     ) -> tuple[list[dict], int]:
         query = (
-            select(User, DriverProfile, Fleet.name.label("fleet_name"))
+            select(User, DriverProfile, Fleet.name.label("fleet_name"), Vehicle)
             .join(DriverProfile, DriverProfile.user_id == User.id)
             .outerjoin(Fleet, Fleet.id == DriverProfile.business_id)
+            .outerjoin(Vehicle, Vehicle.driver_profile_id == DriverProfile.user_id)
             .where(User.role == "driver")
         )
 
@@ -118,7 +135,8 @@ class AdminDriverRepository:
         rows = result.all()
 
         drivers = []
-        for user, driver, fleet_name in rows:
+        for user, driver, fleet_name, vehicle in rows:
+            # Prefer assigned Vehicle fields, fall back to DriverProfile fields
             drivers.append({
                 "user_id": user.id,
                 "first_name": user.first_name,
@@ -133,7 +151,11 @@ class AdminDriverRepository:
                 "is_approved": driver.is_approved,
                 "rating": float(driver.rating),
                 "total_trips": driver.total_trips,
-                "vehicle_type": driver.vehicle_type,
+                "vehicle_type": vehicle.category if vehicle else driver.vehicle_type,
+                "vehicle_make": vehicle.make if vehicle else driver.vehicle_make,
+                "vehicle_model": vehicle.model if vehicle else driver.vehicle_model,
+                "vehicle_year": vehicle.year if vehicle else driver.vehicle_year,
+                "vehicle_plate": vehicle.plate_number if vehicle else driver.vehicle_plate,
                 "specialty": driver.specialty,
                 "created_at": driver.created_at,
             })
@@ -178,6 +200,7 @@ class AdminDriverRepository:
             "vehicle_photo_url": driver.vehicle_photo_url,
             "license_number": driver.license_number,
             "license_expiry": driver.license_expiry,
+            "medical_transport_certification": driver.medical_transport_certification,
             "date_of_birth": driver.date_of_birth,
             "address": driver.address,
             "city": driver.city,

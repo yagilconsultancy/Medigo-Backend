@@ -378,6 +378,19 @@ class AdminBookingService:
             admin_id=admin_id,
         )
 
+    async def assign_caregiver(
+        self, ride_id: UUID, caregiver_id: UUID, admin_id: UUID
+    ) -> Ride:
+        ride = await self.ride_service.admin_assign_caregiver(
+            ride_id=ride_id,
+            caregiver_id=caregiver_id,
+            admin_id=admin_id,
+        )
+        await self._create_system_note(
+            ride_id, admin_id, f"Caregiver assigned: {caregiver_id}"
+        )
+        return ride
+
     async def reassign_driver(
         self, ride_id: UUID, new_driver_id: UUID, admin_id: UUID, reason: str | None = None
     ) -> Ride:

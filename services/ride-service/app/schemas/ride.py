@@ -76,6 +76,7 @@ class RideResponse(BaseModel):
     id: UUID
     rider_id: UUID
     driver_id: UUID | None = None
+    caregiver_id: UUID | None = None
     business_id: UUID | None = None
     ride_type: str
     trip_type: str
@@ -105,6 +106,7 @@ class RideDetailResponse(BaseModel):
     id: UUID
     rider_id: UUID
     driver_id: UUID | None = None
+    caregiver_id: UUID | None = None
     business_id: UUID | None = None
     ride_type: str
     trip_type: str

@@ -28,6 +28,7 @@ class DriverProfile(Base):
     vehicle_vin: Mapped[str | None] = mapped_column(String(17), nullable=True)
     vehicle_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     vehicle_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    medical_transport_certification: Mapped[str | None] = mapped_column(String(255), nullable=True)
     background_check_status: Mapped[str] = mapped_column(
         String(20), default="pending"
     )

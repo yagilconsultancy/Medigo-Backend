@@ -10,8 +10,10 @@ class DocumentType(str, Enum):
     GOVERNMENT_ID_BACK = "government_id_back"
     DRIVERS_LICENSE_FRONT = "drivers_license_front"
     DRIVERS_LICENSE_BACK = "drivers_license_back"
+    DRIVERS_LICENSE = "drivers_license"
     VEHICLE_INSURANCE = "vehicle_insurance"
     VEHICLE_REGISTRATION = "vehicle_registration"
+    MEDICAL_TRANSPORT_CERTIFICATION = "medical_transport_certification"
 
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "application/pdf"}

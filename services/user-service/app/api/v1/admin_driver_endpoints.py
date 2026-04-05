@@ -1,15 +1,18 @@
+from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.auth_service_client import AuthServiceClient
 from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
-from app.dependencies import get_db, get_publisher
+from app.dependencies import get_db, get_publisher, get_s3_client
 from app.repositories.admin_driver_repo import AdminDriverRepository
+from app.repositories.document_repo import DocumentRepository
 from app.repositories.fleet_repo import FleetRepository
 from app.repositories.invitation_repo import InvitationRepository
+from app.repositories.vehicle_repo import VehicleRepository
 from app.schemas.admin_driver import (
     AdminDriverDetailResponse,
     AdminDriverDocumentOverview,
@@ -21,11 +24,13 @@ from app.schemas.admin_driver import (
     UpdateDriverRequest,
 )
 from app.services.admin_driver_service import AdminDriverService
+from app.services.document_service import DocumentService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import StandardResponse
+from mediride_common.storage.s3_client import S3StorageClient
 
 router = APIRouter(prefix="/admin/drivers")
 
@@ -33,7 +38,14 @@ router = APIRouter(prefix="/admin/drivers")
 def _get_service(
     session: AsyncSession = Depends(get_db),
     publisher: EventPublisher = Depends(get_publisher),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ) -> AdminDriverService:
+    document_service = DocumentService(
+        document_repo=DocumentRepository(session),
+        s3_client=s3_client,
+        bucket=settings.S3_BUCKET_DOCUMENTS,
+        publisher=publisher,
+    )
     return AdminDriverService(
         repo=AdminDriverRepository(session),
         publisher=publisher,
@@ -41,6 +53,8 @@ def _get_service(
         ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
         invitation_repo=InvitationRepository(session),
         fleet_repo=FleetRepository(session),
+        vehicle_repo=VehicleRepository(session),
+        document_service=document_service,
     )
 
 
@@ -103,12 +117,67 @@ async def list_drivers(
 
 @router.post("", response_model=StandardResponse[AdminDriverDetailResponse])
 async def create_driver(
-    request: CreateDriverRequest,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    email: str = Form(...),
+    fleet_id: UUID = Form(...),
+    phone: str | None = Form(None),
+    license_number: str | None = Form(None),
+    license_expiry: date | None = Form(None),
+    medical_transport_certification: str | None = Form(None),
+    background_check_status: str = Form("pending"),
+    vehicle_id: UUID | None = Form(None),
+    service_capabilities: str | None = Form(
+        None,
+        description="Comma-separated list of capabilities (e.g. 'wheelchair,stretcher')",
+    ),
+    specialty: str | None = Form(None),
+    date_of_birth: date | None = Form(None),
+    account_status: str = Form("pending"),
+    vehicle_insurance_file: UploadFile | None = File(None),
+    drivers_license_file: UploadFile | None = File(None),
+    certificate_file: UploadFile | None = File(None),
     admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: AdminDriverService = Depends(_get_service),
 ):
-    """Create a new driver (credentials + user + profile)."""
-    result = await service.create_driver(admin.id, request)
+    """
+    Create a new driver (credentials + user + profile) with optional document uploads.
+
+    Accepts `multipart/form-data` so admins can attach:
+      - `vehicle_insurance_file`: Vehicle insurance document
+      - `drivers_license_file`: Driver's license
+      - `certificate_file`: Medical transport certification
+    """
+    capabilities_list: list[str] = []
+    if service_capabilities:
+        capabilities_list = [c.strip() for c in service_capabilities.split(",") if c.strip()]
+
+    request = CreateDriverRequest(
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        phone=phone,
+        fleet_id=fleet_id,
+        license_number=license_number,
+        license_expiry=license_expiry,
+        medical_transport_certification=medical_transport_certification,
+        background_check_status=background_check_status,
+        vehicle_id=vehicle_id,
+        service_capabilities=capabilities_list,
+        specialty=specialty,
+        date_of_birth=date_of_birth,
+        account_status=account_status,
+    )
+
+    documents: dict[str, UploadFile] = {}
+    if vehicle_insurance_file is not None:
+        documents["vehicle_insurance"] = vehicle_insurance_file
+    if drivers_license_file is not None:
+        documents["drivers_license"] = drivers_license_file
+    if certificate_file is not None:
+        documents["medical_transport_certification"] = certificate_file
+
+    result = await service.create_driver(admin.id, request, documents=documents)
     return StandardResponse(data=result, message="Driver created successfully")
 
 

@@ -2,6 +2,7 @@ import asyncio
 import logging
 import secrets
 from datetime import timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.clients.auth_service_client import AuthServiceClient
@@ -11,6 +12,12 @@ from app.models.driver_invitation import DriverInvitation
 from app.repositories.admin_driver_repo import AdminDriverRepository
 from app.repositories.fleet_repo import FleetRepository
 from app.repositories.invitation_repo import InvitationRepository
+from app.repositories.vehicle_repo import VehicleRepository
+
+if TYPE_CHECKING:
+    from fastapi import UploadFile
+
+    from app.services.document_service import DocumentService
 from app.schemas.admin_driver import (
     AdminDriverDetailResponse,
     AdminDriverDocumentKPIs,
@@ -48,6 +55,8 @@ class AdminDriverService:
         ride_client: RideServiceClient,
         invitation_repo: InvitationRepository | None = None,
         fleet_repo: FleetRepository | None = None,
+        vehicle_repo: VehicleRepository | None = None,
+        document_service: "DocumentService | None" = None,
     ):
         self.repo = repo
         self.publisher = publisher
@@ -55,10 +64,35 @@ class AdminDriverService:
         self.ride_client = ride_client
         self.invitation_repo = invitation_repo
         self.fleet_repo = fleet_repo
+        self.vehicle_repo = vehicle_repo
+        self.document_service = document_service
 
     async def get_driver_kpis(self, fleet_id: UUID | None = None) -> AdminDriverKPIs:
-        data = await self.repo.get_driver_kpis(fleet_id)
-        return AdminDriverKPIs(**data)
+        # DB KPIs + ride-service dashboard stats in parallel
+        data, dashboard_stats = await asyncio.gather(
+            self.repo.get_driver_kpis(fleet_id),
+            self.ride_client.get_driver_dashboard_stats(),
+        )
+
+        on_trip = 0
+        available_now = data["online_count"]
+        total_mileage = 0.0
+
+        if dashboard_stats:
+            on_trip = dashboard_stats.get("on_trip_count", 0)
+            total_mileage = dashboard_stats.get("total_mileage_miles", 0.0)
+            # Available = online but NOT on a trip
+            on_trip_ids = set(dashboard_stats.get("on_trip_driver_ids", []))
+            if on_trip_ids:
+                online_on_trip = await self.repo.count_online_drivers_in_set(on_trip_ids)
+                available_now = data["online_count"] - online_on_trip
+
+        return AdminDriverKPIs(
+            **data,
+            available_now=available_now,
+            on_trip=on_trip,
+            total_mileage=total_mileage,
+        )
 
     async def list_drivers(
         self,
@@ -153,14 +187,20 @@ class AdminDriverService:
         )
 
     async def create_driver(
-        self, admin_id: UUID, request: CreateDriverRequest
+        self,
+        admin_id: UUID,
+        request: CreateDriverRequest,
+        documents: "dict[str, UploadFile] | None" = None,
     ) -> AdminDriverDetailResponse:
+        # Auto-generate password for auth credential
+        auto_password = secrets.token_urlsafe(16)
+
         # Create credential in auth-service
         try:
             cred_result = await self.auth_client.create_driver_credential(
                 email=request.email,
                 phone=request.phone,
-                password=request.password,
+                password=auto_password,
                 business_id=request.fleet_id,
             )
         except RuntimeError as e:
@@ -186,23 +226,39 @@ class AdminDriverService:
             business_id=request.fleet_id,
             license_number=request.license_number,
             license_expiry=request.license_expiry,
-            vehicle_type=request.vehicle_type,
-            vehicle_make=request.vehicle_make,
-            vehicle_model=request.vehicle_model,
-            vehicle_year=request.vehicle_year,
-            vehicle_plate=request.vehicle_plate,
-            vehicle_color=request.vehicle_color,
+            medical_transport_certification=request.medical_transport_certification,
+            background_check_status=request.background_check_status,
             service_capabilities=request.service_capabilities,
             specialty=request.specialty,
             date_of_birth=request.date_of_birth,
-            emergency_contact_name=request.emergency_contact_name,
-            emergency_contact_phone=request.emergency_contact_phone,
-            address=request.address,
-            city=request.city,
-            province=request.province,
-            postal_code=request.postal_code,
-            account_status="pending",
+            account_status=request.account_status,
         )
+
+        # Assign vehicle if provided
+        if request.vehicle_id and self.vehicle_repo:
+            await self.vehicle_repo.update(
+                request.vehicle_id, driver_profile_id=user_id
+            )
+
+        # Upload any documents attached to the create request
+        if documents and self.document_service:
+            for doc_type, upload in documents.items():
+                try:
+                    file_data = await upload.read()
+                    if not file_data:
+                        continue
+                    await self.document_service.upload_document(
+                        user_id=user_id,
+                        document_type=doc_type,
+                        file_data=file_data,
+                        file_name=upload.filename or f"{doc_type}",
+                        content_type=upload.content_type or "application/octet-stream",
+                        business_id=request.fleet_id,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to upload {doc_type} for driver {user_id}: {e}"
+                    )
 
         await self.publisher.publish(
             Exchanges.USERS,
@@ -241,7 +297,7 @@ class AdminDriverService:
                         fleet_name=fleet_name,
                         email=request.email,
                         invite_token=token,
-                        temporary_password=request.password,
+                        temporary_password=auto_password,
                     ).model_dump(mode="json"),
                 )
 
@@ -308,6 +364,13 @@ class AdminDriverService:
             raise NotFoundError("Driver not found")
 
         update_data = request.model_dump(exclude_unset=True)
+
+        # Handle vehicle assignment separately
+        vehicle_id = update_data.pop("vehicle_id", None)
+        if vehicle_id and self.vehicle_repo:
+            # Unassign any current vehicle, then assign new one
+            await self.vehicle_repo.unassign_driver_from_all(driver_user_id)
+            await self.vehicle_repo.update(vehicle_id, driver_profile_id=driver_user_id)
 
         # Split user fields vs driver profile fields
         user_fields = {}
