@@ -1,5 +1,6 @@
 from app.models.admin_note import AdminNote
 from app.models.disciplinary_action import DisciplinaryAction
+from app.models.dispatch_settings import DispatchSettings
 from app.models.incident import Incident
 from app.models.incident_note import IncidentNote
 from app.models.investigation import Investigation
@@ -16,6 +17,7 @@ from app.models.vehicle_checklist import VehicleChecklist
 __all__ = [
     "AdminNote",
     "DisciplinaryAction",
+    "DispatchSettings",
     "Incident",
     "IncidentNote",
     "Investigation",

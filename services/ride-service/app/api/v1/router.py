@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1.admin_alert_endpoints import router as admin_alert_router
 from app.api.v1.admin_booking_endpoints import router as admin_booking_router
 from app.api.v1.admin_discipline_endpoints import router as admin_discipline_router
+from app.api.v1.admin_dispatch_endpoints import router as admin_dispatch_router
 from app.api.v1.admin_incident_endpoints import router as admin_incident_router
 from app.api.v1.admin_investigation_endpoints import router as admin_investigation_router
 from app.api.v1.admin_ride_endpoints import router as admin_router
@@ -20,6 +21,7 @@ router.include_router(ride_router, tags=["Rides"])
 router.include_router(rider_router, tags=["Rider"])
 router.include_router(admin_router, prefix="/admin", tags=["Admin Rides"])
 router.include_router(admin_booking_router, prefix="/admin", tags=["Admin Booking Management"])
+router.include_router(admin_dispatch_router, prefix="/admin", tags=["Admin Dispatch Center"])
 router.include_router(analytics_router, prefix="/analytics", tags=["Analytics"])
 router.include_router(driver_router, prefix="/driver", tags=["Driver Rides"])
 router.include_router(rating_router, tags=["Ratings"])
