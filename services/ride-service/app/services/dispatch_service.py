@@ -20,9 +20,8 @@ from app.schemas.dispatch import (
     UnassignedRideItem,
     UpdateAutoDispatchSettingsRequest,
 )
+from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
-from mediride_common.events.routing_keys import RoutingKeys
-from mediride_common.exchanges import Exchanges
 
 logger = logging.getLogger(__name__)
 

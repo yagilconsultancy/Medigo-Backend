@@ -121,11 +121,11 @@ def upgrade() -> None:
     # Service Type Configs
     op.execute(sa.text("""
         INSERT INTO service_type_configs (service_type, display_name, config, sort_order) VALUES
-        ('standard', 'Standard Vehicle', :standard_config, 1),
-        ('wheelchair_wav', 'Wheelchair (WAV)', :wav_config, 2),
-        ('stretcher', 'Stretcher Transport', :stretcher_config, 3),
-        ('psw_caregiver', 'PSW / Caregiver', :psw_config, 4),
-        ('hospital_discharge', 'Hospital Discharge', :discharge_config, 5)
+        ('standard', 'Standard Vehicle', CAST(:standard_config AS jsonb), 1),
+        ('wheelchair_wav', 'Wheelchair (WAV)', CAST(:wav_config AS jsonb), 2),
+        ('stretcher', 'Stretcher Transport', CAST(:stretcher_config AS jsonb), 3),
+        ('psw_caregiver', 'PSW / Caregiver', CAST(:psw_config AS jsonb), 4),
+        ('hospital_discharge', 'Hospital Discharge', CAST(:discharge_config AS jsonb), 5)
     """).bindparams(
         standard_config='{"rate_components":{"base_fare":12.00,"per_km_rate":2.20,"booking_fee":3.50,"wait_time_per_min":0.45,"minimum_fare":15.00},"distance_rules":{"short_trip_km":5,"medium_trip_km":25,"long_trip_km":50},"route_pricing":{"toronto_to_hamilton":{"distance_km":70,"estimated_fare":166.50},"toronto_to_mississauga":{"distance_km":30,"estimated_fare":78.50},"toronto_to_brampton":{"distance_km":40,"estimated_fare":100.50},"toronto_to_markham":{"distance_km":32,"estimated_fare":82.90},"toronto_to_scarborough":{"distance_km":20,"estimated_fare":56.50},"hamilton_to_burlington":{"distance_km":15,"estimated_fare":45.50},"ottawa_to_gatineau":{"distance_km":12,"estimated_fare":38.90}},"toll_charges":{"highway_407":{"per_km":0.25,"minimum":2.50}},"dialysis_discounts":{"discount_percent":15,"max_discount":25.00}}',
         wav_config='{"rate_components":{"base_fare":22.00,"per_km_rate":2.80,"accessibility_fee":15.00,"booking_fee":3.50,"wait_time_per_min":0.55,"minimum_fare":45.00},"platform_commission":0.18,"vendor_terms":{"cancellation_window_hours":24,"late_cancellation_fee":35.00,"no_show_fee":45.00},"route_pricing":{"toronto_to_hamilton":{"distance_km":70,"estimated_fare":234.50},"toronto_to_mississauga":{"distance_km":30,"estimated_fare":124.50},"toronto_to_brampton":{"distance_km":40,"estimated_fare":152.50}}}',
@@ -137,12 +137,12 @@ def upgrade() -> None:
     # Surcharge Rules
     op.execute(sa.text("""
         INSERT INTO surcharge_rules (name, description, surcharge_type, multiplier, flat_amount, schedule, applies_to, is_active, sort_order) VALUES
-        ('Peak Hours', 'Weekdays 6-9 AM & 4-7 PM', 'peak_hours', 1.40, 0, :peak_schedule, :all_types, true, 1),
-        ('Night Surcharge', 'Daily 10 PM - 6 AM', 'night', 1.25, 0, :night_schedule, :all_types, true, 2),
-        ('Weather - Rain', 'Active during rain advisories', 'weather_rain', 1.30, 0, NULL, :all_types, false, 3),
-        ('Winter Weather', 'Active during snow/ice advisories', 'winter_weather', 1.50, 0, NULL, :all_types, false, 4),
-        ('Holiday Pricing', 'Ontario statutory holidays', 'holiday', 1.60, 0, NULL, :all_types, true, 5),
-        ('Early Morning', 'Daily 4-6 AM', 'early_morning', 1.15, 0, :early_schedule, :all_types, false, 6)
+        ('Peak Hours', 'Weekdays 6-9 AM & 4-7 PM', 'peak_hours', 1.40, 0, CAST(:peak_schedule AS jsonb), CAST(:all_types AS jsonb), true, 1),
+        ('Night Surcharge', 'Daily 10 PM - 6 AM', 'night', 1.25, 0, CAST(:night_schedule AS jsonb), CAST(:all_types AS jsonb), true, 2),
+        ('Weather - Rain', 'Active during rain advisories', 'weather_rain', 1.30, 0, NULL, CAST(:all_types AS jsonb), false, 3),
+        ('Winter Weather', 'Active during snow/ice advisories', 'winter_weather', 1.50, 0, NULL, CAST(:all_types AS jsonb), false, 4),
+        ('Holiday Pricing', 'Ontario statutory holidays', 'holiday', 1.60, 0, NULL, CAST(:all_types AS jsonb), true, 5),
+        ('Early Morning', 'Daily 4-6 AM', 'early_morning', 1.15, 0, CAST(:early_schedule AS jsonb), CAST(:all_types AS jsonb), false, 6)
     """).bindparams(
         peak_schedule='{"periods":[{"days":[0,1,2,3,4],"start":"06:00","end":"09:00"},{"days":[0,1,2,3,4],"start":"16:00","end":"19:00"}]}',
         night_schedule='{"periods":[{"days":[0,1,2,3,4,5,6],"start":"22:00","end":"23:59"},{"days":[0,1,2,3,4,5,6],"start":"00:00","end":"06:00"}]}',

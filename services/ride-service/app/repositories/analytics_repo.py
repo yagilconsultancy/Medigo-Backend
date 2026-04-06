@@ -75,7 +75,6 @@ class AnalyticsRepository:
             Ride.deleted_at.is_(None),
             Ride.status.in_([
                 RideStatus.REQUESTED,
-                RideStatus.PENDING_BUSINESS_ASSIGNMENT,
             ]),
         ]
         if business_id:
@@ -140,7 +139,6 @@ class AnalyticsRepository:
             (Ride.status.in_([
                 RideStatus.DRIVER_ASSIGNED,
                 RideStatus.CONFIRMED,
-                RideStatus.PENDING_BUSINESS_ASSIGNMENT,
             ]), "Assigned"),
             (Ride.status.in_([
                 RideStatus.DRIVER_EN_ROUTE,

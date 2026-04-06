@@ -10,7 +10,7 @@ from mediride_common.utils import utc_now
 
 # Dashboard tab → DB status mapping
 _STATUS_MAP = {
-    "pending": [RideStatus.REQUESTED, RideStatus.PENDING_BUSINESS_ASSIGNMENT],
+    "pending": [RideStatus.REQUESTED],
     "approved": [
         RideStatus.CONFIRMED,
         RideStatus.DRIVER_ASSIGNED,
@@ -112,11 +112,11 @@ class AdminBookingRepository:
         avg_wait_raw = avg_wait_result.scalar_one()
         avg_wait_minutes = round(avg_wait_raw) if avg_wait_raw else 0
 
-        # Assigned count (PENDING_BUSINESS_ASSIGNMENT)
+        # Assigned count (CONFIRMED but not yet driver_assigned)
         assigned_result = await self.session.execute(
             select(func.count()).where(
                 Ride.deleted_at.is_(None),
-                Ride.status == RideStatus.PENDING_BUSINESS_ASSIGNMENT,
+                Ride.status == RideStatus.CONFIRMED,
             )
         )
         assigned_count = assigned_result.scalar_one()
