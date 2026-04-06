@@ -110,6 +110,9 @@ class FareEstimateRequest(BaseModel):
     use_highway_407: bool = False
     highway_407_route: str | None = None
     is_dialysis_trip: bool = False
+    ride_type: str = "ambulatory"
+    trip_type: str = "transport_only"
+    trip_structure: str = "one_way"
 
 
 class RiderFareEstimateRequest(BaseModel):
@@ -127,6 +130,11 @@ class RiderFareEstimateRequest(BaseModel):
     use_highway_407: bool = False
     highway_407_route: str | None = None
     is_dialysis_trip: bool = False
+
+    # Ride type differentiation
+    ride_type: str = "ambulatory"  # ambulatory, wheelchair, stretcher
+    trip_type: str = "transport_only"  # transport_only, transport_care_assistant
+    trip_structure: str = "one_way"  # one_way, round_trip
 
     @model_validator(mode="after")
     def validate_locations(self):
@@ -227,6 +235,13 @@ class FareEstimateResponse(BaseModel):
     driver_earnings: float
     is_dialysis_rate: bool
     rate_card_version: int
+    care_assistant_fee: float = 0
+    accessibility_fee: float = 0
+    attendant_fee: float = 0
+    is_round_trip: bool = False
+    return_distance_charge: float = 0
+    ride_type: str = "ambulatory"
+    trip_type: str = "transport_only"
 
 
 class RiderFareEstimateResponse(BaseModel):
@@ -238,15 +253,27 @@ class RiderFareEstimateResponse(BaseModel):
 
     base_fare: float
     distance_charge: float
+    wait_time_charge: float = 0
     surcharges_total: float
     surcharges_capped: float
     surcharge_details: list[dict]
     highway_407_toll: float
     insurance_gateway_fee: float
     flat_surcharge: float
+    platform_fee: float
     total_fare: float
+    driver_earnings: float
     is_dialysis_rate: bool
     rate_card_version: int
+
+    # Ride type differentiation
+    care_assistant_fee: float = 0
+    accessibility_fee: float = 0
+    attendant_fee: float = 0
+    is_round_trip: bool = False
+    return_distance_charge: float = 0
+    ride_type: str = "ambulatory"
+    trip_type: str = "transport_only"
 
     currency: str = "CAD"
     estimated_at: datetime

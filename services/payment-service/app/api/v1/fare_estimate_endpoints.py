@@ -11,6 +11,7 @@ from app.repositories.dialysis_rate_plan_repo import DialysisRatePlanRepository
 from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.holiday_repo import HolidayRepository
 from app.repositories.rate_card_repo import RateCardRepository
+from app.repositories.service_type_config_repo import ServiceTypeConfigRepository
 from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.schemas.rate_card import RiderFareEstimateRequest, RiderFareEstimateResponse
 from app.services.fare_service import FareService
@@ -101,6 +102,7 @@ async def rider_fare_estimate(
         holiday_repo=HolidayRepository(session),
         weather_repo=WeatherConditionRepository(session),
         dialysis_repo=DialysisRatePlanRepository(session),
+        service_type_repo=ServiceTypeConfigRepository(session),
     )
 
     estimate = await fare_service.estimate_fare(
@@ -112,6 +114,9 @@ async def rider_fare_estimate(
             "use_highway_407": body.use_highway_407,
             "highway_407_route": body.highway_407_route,
             "is_dialysis_trip": body.is_dialysis_trip,
+            "ride_type": body.ride_type,
+            "trip_type": body.trip_type,
+            "trip_structure": body.trip_structure,
             "timeline": [],
         }
     )
@@ -123,15 +128,25 @@ async def rider_fare_estimate(
             duration_minutes=duration_minutes,
             base_fare=estimate["base_fare"],
             distance_charge=estimate["distance_charge"],
+            wait_time_charge=estimate["wait_time_charge"],
             surcharges_total=estimate["surcharges_total"],
             surcharges_capped=estimate["surcharges_capped"],
             surcharge_details=estimate["surcharge_details"],
             highway_407_toll=estimate["highway_407_toll"],
             insurance_gateway_fee=estimate["insurance_gateway_fee"],
             flat_surcharge=estimate["flat_surcharge"],
+            platform_fee=estimate["platform_fee"],
             total_fare=estimate["total_fare"],
+            driver_earnings=estimate["driver_earnings"],
             is_dialysis_rate=estimate["is_dialysis_rate"],
             rate_card_version=estimate["rate_card_version"],
+            care_assistant_fee=estimate["care_assistant_fee"],
+            accessibility_fee=estimate["accessibility_fee"],
+            attendant_fee=estimate["attendant_fee"],
+            is_round_trip=estimate["is_round_trip"],
+            return_distance_charge=estimate["return_distance_charge"],
+            ride_type=estimate["ride_type"],
+            trip_type=estimate["trip_type"],
             currency=settings.DEFAULT_CURRENCY,
             estimated_at=datetime.now(timezone.utc),
         )

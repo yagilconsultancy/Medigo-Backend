@@ -45,3 +45,14 @@ class FareBreakdown(Base):
     # Denormalized for admin dashboard analytics (avoids cross-DB joins)
     ride_type: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     pickup_city: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
+
+    # Ride type differentiation fees
+    care_assistant_fee: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)
+    accessibility_fee: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)
+    attendant_fee: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)
+
+    # Trip metadata
+    trip_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    trip_structure: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    is_round_trip: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    return_distance_charge: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True, default=0)

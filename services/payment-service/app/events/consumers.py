@@ -11,6 +11,7 @@ from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.holiday_repo import HolidayRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.repositories.rate_card_repo import RateCardRepository
+from app.repositories.service_type_config_repo import ServiceTypeConfigRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.services.payment_processing_service import PaymentProcessingService
@@ -49,6 +50,7 @@ class RideCompletedConsumer(BaseEventConsumer):
                     stripe_client=get_stripe_client(),
                     ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
                     publisher=get_publisher(),
+                    service_type_repo=ServiceTypeConfigRepository(session),
                 )
 
                 tx = await service.process_ride_payment(
@@ -92,6 +94,7 @@ class RideCancelledConsumer(BaseEventConsumer):
                     stripe_client=get_stripe_client(),
                     ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
                     publisher=get_publisher(),
+                    service_type_repo=ServiceTypeConfigRepository(session),
                 )
 
                 refund_tx = await service.refund_ride_payment(

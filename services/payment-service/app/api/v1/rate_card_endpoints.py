@@ -11,6 +11,7 @@ from app.repositories.dialysis_rate_plan_repo import DialysisRatePlanRepository
 from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.holiday_repo import HolidayRepository
 from app.repositories.rate_card_repo import RateCardRepository
+from app.repositories.service_type_config_repo import ServiceTypeConfigRepository
 from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.schemas.rate_card import (
     CreateRateCardRequest,
@@ -45,6 +46,7 @@ def _repos(session: AsyncSession):
         "weather_repo": WeatherConditionRepository(session),
         "dialysis_repo": DialysisRatePlanRepository(session),
         "fare_repo": FareBreakdownRepository(session),
+        "service_type_repo": ServiceTypeConfigRepository(session),
     }
 
 
@@ -277,6 +279,7 @@ async def estimate_fare(
         holiday_repo=repos["holiday_repo"],
         weather_repo=repos["weather_repo"],
         dialysis_repo=repos["dialysis_repo"],
+        service_type_repo=repos["service_type_repo"],
     )
     estimate = await fare_service.estimate_fare({
         "distance_miles": body.distance_miles,
@@ -286,6 +289,9 @@ async def estimate_fare(
         "use_highway_407": body.use_highway_407,
         "highway_407_route": body.highway_407_route,
         "is_dialysis_trip": body.is_dialysis_trip,
+        "ride_type": body.ride_type,
+        "trip_type": body.trip_type,
+        "trip_structure": body.trip_structure,
         "timeline": [],
     })
     return StandardResponse(data=FareEstimateResponse(**estimate))

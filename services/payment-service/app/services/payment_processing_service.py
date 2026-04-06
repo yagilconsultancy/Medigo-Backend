@@ -10,6 +10,7 @@ from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.holiday_repo import HolidayRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.repositories.rate_card_repo import RateCardRepository
+from app.repositories.service_type_config_repo import ServiceTypeConfigRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.services.fare_service import FareService
@@ -38,6 +39,7 @@ class PaymentProcessingService:
         stripe_client: StripeClient,
         ride_client: RideServiceClient,
         publisher: EventPublisher,
+        service_type_repo: ServiceTypeConfigRepository | None = None,
     ):
         self.tx_repo = tx_repo
         self.fare_repo = fare_repo
@@ -50,6 +52,7 @@ class PaymentProcessingService:
         self.stripe = stripe_client
         self.ride_client = ride_client
         self.publisher = publisher
+        self.service_type_repo = service_type_repo
 
     async def process_ride_payment(
         self,
@@ -71,10 +74,13 @@ class PaymentProcessingService:
             holiday_repo=self.holiday_repo,
             weather_repo=self.weather_repo,
             dialysis_repo=self.dialysis_repo,
+            service_type_repo=self.service_type_repo,
         )
         breakdown = await fare_service.calculate_fare({
             "ride_id": ride_id,
-            "ride_type": ride_data.get("ride_type", "standard"),
+            "ride_type": ride_data.get("ride_type", "ambulatory"),
+            "trip_type": ride_data.get("trip_type", "transport_only"),
+            "trip_structure": ride_data.get("trip_structure", "one_way"),
             "distance_miles": ride_data.get("actual_distance_miles",
                                             ride_data.get("estimated_distance_miles", 0)),
             "timeline": ride_data.get("timeline", []),
@@ -85,6 +91,7 @@ class PaymentProcessingService:
             "is_dialysis_trip": ride_data.get("is_dialysis_trip", False),
             "pickup_address": ride_data.get("pickup_address", ""),
             "destination_address": ride_data.get("destination_address", ""),
+            "pickup_city": ride_data.get("pickup_city", ""),
         })
 
         total_fare = float(breakdown.total_fare)

@@ -7,6 +7,7 @@ from app.api.v1.router import router as v1_router
 from app.config import settings
 from app.dependencies import get_broker, get_db, init_broker, init_db, init_stripe
 from app.events.consumers import setup_consumers
+from app.seed import run_seed
 from mediride_common.health import create_health_router
 from mediride_common.logging import setup_logging
 from mediride_common.middleware import CorrelationIdMiddleware, register_error_handlers
@@ -16,6 +17,7 @@ from mediride_common.middleware import CorrelationIdMiddleware, register_error_h
 async def lifespan(app: FastAPI):
     setup_logging(level=settings.LOG_LEVEL, service_name=settings.SERVICE_NAME)
     await init_db()
+    await run_seed()
     await init_broker()
     init_stripe()
     await setup_consumers()
