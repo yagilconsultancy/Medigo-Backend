@@ -14,9 +14,6 @@ from app.repositories.rate_card_repo import RateCardRepository
 from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.schemas.rate_card import RiderFareEstimateRequest, RiderFareEstimateResponse
 from app.services.fare_service import FareService
-from mediride_common.auth.dependencies import require_role
-from mediride_common.auth.models import UserClaims
-from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import StandardResponse
 
 logger = logging.getLogger(__name__)
@@ -31,11 +28,13 @@ def _location_client() -> LocationServiceClient:
 @router.post("/fare-estimate", response_model=StandardResponse[RiderFareEstimateResponse])
 async def rider_fare_estimate(
     body: RiderFareEstimateRequest,
-    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.DRIVER, UserRole.ADMIN])),
     session: AsyncSession = Depends(get_db),
 ):
     """
     Calculate a fare estimate using real Google Maps distance.
+
+    **PUBLIC ENDPOINT** - No authentication required.
+    Riders can get fare estimates before booking or logging in.
 
     Accepts pickup and destination as addresses and/or coordinates.
     Automatically geocodes addresses and calculates driving distance.

@@ -36,6 +36,7 @@ PUBLIC_PATHS = {
     "/auth/driver/verify-invite",
     "/auth/driver/register",
     "/payments/webhooks/stripe",
+    "/payments/fare-estimate",  # Public fare estimates for riders
 }
 
 
