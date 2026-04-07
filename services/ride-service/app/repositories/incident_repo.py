@@ -18,6 +18,7 @@ class IncidentRepository:
     async def create(self, incident: Incident) -> Incident:
         self.session.add(incident)
         await self.session.flush()
+        await self.session.refresh(incident)
         return incident
 
     async def get_by_id(self, incident_id: UUID) -> Incident | None:

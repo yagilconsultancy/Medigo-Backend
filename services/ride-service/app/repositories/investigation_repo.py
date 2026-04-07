@@ -18,6 +18,7 @@ class InvestigationRepository:
     async def create(self, investigation: Investigation) -> Investigation:
         self.session.add(investigation)
         await self.session.flush()
+        await self.session.refresh(investigation)
         return investigation
 
     async def get_by_id(self, inv_id: UUID) -> Investigation | None:

@@ -17,6 +17,7 @@ class DisciplinaryActionRepository:
     async def create(self, action: DisciplinaryAction) -> DisciplinaryAction:
         self.session.add(action)
         await self.session.flush()
+        await self.session.refresh(action)
         return action
 
     async def get_by_id(self, action_id: UUID) -> DisciplinaryAction | None:
