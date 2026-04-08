@@ -13,7 +13,12 @@ from app.repositories.holiday_repo import HolidayRepository
 from app.repositories.rate_card_repo import RateCardRepository
 from app.repositories.service_type_config_repo import ServiceTypeConfigRepository
 from app.repositories.weather_condition_repo import WeatherConditionRepository
-from app.schemas.rate_card import RiderFareEstimateRequest, RiderFareEstimateResponse
+from app.schemas.rate_card import (
+    RiderFareEstimateArrayResponse,
+    RiderFareEstimateItem,
+    RiderFareEstimateRequest,
+    RiderFareEstimateResponse,
+)
 from app.services.fare_service import FareService
 from mediride_common.schemas.responses import StandardResponse
 
@@ -26,7 +31,7 @@ def _location_client() -> LocationServiceClient:
     return LocationServiceClient(settings.LOCATION_SERVICE_URL)
 
 
-@router.post("/fare-estimate", response_model=StandardResponse[RiderFareEstimateResponse])
+@router.post("/fare-estimate")
 async def rider_fare_estimate(
     body: RiderFareEstimateRequest,
     session: AsyncSession = Depends(get_db),
@@ -39,6 +44,8 @@ async def rider_fare_estimate(
 
     Accepts pickup and destination as addresses and/or coordinates.
     Automatically geocodes addresses and calculates driving distance.
+
+    **ride_type**: Set to "all" to get estimates for all ride types, or specify a specific type.
     """
     location_client = _location_client()
 
@@ -105,6 +112,69 @@ async def rider_fare_estimate(
         service_type_repo=ServiceTypeConfigRepository(session),
     )
 
+    # --- Check if requesting all ride types ---
+    if body.ride_type == "all":
+        service_type_repo = ServiceTypeConfigRepository(session)
+        service_types = await service_type_repo.get_all(active_only=True)
+
+        estimates_list = []
+        for service_type in service_types:
+            estimate = await fare_service.estimate_fare(
+                {
+                    "distance_miles": distance_miles,
+                    "scheduled_at": scheduled_at.isoformat(),
+                    "pickup_address": pickup_address or "",
+                    "destination_address": dest_address or "",
+                    "use_highway_407": body.use_highway_407,
+                    "highway_407_route": body.highway_407_route,
+                    "is_dialysis_trip": body.is_dialysis_trip,
+                    "ride_type": service_type.service_type,
+                    "trip_type": body.trip_type,
+                    "trip_structure": body.trip_structure,
+                    "timeline": [],
+                }
+            )
+
+            estimates_list.append(
+                RiderFareEstimateItem(
+                    service_type=service_type.service_type,
+                    display_name=service_type.display_name,
+                    base_fare=estimate["base_fare"],
+                    distance_charge=estimate["distance_charge"],
+                    wait_time_charge=estimate["wait_time_charge"],
+                    surcharges_total=estimate["surcharges_total"],
+                    surcharges_capped=estimate["surcharges_capped"],
+                    surcharge_details=estimate["surcharge_details"],
+                    highway_407_toll=estimate["highway_407_toll"],
+                    insurance_gateway_fee=estimate["insurance_gateway_fee"],
+                    flat_surcharge=estimate["flat_surcharge"],
+                    platform_fee=estimate["platform_fee"],
+                    total_fare=estimate["total_fare"],
+                    driver_earnings=estimate["driver_earnings"],
+                    is_dialysis_rate=estimate["is_dialysis_rate"],
+                    rate_card_version=estimate["rate_card_version"],
+                    care_assistant_fee=estimate["care_assistant_fee"],
+                    accessibility_fee=estimate["accessibility_fee"],
+                    attendant_fee=estimate["attendant_fee"],
+                    is_round_trip=estimate["is_round_trip"],
+                    return_distance_charge=estimate["return_distance_charge"],
+                    ride_type=estimate["ride_type"],
+                    trip_type=estimate["trip_type"],
+                )
+            )
+
+        return StandardResponse(
+            data=RiderFareEstimateArrayResponse(
+                distance_km=distance_km,
+                distance_miles=distance_miles,
+                duration_minutes=duration_minutes,
+                estimates=estimates_list,
+                currency=settings.DEFAULT_CURRENCY,
+                estimated_at=datetime.now(timezone.utc),
+            )
+        )
+
+    # --- Single ride type estimate ---
     estimate = await fare_service.estimate_fare(
         {
             "distance_miles": distance_miles,

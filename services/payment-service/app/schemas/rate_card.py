@@ -277,3 +277,40 @@ class RiderFareEstimateResponse(BaseModel):
 
     currency: str = "CAD"
     estimated_at: datetime
+
+
+class RiderFareEstimateItem(BaseModel):
+    """Single fare estimate for a specific ride type."""
+    service_type: str
+    display_name: str
+    base_fare: float
+    distance_charge: float
+    wait_time_charge: float = 0
+    surcharges_total: float
+    surcharges_capped: float
+    surcharge_details: list[dict]
+    highway_407_toll: float
+    insurance_gateway_fee: float
+    flat_surcharge: float
+    platform_fee: float
+    total_fare: float
+    driver_earnings: float
+    is_dialysis_rate: bool
+    rate_card_version: int
+    care_assistant_fee: float = 0
+    accessibility_fee: float = 0
+    attendant_fee: float = 0
+    is_round_trip: bool = False
+    return_distance_charge: float = 0
+    ride_type: str = "ambulatory"
+    trip_type: str = "transport_only"
+
+
+class RiderFareEstimateArrayResponse(BaseModel):
+    """Fare estimate response for all ride types."""
+    distance_km: float
+    distance_miles: float
+    duration_minutes: float
+    estimates: list[RiderFareEstimateItem]
+    currency: str = "CAD"
+    estimated_at: datetime
