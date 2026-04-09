@@ -314,3 +314,51 @@ class RiderFareEstimateArrayResponse(BaseModel):
     estimates: list[RiderFareEstimateItem]
     currency: str = "CAD"
     estimated_at: datetime
+
+
+class BaseFareEstimateRequest(BaseModel):
+    """Simple base fare estimate request - calculates distance from pickup to destination."""
+
+    pickup_address: str | None = None
+    pickup_latitude: float | None = None
+    pickup_longitude: float | None = None
+
+    destination_address: str | None = None
+    destination_latitude: float | None = None
+    destination_longitude: float | None = None
+
+    @model_validator(mode="after")
+    def validate_locations(self):
+        has_pickup = bool(self.pickup_address) or (
+            self.pickup_latitude is not None and self.pickup_longitude is not None
+        )
+        has_dest = bool(self.destination_address) or (
+            self.destination_latitude is not None and self.destination_longitude is not None
+        )
+        if not has_pickup:
+            raise ValueError("Provide pickup_address or pickup_latitude + pickup_longitude")
+        if not has_dest:
+            raise ValueError("Provide destination_address or destination_latitude + destination_longitude")
+        return self
+
+
+class BaseFareEstimateItem(BaseModel):
+    """Base fare estimate for a single ride type."""
+    service_type: str
+    display_name: str
+    base_fare: float
+    distance_charge: float
+    estimated_total: float
+    description: str
+    passengers: str
+    best_for: str
+    features: list[str]
+
+
+class BaseFareEstimateResponse(BaseModel):
+    """Base fare estimates for all ride types based on distance only."""
+    distance_km: float
+    estimates: list[BaseFareEstimateItem]
+    currency: str = "CAD"
+    note: str = "This is a base fare estimate. Final price may vary based on time of day, weather conditions, and other factors."
+    estimated_at: datetime

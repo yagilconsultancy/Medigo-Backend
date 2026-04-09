@@ -14,6 +14,9 @@ from app.repositories.rate_card_repo import RateCardRepository
 from app.repositories.service_type_config_repo import ServiceTypeConfigRepository
 from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.schemas.rate_card import (
+    BaseFareEstimateRequest,
+    BaseFareEstimateResponse,
+    BaseFareEstimateItem,
     RiderFareEstimateArrayResponse,
     RiderFareEstimateItem,
     RiderFareEstimateRequest,
@@ -217,6 +220,162 @@ async def rider_fare_estimate(
             return_distance_charge=estimate["return_distance_charge"],
             ride_type=estimate["ride_type"],
             trip_type=estimate["trip_type"],
+            currency=settings.DEFAULT_CURRENCY,
+            estimated_at=datetime.now(timezone.utc),
+        )
+    )
+
+
+@router.post("/base-fare-estimate", response_model=StandardResponse[BaseFareEstimateResponse])
+async def calculate_base_fare(
+    body: BaseFareEstimateRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Calculate simple base fare estimates for all ride types based on distance only.
+
+    **PUBLIC ENDPOINT** - No authentication required.
+
+    This is a simplified estimate that only considers:
+    - Base fare + distance charge
+    - NO booking fees, accessibility fees, or other surcharges
+
+    Automatically calculates distance from pickup to destination using Google Maps.
+
+    Does NOT include:
+    - Booking fees
+    - Accessibility fees
+    - Time-based surcharges
+    - Weather conditions
+    - Holiday surcharges
+    - Highway tolls
+
+    Returns estimates for standard, wheelchair, stretcher, and PSW ride types.
+    """
+    location_client = _location_client()
+
+    # --- Resolve pickup coordinates ---
+    pickup_lat = body.pickup_latitude
+    pickup_lng = body.pickup_longitude
+    pickup_address = body.pickup_address
+
+    if pickup_lat is None or pickup_lng is None:
+        geo = await location_client.geocode(body.pickup_address)
+        if not geo:
+            raise HTTPException(
+                status_code=422,
+                detail="Could not geocode pickup address. Provide valid coordinates or a more specific address.",
+            )
+        pickup_lat = geo["latitude"]
+        pickup_lng = geo["longitude"]
+        if not pickup_address:
+            pickup_address = geo.get("formatted_address", "")
+
+    # --- Resolve destination coordinates ---
+    dest_lat = body.destination_latitude
+    dest_lng = body.destination_longitude
+    dest_address = body.destination_address
+
+    if dest_lat is None or dest_lng is None:
+        geo = await location_client.geocode(body.destination_address)
+        if not geo:
+            raise HTTPException(
+                status_code=422,
+                detail="Could not geocode destination address. Provide valid coordinates or a more specific address.",
+            )
+        dest_lat = geo["latitude"]
+        dest_lng = geo["longitude"]
+        if not dest_address:
+            dest_address = geo.get("formatted_address", "")
+
+    # --- Calculate driving distance ---
+    distance_result = await location_client.calculate_distance(
+        origin_lat=pickup_lat,
+        origin_lng=pickup_lng,
+        dest_lat=dest_lat,
+        dest_lng=dest_lng,
+    )
+    if not distance_result:
+        raise HTTPException(
+            status_code=503,
+            detail="Could not calculate distance. Please try again later.",
+        )
+
+    distance_km = distance_result["distance_km"]
+
+    # --- Get service types (exclude hospital_discharge) ---
+    service_type_repo = ServiceTypeConfigRepository(session)
+    all_service_types = await service_type_repo.get_all(active_only=True)
+
+    # Filter out hospital_discharge
+    service_types = [
+        st for st in all_service_types if st.service_type != "hospital_discharge"
+    ]
+
+    estimates_list = []
+
+    for service_type in service_types:
+        config = service_type.config
+        rate_components = config.get("rate_components", {})
+
+        # Extract pricing components - ONLY base fare and per km rate
+        base_fare = rate_components.get("base_fare", 0)
+        per_km_rate = rate_components.get("per_km_rate", 0)
+
+        # Calculate distance charge
+        distance_charge = distance_km * per_km_rate
+
+        # Calculate estimated total - ONLY base + distance
+        estimated_total = base_fare + distance_charge
+
+        # Build description, best_for, and features based on service type
+        passengers = "Up to 3 passengers"
+        description = "Comfortable assisted transport for mobile patients."
+        best_for = "Routine appointments and light mobility support"
+        features = ["Door-to-door assistance", "Boarding support"]
+
+        if service_type.service_type == "wheelchair_wav":
+            passengers = "1 wheelchair + 2"
+            description = "Safe and secure transport for wheelchair users"
+            best_for = "Patients requiring ramp or lift access"
+            features = ["ADA-compliant lift or ramp", "Secure wheelchair locking"]
+        elif service_type.service_type == "stretcher":
+            passengers = "1 stretcher"
+            description = "Full medical transport for patients unable to sit upright"
+            best_for = "Post-surgery, injury recovery, and non-emergency medical needs"
+            features = [
+                "Stretcher-compatible vehicle",
+                "Emergency-trained staff",
+                "Two-person medical support"
+            ]
+        elif service_type.service_type == "psw_caregiver":
+            passengers = "Up to 3 passengers"
+            description = "Transport with professional caregiver assistance"
+            best_for = "Patients needing personal support worker care"
+            features = [
+                "Certified PSW caregiver",
+                "Medication assistance",
+                "Personal care support"
+            ]
+
+        estimates_list.append(
+            BaseFareEstimateItem(
+                service_type=service_type.service_type,
+                display_name=service_type.display_name,
+                base_fare=base_fare,
+                distance_charge=round(distance_charge, 2),
+                estimated_total=round(estimated_total, 2),
+                description=description,
+                passengers=passengers,
+                best_for=best_for,
+                features=features,
+            )
+        )
+
+    return StandardResponse(
+        data=BaseFareEstimateResponse(
+            distance_km=distance_km,
+            estimates=estimates_list,
             currency=settings.DEFAULT_CURRENCY,
             estimated_at=datetime.now(timezone.utc),
         )
