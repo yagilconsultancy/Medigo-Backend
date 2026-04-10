@@ -233,3 +233,55 @@ class AdminRoleService:
                 module_name=perm_data["module_name"],
                 can_access=perm_data["can_access"],
             )
+
+    async def get_user_permissions(self, user_id: UUID) -> dict:
+        """Get current user's roles and accessible modules."""
+        # Get user info
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise ValueError("User not found")
+
+        # Get user's role assignments
+        user_roles = await self.role_repo.get_user_roles(user_id)
+
+        # Collect all accessible modules from all roles
+        accessible_modules = set()
+        role_info = []
+
+        for role in user_roles:
+            # Get permissions for this role
+            permissions = await self.role_repo.get_role_permissions(role.id)
+
+            # Add modules where can_access is True
+            for perm in permissions:
+                if perm.can_access:
+                    accessible_modules.add(perm.module_name)
+
+            role_info.append({
+                "id": role.id,
+                "name": role.name,
+                "display_name": role.display_name,
+                "color": role.color,
+            })
+
+        return {
+            "user": {
+                "id": str(user.id),
+                "full_name": f"{user.first_name} {user.last_name}",
+                "email": user.email,
+            },
+            "roles": role_info,
+            "accessible_modules": sorted(list(accessible_modules)),
+        }
+
+    async def check_module_access(self, user_id: UUID, module_name: str) -> bool:
+        """Check if user has access to a specific module."""
+        user_roles = await self.role_repo.get_user_roles(user_id)
+
+        for role in user_roles:
+            permissions = await self.role_repo.get_role_permissions(role.id)
+            for perm in permissions:
+                if perm.module_name == module_name and perm.can_access:
+                    return True
+
+        return False

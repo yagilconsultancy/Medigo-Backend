@@ -14,6 +14,7 @@ from app.schemas.admin_role import (
     AssignRoleRequest,
     ModulePermissionUpdate,
     PermissionMatrixResponse,
+    UserPermissionsResponse,
 )
 from app.services.admin_role_service import AdminRoleService
 from mediride_common.auth.dependencies import require_role
@@ -199,3 +200,19 @@ async def save_permissions(
     ]
     await service.save_permissions(perm_list)
     return StandardResponse(message="Permissions saved successfully")
+
+
+@router.get(
+    "/admin/me/permissions",
+    response_model=StandardResponse[UserPermissionsResponse],
+)
+async def get_my_permissions(
+    admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminRoleService = Depends(_get_service),
+):
+    """Get current user's roles and accessible modules."""
+    try:
+        permissions = await service.get_user_permissions(admin.id)
+        return StandardResponse(data=permissions)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

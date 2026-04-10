@@ -77,3 +77,16 @@ class AdminRoleCardResponse(BaseModel):
     total_modules: int = 0
 
     model_config = {"from_attributes": True}
+
+
+class UserRoleInfo(BaseModel):
+    id: UUID
+    name: str
+    display_name: str
+    color: str | None = None
+
+
+class UserPermissionsResponse(BaseModel):
+    user: dict  # {id, full_name, email}
+    roles: list[UserRoleInfo]
+    accessible_modules: list[str]

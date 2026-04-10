@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,7 +42,7 @@ class AdminRoleAssignment(Base):
     )
     user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     role_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), nullable=False
+        PGUUID(as_uuid=True), ForeignKey("admin_roles.id"), nullable=False
     )
     assigned_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), nullable=True
@@ -62,7 +62,7 @@ class ModulePermission(Base):
         PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     role_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True), nullable=False
+        PGUUID(as_uuid=True), ForeignKey("admin_roles.id"), nullable=False
     )
     module_name: Mapped[str] = mapped_column(
         String(100), nullable=False

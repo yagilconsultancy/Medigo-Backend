@@ -390,3 +390,35 @@ async def accept_invitation(
     )
 
     return {"accepted": True, "invitation_id": str(invitation.id)}
+
+
+class CheckModuleAccessRequest(BaseModel):
+    user_id: str
+    module_name: str
+
+
+@router.post("/check-module-access")
+async def check_module_access(
+    request: CheckModuleAccessRequest,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Check if user has access to a module. Called by other services for permission enforcement."""
+    from app.repositories.admin_role_repo import AdminRoleRepository
+    from app.services.admin_role_service import AdminRoleService
+    from app.repositories.user_repo import UserRepository
+
+    role_service = AdminRoleService(
+        role_repo=AdminRoleRepository(session),
+        user_repo=UserRepository(session),
+    )
+
+    try:
+        user_id = UUID(request.user_id)
+        has_access = await role_service.check_module_access(user_id, request.module_name)
+        return {"has_access": has_access}
+    except ValueError:
+        return {"has_access": False}
+    except Exception as e:
+        logger.error(f"Error checking module access: {e}")
+        return {"has_access": False}
