@@ -3,7 +3,7 @@ from uuid import UUID
 
 from app.clients.auth_service_client import AuthServiceClient
 from app.clients.ride_service_client import RideServiceClient
-from app.repositories.driver_repo import DriverRepository
+from app.repositories.caregiver_repo import CaregiverRepository
 from app.repositories.fleet_repo import FleetRepository
 from app.repositories.user_repo import UserRepository
 from app.schemas.caregiver import (
@@ -26,14 +26,14 @@ logger = logging.getLogger(__name__)
 class CaregiverService:
     def __init__(
         self,
-        driver_repo: DriverRepository,
+        caregiver_repo: CaregiverRepository,
         user_repo: UserRepository,
         fleet_repo: FleetRepository,
         auth_client: AuthServiceClient,
         ride_client: RideServiceClient,
         publisher: EventPublisher,
     ):
-        self.driver_repo = driver_repo
+        self.caregiver_repo = caregiver_repo
         self.user_repo = user_repo
         self.fleet_repo = fleet_repo
         self.auth_client = auth_client
@@ -42,8 +42,8 @@ class CaregiverService:
 
     async def get_kpis(self) -> CaregiverKPIs:
         """Get caregiver KPI cards."""
-        # Get all drivers with specialty (caregivers)
-        caregivers = await self.driver_repo.get_all_with_specialty()
+        # Get all caregivers
+        caregivers = await self.caregiver_repo.get_all()
 
         total = len(caregivers)
         available = sum(1 for c in caregivers if c.account_status == "active" and not c.is_online)
@@ -74,7 +74,7 @@ class CaregiverService:
         limit: int = 20,
     ) -> tuple[list[CaregiverRosterRow], int]:
         """List caregivers with filters."""
-        caregivers = await self.driver_repo.get_all_with_specialty()
+        caregivers = await self.caregiver_repo.get_all(specialty=specialty)
 
         # Filter
         filtered = []
@@ -116,39 +116,39 @@ class CaregiverService:
 
         # Build response
         rows = []
-        for driver_profile, user in paginated:
+        for caregiver_profile, user in paginated:
             full_name = f"{user.first_name} {user.last_name}"
-            location = f"{driver_profile.city}, {driver_profile.province}" if driver_profile.city and driver_profile.province else None
+            location = f"{caregiver_profile.city}, {caregiver_profile.province}" if caregiver_profile.city and caregiver_profile.province else None
 
             # Get certifications count (documents)
             # TODO: Implement document repo query
             certifications = []
 
             # Get ratings from ride service
-            ratings_data = await self.ride_client.get_driver_ratings(driver_profile.user_id)
+            ratings_data = await self.ride_client.get_driver_ratings(caregiver_profile.user_id)
             avg_rating = ratings_data.get("avg_rating") if ratings_data else None
 
             # Get assignment count
-            stats = await self.ride_client.get_driver_stats(driver_profile.user_id)
+            stats = await self.ride_client.get_driver_stats(caregiver_profile.user_id)
             assignments = stats.get("total_rides", 0) if stats else 0
 
             # Determine status
-            status_str = "on_assignment" if driver_profile.is_online else "available"
+            status_str = "on_assignment" if caregiver_profile.is_online else "available"
 
             rows.append(
                 CaregiverRosterRow(
                     caregiver_id=user.id,
-                    driver_profile_id=driver_profile.id,
+                    caregiver_profile_id=caregiver_profile.user_id,
                     full_name=full_name,
                     avatar_url=user.avatar_url,
-                    specialty=driver_profile.specialty or "",
+                    specialty=caregiver_profile.specialty or "",
                     certifications=certifications,
-                    capabilities=driver_profile.service_capabilities or [],
+                    capabilities=caregiver_profile.service_capabilities or [],
                     status=status_str,
                     rating=avg_rating,
                     assignments=assignments,
                     location=location,
-                    account_status=driver_profile.account_status or "active",
+                    account_status=caregiver_profile.account_status or "active",
                 )
             )
 
@@ -161,43 +161,39 @@ class CaregiverService:
         limit: int = 20,
     ) -> tuple[list[CaregiverProfileCard], int]:
         """Get caregiver profile cards."""
-        caregivers = await self.driver_repo.get_all_with_specialty()
-
-        # Filter by specialty if provided
-        if specialty:
-            caregivers = [c for c in caregivers if c.specialty == specialty]
+        caregivers = await self.caregiver_repo.get_all(specialty=specialty)
 
         total = len(caregivers)
         offset = (page - 1) * limit
         paginated = caregivers[offset : offset + limit]
 
         cards = []
-        for driver_profile in paginated:
-            user = await self.user_repo.get_by_id(driver_profile.user_id)
+        for caregiver_profile in paginated:
+            user = await self.user_repo.get_by_id(caregiver_profile.user_id)
             if not user:
                 continue
 
             full_name = f"{user.first_name} {user.last_name}"
-            location = f"{driver_profile.city}, {driver_profile.province}" if driver_profile.city and driver_profile.province else None
+            location = f"{caregiver_profile.city}, {caregiver_profile.province}" if caregiver_profile.city and caregiver_profile.province else None
 
             # Get ratings
-            ratings_data = await self.ride_client.get_driver_ratings(driver_profile.user_id)
+            ratings_data = await self.ride_client.get_driver_ratings(caregiver_profile.user_id)
             avg_rating = ratings_data.get("avg_rating") if ratings_data else None
 
             # Get assignments
-            stats = await self.ride_client.get_driver_stats(driver_profile.user_id)
+            stats = await self.ride_client.get_driver_stats(caregiver_profile.user_id)
             assignments = stats.get("total_rides", 0) if stats else 0
 
             cards.append(
                 CaregiverProfileCard(
                     caregiver_id=user.id,
-                    driver_profile_id=driver_profile.id,
+                    caregiver_profile_id=caregiver_profile.user_id,
                     full_name=full_name,
                     avatar_url=user.avatar_url,
-                    specialty=driver_profile.specialty or "",
+                    specialty=caregiver_profile.specialty or "",
                     phone=user.phone,
                     location=location,
-                    capabilities=driver_profile.service_capabilities or [],
+                    capabilities=caregiver_profile.service_capabilities or [],
                     rating=avg_rating,
                     assignments=assignments,
                     joined=user.created_at,
@@ -242,10 +238,10 @@ class CaregiverService:
             role="DRIVER",
         )
 
-        # Create driver profile with specialty
-        from app.models.driver_profile import DriverProfile
+        # Create caregiver profile
+        from app.models.caregiver_profile import CaregiverProfile
 
-        driver_profile = DriverProfile(
+        caregiver_profile = CaregiverProfile(
             user_id=user_id,
             business_id=fleet_id,
             specialty=specialty,
@@ -254,7 +250,7 @@ class CaregiverService:
             city=city,
             province=province,
         )
-        driver_profile = await self.driver_repo.create(driver_profile)
+        caregiver_profile = await self.caregiver_repo.create(caregiver_profile)
 
         # Publish event
         await self.publisher.publish(
@@ -262,7 +258,7 @@ class CaregiverService:
             routing_key=RoutingKeys.DRIVER_ACCOUNT_CREATED,
             payload={
                 "user_id": str(user_id),
-                "driver_profile_id": str(driver_profile.id),
+                "caregiver_profile_id": str(caregiver_profile.user_id),
                 "specialty": specialty,
                 "created_by": str(admin_id),
             },
@@ -270,7 +266,7 @@ class CaregiverService:
 
         return {
             "caregiver_id": user_id,
-            "driver_profile_id": driver_profile.id,
+            "caregiver_profile_id": caregiver_profile.user_id,
             "full_name": f"{first_name} {last_name}",
             "specialty": specialty,
         }
@@ -281,27 +277,27 @@ class CaregiverService:
         if not user:
             raise ValueError("Caregiver not found")
 
-        driver_profile = await self.driver_repo.get_by_user_id(caregiver_id)
-        if not driver_profile or not driver_profile.specialty:
-            raise ValueError("Not a caregiver")
+        caregiver_profile = await self.caregiver_repo.get_by_user_id(caregiver_id)
+        if not caregiver_profile:
+            raise ValueError("Caregiver profile not found")
 
         # Personal info
         personal_info = CaregiverPersonalInfo(
             full_name=f"{user.first_name} {user.last_name}",
             phone=user.phone,
             email=user.email,
-            specialty=driver_profile.specialty,
-            city=driver_profile.city,
-            province=driver_profile.province,
+            specialty=caregiver_profile.specialty,
+            city=caregiver_profile.city,
+            province=caregiver_profile.province,
             joined=user.created_at,
             languages=[],  # TODO: Add languages field to model
-            capabilities=driver_profile.service_capabilities or [],
+            capabilities=caregiver_profile.service_capabilities or [],
         )
 
         # Certifications (from documents)
         # TODO: Fetch from document repository
         certifications = [
-            CaregiverCertification(name=driver_profile.specialty, status="active", expiry_date=None),
+            CaregiverCertification(name=caregiver_profile.specialty, status="active", expiry_date=None),
         ]
 
         # Assignments (from ride service)
@@ -341,7 +337,7 @@ class CaregiverService:
 
         return CaregiverDetailResponse(
             caregiver_id=user.id,
-            driver_profile_id=driver_profile.id,
+            caregiver_profile_id=caregiver_profile.user_id,
             personal_info=personal_info,
             certifications=certifications,
             assignments=assignments,
@@ -369,9 +365,9 @@ class CaregiverService:
         if not user:
             raise ValueError("Caregiver not found")
 
-        driver_profile = await self.driver_repo.get_by_user_id(caregiver_id)
-        if not driver_profile:
-            raise ValueError("Driver profile not found")
+        caregiver_profile = await self.caregiver_repo.get_by_user_id(caregiver_id)
+        if not caregiver_profile:
+            raise ValueError("Caregiver profile not found")
 
         # Update user
         if first_name:
@@ -384,19 +380,19 @@ class CaregiverService:
             user.phone = phone
         await self.user_repo.update(user)
 
-        # Update driver profile
+        # Update caregiver profile
         if specialty:
-            driver_profile.specialty = specialty
+            caregiver_profile.specialty = specialty
         if city:
-            driver_profile.city = city
+            caregiver_profile.city = city
         if province:
-            driver_profile.province = province
+            caregiver_profile.province = province
         if capabilities is not None:
-            driver_profile.service_capabilities = capabilities
+            caregiver_profile.service_capabilities = capabilities
         if fleet_id:
-            driver_profile.business_id = fleet_id
+            caregiver_profile.business_id = fleet_id
 
-        await self.driver_repo.update(driver_profile)
+        await self.caregiver_repo.update(caregiver_profile)
 
         # Publish event
         await self.publisher.publish(
@@ -404,14 +400,14 @@ class CaregiverService:
             routing_key=RoutingKeys.DRIVER_PROFILE_UPDATED,
             payload={
                 "user_id": str(caregiver_id),
-                "driver_profile_id": str(driver_profile.id),
+                "caregiver_profile_id": str(caregiver_profile.user_id),
                 "updated_by": str(admin_id),
             },
         )
 
         return {
             "caregiver_id": caregiver_id,
-            "driver_profile_id": driver_profile.id,
+            "caregiver_profile_id": caregiver_profile.user_id,
             "full_name": f"{user.first_name} {user.last_name}",
-            "specialty": driver_profile.specialty,
+            "specialty": caregiver_profile.specialty,
         }

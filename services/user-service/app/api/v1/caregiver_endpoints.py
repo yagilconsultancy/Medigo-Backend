@@ -7,7 +7,7 @@ from app.clients.auth_service_client import AuthServiceClient
 from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_publisher
-from app.repositories.driver_repo import DriverRepository
+from app.repositories.caregiver_repo import CaregiverRepository
 from app.repositories.fleet_repo import FleetRepository
 from app.repositories.user_repo import UserRepository
 from app.schemas.caregiver import (
@@ -33,7 +33,7 @@ def _get_service(
     publisher: EventPublisher = Depends(get_publisher),
 ) -> CaregiverService:
     return CaregiverService(
-        driver_repo=DriverRepository(session),
+        caregiver_repo=CaregiverRepository(session),
         user_repo=UserRepository(session),
         fleet_repo=FleetRepository(session),
         auth_client=AuthServiceClient(settings.AUTH_SERVICE_URL),

@@ -13,6 +13,7 @@ from app.api.v1.fleet_vehicle_endpoints import router as fleet_vehicle_router
 from app.api.v1.fleet_earnings_endpoints import router as fleet_earnings_router
 from app.api.v1.admin_driver_endpoints import router as admin_driver_router
 from app.api.v1.admin_rider_endpoints import router as admin_rider_router
+from app.api.v1.admin_role_endpoints import router as admin_role_router
 from app.api.v1.caregiver_endpoints import router as caregiver_router
 
 router = APIRouter()
@@ -30,3 +31,4 @@ router.include_router(fleet_earnings_router, tags=["Fleet Earnings"])
 router.include_router(admin_driver_router, tags=["Admin Driver Management"])
 router.include_router(admin_rider_router, tags=["Admin Rider Management"])
 router.include_router(caregiver_router, tags=["Service Provider (Caregivers)"])
+router.include_router(admin_role_router, tags=["Roles & Permissions"])

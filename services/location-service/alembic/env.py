@@ -9,7 +9,7 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.models import GeocodingCache, ServiceArea  # noqa: F401
+from app.models import City, GeocodingCache, ServiceArea  # noqa: F401
 from mediride_common.database.base import Base
 
 config = context.config

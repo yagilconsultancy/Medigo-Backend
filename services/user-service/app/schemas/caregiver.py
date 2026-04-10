@@ -37,7 +37,7 @@ class CaregiverKPIs(BaseModel):
 
 class CaregiverRosterRow(BaseModel):
     caregiver_id: UUID
-    driver_profile_id: UUID
+    caregiver_profile_id: UUID
     full_name: str
     avatar_url: str | None = None
     specialty: str
@@ -52,7 +52,7 @@ class CaregiverRosterRow(BaseModel):
 
 class CaregiverProfileCard(BaseModel):
     caregiver_id: UUID
-    driver_profile_id: UUID
+    caregiver_profile_id: UUID
     full_name: str
     avatar_url: str | None = None
     specialty: str
@@ -100,7 +100,7 @@ class CaregiverRating(BaseModel):
 
 class CaregiverDetailResponse(BaseModel):
     caregiver_id: UUID
-    driver_profile_id: UUID
+    caregiver_profile_id: UUID
     personal_info: CaregiverPersonalInfo
     certifications: list[CaregiverCertification] = []
     assignments: list[CaregiverAssignment] = []

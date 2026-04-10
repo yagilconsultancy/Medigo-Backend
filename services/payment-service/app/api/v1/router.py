@@ -16,6 +16,7 @@ from app.api.v1.pricing_log_endpoints import router as pricing_log_router
 from app.api.v1.rate_card_endpoints import router as rate_card_router
 from app.api.v1.receipt_endpoints import router as receipt_router
 from app.api.v1.ride_package_endpoints import router as ride_package_router
+from app.api.v1.ride_type_endpoints import router as ride_type_router
 from app.api.v1.surcharge_rule_endpoints import router as surcharge_router
 from app.api.v1.webhook_endpoints import router as webhook_router
 from app.api.v1.withdrawal_endpoints import router as withdrawal_router
@@ -35,6 +36,7 @@ router.include_router(admin_tx_router, prefix="/admin", tags=["Admin Transaction
 router.include_router(admin_revenue_router, prefix="/admin", tags=["Admin Revenue"])
 router.include_router(admin_payout_router, prefix="/admin", tags=["Admin Payouts"])
 router.include_router(admin_refund_router, prefix="/admin", tags=["Admin Refunds"])
+router.include_router(ride_type_router, tags=["Ride Types"])
 
 # Pricing management endpoints
 router.include_router(pricing_dashboard_router, prefix="/pricing", tags=["Pricing Dashboard"])

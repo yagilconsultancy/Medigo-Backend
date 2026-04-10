@@ -69,6 +69,9 @@ class User(Base):
     driver_profile = relationship(
         "DriverProfile", back_populates="user", uselist=False, lazy="selectin"
     )
+    caregiver_profile = relationship(
+        "CaregiverProfile", back_populates="user", uselist=False, lazy="selectin"
+    )
     emergency_contacts = relationship(
         "EmergencyContact", back_populates="user", lazy="selectin"
     )

@@ -1,4 +1,6 @@
+from app.models.admin_role import AdminRole, AdminRoleAssignment, ModulePermission
 from app.models.fleet import Fleet
+from app.models.caregiver_profile import CaregiverProfile
 from app.models.driver_document import DriverDocument
 from app.models.driver_invitation import DriverInvitation
 from app.models.driver_profile import DriverProfile
@@ -18,9 +20,13 @@ from app.models.rider_issue_note import RiderIssueNote
 from app.models.vehicle_maintenance_log import VehicleMaintenanceLog
 
 __all__ = [
+    "AdminRole",
+    "AdminRoleAssignment",
+    "ModulePermission",
     "User",
     "UserSettings",
     "Fleet",
+    "CaregiverProfile",
     "DriverProfile",
     "DriverDocument",
     "DriverSuspensionLog",
