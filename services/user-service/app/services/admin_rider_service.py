@@ -212,7 +212,7 @@ class AdminRiderService:
         await self.repo.suspend_rider(rider_id, reason, admin_id)
 
         await self.publisher.publish(
-            exchange=Exchanges.USERS,
+            exchange_name=Exchanges.USERS,
             routing_key=RoutingKeys.RIDER_SUSPENDED,
             payload={
                 "rider_id": str(rider_id),
@@ -235,7 +235,7 @@ class AdminRiderService:
         await self.repo.reinstate_rider(rider_id)
 
         await self.publisher.publish(
-            exchange=Exchanges.USERS,
+            exchange_name=Exchanges.USERS,
             routing_key=RoutingKeys.RIDER_REINSTATED,
             payload={
                 "rider_id": str(rider_id),
@@ -399,7 +399,7 @@ class AdminRiderService:
         issue = await self.issue_repo.create(issue)
 
         await self.publisher.publish(
-            exchange=Exchanges.USERS,
+            exchange_name=Exchanges.USERS,
             routing_key=RoutingKeys.RIDER_ISSUE_CREATED,
             payload={
                 "issue_id": str(issue.id),
@@ -506,7 +506,7 @@ class AdminRiderService:
         await self.issue_repo.add_note(note)
 
         await self.publisher.publish(
-            exchange=Exchanges.USERS,
+            exchange_name=Exchanges.USERS,
             routing_key=RoutingKeys.RIDER_ISSUE_STATUS_CHANGED,
             payload={
                 "issue_id": str(issue_id),
