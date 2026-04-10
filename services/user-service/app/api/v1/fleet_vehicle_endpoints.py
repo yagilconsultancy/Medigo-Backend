@@ -204,14 +204,76 @@ async def list_vehicles(
     status_code=201,
 )
 async def create_vehicle(
-    body: VehicleCreate,
+    business_id: UUID = Form(...),
+    make: str = Form(...),
+    model: str = Form(...),
+    year: int = Form(...),
+    plate_number: str = Form(...),
+    category: str = Form(...),
+    vehicle_name: str | None = Form(None),
+    color: str | None = Form(None),
+    vin: str | None = Form(None),
+    mileage: int | None = Form(None),
+    insurance_expiry: date | None = Form(None),
+    registration_expiry: date | None = Form(None),
+    passenger_capacity: int | None = Form(None),
+    insurance_provider: str | None = Form(None),
+    registration_authority: str | None = Form(None),
+    last_inspection_date: date | None = Form(None),
+    internal_notes: str | None = Form(None),
+    special_equipment: str | None = Form(None),
+    photo: UploadFile | None = File(None),
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetVehicleService = Depends(_get_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     try:
+        # Parse special_equipment from JSON string or comma-separated
+        equipment_list = None
+        if special_equipment:
+            try:
+                import json
+                equipment_list = json.loads(special_equipment)
+            except (json.JSONDecodeError, ValueError):
+                equipment_list = [eq.strip() for eq in special_equipment.split(",") if eq.strip()]
+
+        # Upload photo if provided
+        photo_url = None
+        if photo:
+            file_data = await photo.read()
+            file_name = photo.filename or "vehicle_photo.jpg"
+            mime_type = photo.content_type or "image/jpeg"
+
+            file_key = f"vehicles/{business_id}/photos/{file_name}"
+            await s3_client.upload_file(
+                bucket=settings.S3_BUCKET_DOCUMENTS,
+                key=file_key,
+                data=file_data,
+                content_type=mime_type,
+            )
+            photo_url = f"s3://{settings.S3_BUCKET_DOCUMENTS}/{file_key}"
+
         vehicle = await service.create_vehicle(
             admin_id=user.id,
-            **body.model_dump(),
+            business_id=business_id,
+            make=make,
+            model=model,
+            year=year,
+            plate_number=plate_number,
+            category=category,
+            vehicle_name=vehicle_name,
+            color=color,
+            vin=vin,
+            mileage=mileage,
+            insurance_expiry=insurance_expiry,
+            registration_expiry=registration_expiry,
+            passenger_capacity=passenger_capacity,
+            special_equipment=equipment_list,
+            insurance_provider=insurance_provider,
+            registration_authority=registration_authority,
+            last_inspection_date=last_inspection_date,
+            internal_notes=internal_notes,
+            photo_url=photo_url,
         )
         return StandardResponse(data=vehicle, message="Vehicle registered")
     except ValueError as e:

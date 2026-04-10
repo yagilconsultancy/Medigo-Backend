@@ -86,6 +86,46 @@ class RideServiceClient:
             logger.error(f"Ride service driver dashboard stats error: {e}")
             return None
 
+    async def get_driver_rides(
+        self, driver_id: UUID, page: int = 1, limit: int = 20
+    ) -> dict | None:
+        """Get rides for a driver (for assignments tab)."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/rides/driver/{driver_id}",
+                    params={"page": page, "limit": limit},
+                    headers=HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(
+                    f"Ride service driver rides returned {resp.status_code}"
+                )
+                return None
+        except httpx.RequestError as e:
+            logger.error(f"Ride service driver rides error: {e}")
+            return None
+
+    async def get_batch_driver_ratings(self, driver_ids: list[UUID]) -> list[dict]:
+        """Get ratings for multiple drivers at once."""
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/internal/drivers/batch-ratings",
+                    json={"driver_ids": [str(did) for did in driver_ids]},
+                    headers=HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("ratings", [])
+                logger.warning(
+                    f"Ride service batch driver ratings returned {resp.status_code}"
+                )
+                return []
+        except httpx.RequestError as e:
+            logger.error(f"Ride service batch driver ratings error: {e}")
+            return []
+
     # --- Rider methods ---
 
     async def get_rider_stats(self, rider_id: UUID) -> dict | None:

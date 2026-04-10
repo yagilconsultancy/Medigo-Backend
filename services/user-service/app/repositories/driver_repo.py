@@ -71,3 +71,12 @@ class DriverRepository:
 
     async def set_online_status(self, user_id: UUID, is_online: bool) -> None:
         await self.update(user_id, is_online=is_online)
+
+    async def get_all_with_specialty(self) -> list[DriverProfile]:
+        """Get all drivers with a specialty (caregivers)."""
+        result = await self.session.execute(
+            select(DriverProfile)
+            .where(DriverProfile.specialty.isnot(None))
+            .order_by(DriverProfile.created_at.desc())
+        )
+        return list(result.scalars().all())

@@ -36,14 +36,28 @@ class AdminPayoutService:
         self.publisher = publisher
 
     async def get_payout_kpis(self, is_caregiver: bool = False, caregiver_ids: list | None = None) -> dict:
-        driver_ids = caregiver_ids if is_caregiver and caregiver_ids else None
+        driver_ids = None
+        if is_caregiver:
+            if caregiver_ids:
+                driver_ids = caregiver_ids
+            else:
+                # Fetch caregiver driver IDs (drivers with specialty)
+                specialty_map = await self.build_specialty_map()
+                driver_ids = [did for specialty_drivers in specialty_map.values() for did in specialty_drivers]
         return await self.payout_repo.get_payout_kpis(driver_ids=driver_ids)
 
     async def get_payout_schedule(self) -> list[dict]:
         return await self.payout_repo.get_payout_schedule()
 
     async def get_earnings_breakdown(self, is_caregiver: bool = False, caregiver_ids: list | None = None) -> dict:
-        driver_ids = caregiver_ids if is_caregiver and caregiver_ids else None
+        driver_ids = None
+        if is_caregiver:
+            if caregiver_ids:
+                driver_ids = caregiver_ids
+            else:
+                # Fetch caregiver driver IDs (drivers with specialty)
+                specialty_map = await self.build_specialty_map()
+                driver_ids = [did for specialty_drivers in specialty_map.values() for did in specialty_drivers]
         return await self.payout_repo.get_earnings_breakdown_aggregate(driver_ids=driver_ids)
 
     async def get_monthly_distribution(self) -> list[dict]:
