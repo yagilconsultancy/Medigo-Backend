@@ -15,10 +15,13 @@ RUN pip install --no-cache-dir -e .
 COPY services/tracking-service/app ./app
 COPY services/tracking-service/alembic.ini .
 COPY services/tracking-service/alembic ./alembic
+COPY services/tracking-service/entrypoint.sh .
+
+RUN chmod +x entrypoint.sh
 
 RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 8006
 
-CMD ["uvicorn", "app.main:socket_app", "--host", "0.0.0.0", "--port", "8006", "--workers", "1"]
+CMD ["./entrypoint.sh"]

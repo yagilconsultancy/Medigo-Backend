@@ -9,19 +9,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY libs/common /tmp/libs/common
 RUN pip install --no-cache-dir /tmp/libs/common && rm -rf /tmp/libs
 
-COPY services/location-service/pyproject.toml .
+COPY services/tracking-service/pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
-COPY services/location-service/app ./app
-COPY services/location-service/alembic.ini .
-COPY services/location-service/alembic ./alembic
-COPY services/location-service/entrypoint.sh .
+COPY services/tracking-service/app ./app
+COPY services/tracking-service/alembic.ini .
+COPY services/tracking-service/alembic ./alembic
+COPY services/tracking-service/entrypoint.sh .
 
 RUN chmod +x entrypoint.sh
 
 RUN useradd --create-home appuser
 USER appuser
 
-EXPOSE 8004
+EXPOSE 8006
 
-CMD ["./entrypoint.sh"]
+CMD ["uvicorn", "app.main:socket_app", "--host", "0.0.0.0", "--port", "8006", "--workers", "1"]

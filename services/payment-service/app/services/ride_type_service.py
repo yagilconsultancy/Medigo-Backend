@@ -108,26 +108,32 @@ class RideTypeService:
         """Update ride type."""
         config = await self.get_ride_type(ride_type_id)
 
+        # Prepare update dict
+        updates = {}
+
         if display_name is not None:
-            config.display_name = display_name
+            updates["display_name"] = display_name
 
         # Update config JSON
-        if isinstance(config.config, dict):
+        if any([description is not None, base_fare is not None, per_km_rate is not None,
+                per_min_rate is not None, min_fare is not None]):
+            config_dict = config.config if isinstance(config.config, dict) else {}
             if description is not None:
-                config.config["description"] = description
+                config_dict["description"] = description
             if base_fare is not None:
-                config.config["base_fare"] = base_fare
+                config_dict["base_fare"] = base_fare
             if per_km_rate is not None:
-                config.config["per_km_rate"] = per_km_rate
+                config_dict["per_km_rate"] = per_km_rate
             if per_min_rate is not None:
-                config.config["per_min_rate"] = per_min_rate
+                config_dict["per_min_rate"] = per_min_rate
             if min_fare is not None:
-                config.config["min_fare"] = min_fare
+                config_dict["min_fare"] = min_fare
+            updates["config"] = config_dict
 
         if is_active is not None:
-            config.is_active = is_active
+            updates["is_active"] = is_active
 
-        return await self.config_repo.update(config)
+        return await self.config_repo.update(ride_type_id, **updates)
 
     async def toggle_ride_type(
         self, ride_type_id: UUID, is_active: bool

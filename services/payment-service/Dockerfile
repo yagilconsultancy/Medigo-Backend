@@ -15,10 +15,13 @@ RUN pip install --no-cache-dir -e .
 COPY services/payment-service/app ./app
 COPY services/payment-service/alembic.ini .
 COPY services/payment-service/alembic ./alembic
+COPY services/payment-service/entrypoint.sh .
+
+RUN chmod +x entrypoint.sh
 
 RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 8005
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8005", "--workers", "2"]
+CMD ["./entrypoint.sh"]

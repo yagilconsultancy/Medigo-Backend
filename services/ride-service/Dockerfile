@@ -15,10 +15,13 @@ RUN pip install --no-cache-dir -e .
 COPY services/ride-service/app ./app
 COPY services/ride-service/alembic.ini .
 COPY services/ride-service/alembic ./alembic
+COPY services/ride-service/entrypoint.sh .
+
+RUN chmod +x entrypoint.sh
 
 RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 8003
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8003", "--workers", "2"]
+CMD ["./entrypoint.sh"]

@@ -15,10 +15,13 @@ RUN pip install --no-cache-dir -e .
 COPY services/notification-service/app ./app
 COPY services/notification-service/alembic.ini .
 COPY services/notification-service/alembic ./alembic
+COPY services/notification-service/entrypoint.sh .
+
+RUN chmod +x entrypoint.sh
 
 RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 8007
 
-CMD ["uvicorn", "app.main:socket_app", "--host", "0.0.0.0", "--port", "8007", "--workers", "1"]
+CMD ["./entrypoint.sh"]
