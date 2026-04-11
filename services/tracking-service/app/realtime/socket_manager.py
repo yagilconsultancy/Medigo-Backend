@@ -77,6 +77,27 @@ async def on_leave_ride(sid, data):
         logger.info(f"SID {sid} left tracking room {room}")
 
 
+@sio.on("join_dispatch_center", namespace="/tracking")
+async def on_join_dispatch_center(sid):
+    """Admin joins dispatch center room to receive all active trip location updates."""
+    session = await sio.get_session(sid, namespace="/tracking")
+    if session.get("role") != "admin":
+        return {"error": "Only admins can join dispatch center"}
+
+    room = "dispatch_center"
+    sio.enter_room(sid, room, namespace="/tracking")
+    logger.info(f"Admin {session['user_id']} joined dispatch center room")
+    return {"status": "joined", "room": room}
+
+
+@sio.on("leave_dispatch_center", namespace="/tracking")
+async def on_leave_dispatch_center(sid):
+    """Leave dispatch center room."""
+    room = "dispatch_center"
+    sio.leave_room(sid, room, namespace="/tracking")
+    logger.info(f"SID {sid} left dispatch center room")
+
+
 @sio.on("update_location", namespace="/tracking")
 async def on_update_location(sid, data):
     """Driver pushes GPS location update. Broadcasts to ride room."""
@@ -118,14 +139,24 @@ async def on_update_location(sid, data):
             )
 
         if result:
-            room = f"ride_{result['ride_id']}"
+            # Broadcast to specific ride room
+            ride_room = f"ride_{result['ride_id']}"
             await sio.emit(
                 "location_update",
                 result,
-                room=room,
+                room=ride_room,
                 namespace="/tracking",
                 skip_sid=sid,
             )
+
+            # Also broadcast to dispatch center room for live map
+            await sio.emit(
+                "dispatch_location_update",
+                result,
+                room="dispatch_center",
+                namespace="/tracking",
+            )
+
             return {"status": "ok"}
         return {"error": "No active tracking session"}
     except Exception as e:

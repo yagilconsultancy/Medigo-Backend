@@ -7,6 +7,7 @@ from uuid import UUID
 from app.clients.stripe_client import StripeClient
 from app.clients.user_service_client import UserServiceClient
 from app.repositories.admin_payout_repo import AdminPayoutRepository
+from app.repositories.caregiver_commission_repo import CaregiverCommissionRepository
 from app.repositories.earnings_repo import EarningsRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.repositories.transaction_repo import TransactionRepository
@@ -14,6 +15,9 @@ from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 
 logger = logging.getLogger(__name__)
+
+# Default commission for non-caregivers (drivers)
+DEFAULT_DRIVER_COMMISSION_PERCENT = 20.0
 
 
 class AdminPayoutService:
@@ -26,6 +30,7 @@ class AdminPayoutService:
         stripe_client: StripeClient,
         user_client: UserServiceClient,
         publisher: EventPublisher,
+        caregiver_commission_repo: CaregiverCommissionRepository | None = None,
     ):
         self.payout_repo = payout_repo
         self.earnings_repo = earnings_repo
@@ -34,6 +39,7 @@ class AdminPayoutService:
         self.stripe = stripe_client
         self.user_client = user_client
         self.publisher = publisher
+        self.caregiver_commission_repo = caregiver_commission_repo
 
     async def get_payout_kpis(self, is_caregiver: bool = False, caregiver_ids: list | None = None) -> dict:
         driver_ids = None
@@ -164,7 +170,15 @@ class AdminPayoutService:
             driver_specialty = d.get("specialty")
 
         gross = float(balance.total_earned)
-        commission = round(gross * 0.20, 2)
+
+        # Determine commission rate based on specialty (for caregivers)
+        commission_percent = DEFAULT_DRIVER_COMMISSION_PERCENT
+        if driver_specialty and self.caregiver_commission_repo:
+            config = await self.caregiver_commission_repo.get_by_specialty(driver_specialty)
+            if config:
+                commission_percent = float(config.commission_percent)
+
+        commission = round(gross * (commission_percent / 100), 2)
         net = float(balance.available_balance)
 
         # Get actual trip count
@@ -183,7 +197,7 @@ class AdminPayoutService:
             "trips": trips,
             "gross_earned": gross,
             "commission": commission,
-            "commission_percent": 20.0,
+            "commission_percent": commission_percent,
             "payout_schedule": "Weekly / Every Monday",
             "payout_method": "Direct Deposit",
             "bank_last_four": bank_last_four,

@@ -54,6 +54,20 @@ async def get_dispatch_dashboard(
     return StandardResponse(data=result)
 
 
+@router.get("/active-trips", response_model=StandardResponse[list[dict]])
+async def get_active_trips(
+    _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: DispatchService = Depends(_get_service),
+):
+    """
+    Get all active trips for live dispatch map.
+    Returns trips with driver_arrived or in_progress status.
+    Use Socket.IO /tracking namespace to get real-time location updates.
+    """
+    trips = await service.get_active_trips()
+    return StandardResponse(data=trips)
+
+
 # --- Unassigned Rides ---
 
 

@@ -72,7 +72,7 @@ class DispatchService:
                     AvailableDriverItem(
                         driver_id=UUID(d["user_id"]),
                         driver_name=f"{d.get('first_name', '')} {d.get('last_name', '')}".strip(),
-                        vehicle_type=d.get("vehicle_type", "Unknown"),
+                        vehicle_type=d.get("vehicle_type") or "Unknown",
                         vehicle_info=f"{d.get('vehicle_make', '')} {d.get('vehicle_model', '')} - {d.get('vehicle_year', '')}".strip(),
                         rating=d.get("rating", 5.0),
                         total_trips=d.get("total_trips", 0),
@@ -149,7 +149,7 @@ class DispatchService:
                 AvailableDriverItem(
                     driver_id=UUID(d["user_id"]),
                     driver_name=f"{d.get('first_name', '')} {d.get('last_name', '')}".strip(),
-                    vehicle_type=d.get("vehicle_type", "Unknown"),
+                    vehicle_type=d.get("vehicle_type") or "Unknown",
                     vehicle_info=f"{d.get('vehicle_make', '')} {d.get('vehicle_model', '')} - {d.get('vehicle_year', '')}".strip(),
                     rating=d.get("rating", 5.0),
                     total_trips=d.get("total_trips", 0),
@@ -158,6 +158,82 @@ class DispatchService:
                 )
             )
         return available_drivers
+
+    async def get_active_trips(self) -> list[dict]:
+        """
+        Get all active trips with enriched data.
+        Returns trips with driver_arrived or in_progress status.
+        """
+        rides = await self.repo.get_active_trips()
+        if not rides:
+            return []
+
+        # Collect unique rider and driver IDs
+        rider_ids = [r.rider_id for r in rides]
+        driver_ids = [r.driver_id for r in rides if r.driver_id]
+
+        # Fetch user details in batch
+        rider_details = {}
+        driver_details = {}
+
+        try:
+            if rider_ids:
+                riders_data = await self.user_client.batch_get_users(rider_ids)
+                rider_details = {
+                    UUID(u["id"]): u for u in riders_data if u.get("id")
+                }
+        except Exception as e:
+            logger.error(f"Failed to fetch rider details: {e}")
+
+        try:
+            if driver_ids:
+                drivers_data = await self.user_client.get_drivers_with_details(
+                    driver_ids
+                )
+                driver_details = {
+                    UUID(d["driver_id"]): d for d in drivers_data if d.get("driver_id")
+                }
+        except Exception as e:
+            logger.error(f"Failed to fetch driver details: {e}")
+
+        # Build response
+        active_trips = []
+        for ride in rides:
+            rider = rider_details.get(ride.rider_id, {})
+            driver = driver_details.get(ride.driver_id, {}) if ride.driver_id else {}
+
+            rider_name = f"{rider.get('first_name', '')} {rider.get('last_name', '')}".strip() or "Unknown"
+            driver_name = f"{driver.get('first_name', '')} {driver.get('last_name', '')}".strip() or "Unassigned"
+
+            active_trips.append({
+                "trip_id": str(ride.id),
+                "booking_number": f"TR-{str(ride.id)[:8].upper()}",
+                "rider_id": str(ride.rider_id),
+                "rider_name": rider_name,
+                "driver_id": str(ride.driver_id) if ride.driver_id else None,
+                "driver_name": driver_name,
+                "driver_avatar": driver.get("avatar_url"),
+                "status": ride.status,
+                "ride_type": ride.ride_type,
+                "pickup_address": ride.pickup_address,
+                "destination_address": ride.destination_address,
+                "scheduled_at": ride.scheduled_at.isoformat() if ride.scheduled_at else None,
+                "pickup_at": ride.pickup_at.isoformat() if ride.pickup_at else None,
+                "progress_percent": self._calculate_progress(ride),
+                "eta_minutes": None,  # Will be updated by tracking-service
+                "speed_mph": None,  # Will be updated by tracking-service
+                "special_requirements": self._extract_special_requirements(ride),
+            })
+
+        return active_trips
+
+    def _calculate_progress(self, ride) -> int:
+        """Calculate trip progress percentage based on status."""
+        status_progress = {
+            "driver_arrived": 75,
+            "in_progress": 85,
+        }
+        return status_progress.get(ride.status, 0)
 
     # --- Auto-Dispatch Settings ---
 

@@ -171,3 +171,18 @@ class DispatchRepository:
         await self.session.flush()
         await self.session.refresh(ride)
         return ride
+
+    async def get_active_trips(self) -> list[Ride]:
+        """
+        Get all active trips (rides with driver_arrived or in_progress status).
+        Used for live dispatch map view.
+        """
+        result = await self.session.execute(
+            select(Ride)
+            .where(
+                Ride.status.in_(["driver_arrived", "in_progress"]),
+                Ride.deleted_at.is_(None),
+            )
+            .order_by(Ride.scheduled_at.desc())
+        )
+        return list(result.scalars().all())

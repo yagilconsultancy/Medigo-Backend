@@ -8,6 +8,7 @@ from app.clients.user_service_client import UserServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_publisher, get_stripe_client
 from app.repositories.admin_payout_repo import AdminPayoutRepository
+from app.repositories.caregiver_commission_repo import CaregiverCommissionRepository
 from app.repositories.earnings_repo import EarningsRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.repositories.transaction_repo import TransactionRepository
@@ -43,6 +44,7 @@ def _get_service(
         stripe_client=stripe,
         user_client=UserServiceClient(settings.USER_SERVICE_URL),
         publisher=publisher,
+        caregiver_commission_repo=CaregiverCommissionRepository(session),
     )
 
 
