@@ -72,16 +72,17 @@ async def create_ride_type(
         admin_id=admin.id,
     )
 
+    config_data = config.config if isinstance(config.config, dict) else {}
     return StandardResponse(
         data=RideTypeResponse(
             id=config.id,
             service_type=config.service_type,
             display_name=config.display_name,
-            description=config.config.get("description"),
-            base_fare=config.config["base_fare"],
-            per_km_rate=config.config["per_km_rate"],
-            per_min_rate=config.config["per_min_rate"],
-            min_fare=config.config["min_fare"],
+            description=config_data.get("description"),
+            base_fare=float(config_data.get("base_fare", 0)),
+            per_km_rate=float(config_data.get("per_km_rate", 0)),
+            per_min_rate=float(config_data.get("per_min_rate", 0)),
+            min_fare=float(config_data.get("min_fare", 0)),
             is_active=config.is_active,
             created_at=config.created_at,
         ),
@@ -101,16 +102,17 @@ async def get_ride_type(
     """Get ride type details."""
     try:
         config = await service.get_ride_type(ride_type_id)
+        config_data = config.config if isinstance(config.config, dict) else {}
         return StandardResponse(
             data=RideTypeResponse(
                 id=config.id,
                 service_type=config.service_type,
                 display_name=config.display_name,
-                description=config.config.get("description"),
-                base_fare=config.config["base_fare"],
-                per_km_rate=config.config["per_km_rate"],
-                per_min_rate=config.config["per_min_rate"],
-                min_fare=config.config["min_fare"],
+                description=config_data.get("description"),
+                base_fare=float(config_data.get("base_fare", 0)),
+                per_km_rate=float(config_data.get("per_km_rate", 0)),
+                per_min_rate=float(config_data.get("per_min_rate", 0)),
+                min_fare=float(config_data.get("min_fare", 0)),
                 is_active=config.is_active,
                 created_at=config.created_at,
             )
@@ -142,16 +144,17 @@ async def update_ride_type(
             is_active=body.is_active,
         )
 
+        config_data = config.config if isinstance(config.config, dict) else {}
         return StandardResponse(
             data=RideTypeResponse(
                 id=config.id,
                 service_type=config.service_type,
                 display_name=config.display_name,
-                description=config.config.get("description"),
-                base_fare=config.config["base_fare"],
-                per_km_rate=config.config["per_km_rate"],
-                per_min_rate=config.config["per_min_rate"],
-                min_fare=config.config["min_fare"],
+                description=config_data.get("description"),
+                base_fare=float(config_data.get("base_fare", 0)),
+                per_km_rate=float(config_data.get("per_km_rate", 0)),
+                per_min_rate=float(config_data.get("per_min_rate", 0)),
+                min_fare=float(config_data.get("min_fare", 0)),
                 is_active=config.is_active,
                 created_at=config.created_at,
             ),
@@ -174,17 +177,18 @@ async def toggle_ride_type(
     """Toggle ride type active/inactive."""
     try:
         config = await service.toggle_ride_type(ride_type_id, is_active)
+        config_data = config.config if isinstance(config.config, dict) else {}
 
         return StandardResponse(
             data=RideTypeResponse(
                 id=config.id,
                 service_type=config.service_type,
                 display_name=config.display_name,
-                description=config.config.get("description"),
-                base_fare=config.config["base_fare"],
-                per_km_rate=config.config["per_km_rate"],
-                per_min_rate=config.config["per_min_rate"],
-                min_fare=config.config["min_fare"],
+                description=config_data.get("description"),
+                base_fare=float(config_data.get("base_fare", 0)),
+                per_km_rate=float(config_data.get("per_km_rate", 0)),
+                per_min_rate=float(config_data.get("per_min_rate", 0)),
+                min_fare=float(config_data.get("min_fare", 0)),
                 is_active=config.is_active,
                 created_at=config.created_at,
             ),
