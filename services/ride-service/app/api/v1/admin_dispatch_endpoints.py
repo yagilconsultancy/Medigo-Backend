@@ -123,11 +123,11 @@ async def manually_assign_driver(
     Updates ride status to 'driver_assigned' and publishes event.
     Requires: dispatch_center module access
     """
-    # Get driver details to fetch fleet_id
+    # Get driver details to fetch business_id
     driver_profile = await service.user_client.get_driver_profile(request.driver_id)
     business_id = None
-    if driver_profile and driver_profile.get("fleet_id"):
-        business_id = UUID(driver_profile["fleet_id"])
+    if driver_profile and driver_profile.get("business_id"):
+        business_id = UUID(driver_profile["business_id"])
 
     # Assign driver
     ride = await service.repo.assign_driver_to_ride(

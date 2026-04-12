@@ -153,6 +153,7 @@ async def get_driver_profile_internal(
         "last_name": user.last_name,
         "phone": user.phone,
         "avatar_url": user.avatar_url,
+        "business_id": str(driver.business_id) if driver.business_id else None,
         "rating": float(driver.rating),
         "total_trips": driver.total_trips,
         "is_online": driver.is_online,
