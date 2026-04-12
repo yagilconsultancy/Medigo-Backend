@@ -233,8 +233,7 @@ class AdminDriverService:
             specialty=request.specialty,
             date_of_birth=request.date_of_birth,
             account_status=request.account_status,
-            is_approved=True,  # Auto-approve drivers created by admin
-            approved_at=utc_now(),  # Set approval timestamp
+            # is_approved defaults to False - requires manual approval via approve button
         )
 
         # Assign vehicle if provided

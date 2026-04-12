@@ -61,16 +61,24 @@ class DriverRepository:
         )
 
     async def get_available_drivers(self) -> list[DriverProfile]:
-        """Get all approved drivers for admin assignment."""
+        """Get all approved, online drivers who are NOT currently on a trip."""
         result = await self.session.execute(
             select(DriverProfile)
-            .where(DriverProfile.is_approved.is_(True))
+            .where(
+                DriverProfile.is_approved.is_(True),
+                DriverProfile.is_online.is_(True),
+                DriverProfile.is_on_trip.is_(False),
+            )
             .order_by(DriverProfile.rating.desc())
         )
         return list(result.scalars().all())
 
     async def set_online_status(self, user_id: UUID, is_online: bool) -> None:
         await self.update(user_id, is_online=is_online)
+
+    async def set_trip_status(self, user_id: UUID, is_on_trip: bool) -> None:
+        """Update driver's trip status (called by ride events)."""
+        await self.update(user_id, is_on_trip=is_on_trip)
 
     async def get_all_with_specialty(self) -> list[DriverProfile]:
         """Get all drivers with a specialty (caregivers)."""

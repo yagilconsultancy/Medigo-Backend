@@ -34,6 +34,7 @@ class DriverProfile(Base):
     )
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False)
     is_online: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_on_trip: Mapped[bool] = mapped_column(Boolean, default=False)
     rating: Mapped[float] = mapped_column(Numeric(3, 2), default=5.00)
     total_trips: Mapped[int] = mapped_column(Integer, default=0)
     specialty: Mapped[str | None] = mapped_column(String(30), nullable=True)
