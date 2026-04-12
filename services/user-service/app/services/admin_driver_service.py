@@ -222,19 +222,25 @@ class AdminDriverService:
         )
 
         # Create driver profile
-        await self.repo.create_driver_profile(
-            user_id=user_id,
-            business_id=request.fleet_id,
-            license_number=request.license_number,
-            license_expiry=request.license_expiry,
-            medical_transport_certification=request.medical_transport_certification,
-            background_check_status=request.background_check_status,
-            service_capabilities=request.service_capabilities,
-            specialty=request.specialty,
-            date_of_birth=request.date_of_birth,
-            account_status=request.account_status,
-            # is_approved defaults to False - requires manual approval via approve button
-        )
+        profile_data = {
+            "user_id": user_id,
+            "business_id": request.fleet_id,
+            "license_number": request.license_number,
+            "license_expiry": request.license_expiry,
+            "medical_transport_certification": request.medical_transport_certification,
+            "background_check_status": request.background_check_status,
+            "service_capabilities": request.service_capabilities,
+            "specialty": request.specialty,
+            "date_of_birth": request.date_of_birth,
+            "account_status": request.account_status,
+            "is_approved": request.is_approved,
+        }
+
+        # Set approved_at timestamp if driver is being approved
+        if request.is_approved:
+            profile_data["approved_at"] = utc_now()
+
+        await self.repo.create_driver_profile(**profile_data)
 
         # Assign vehicle if provided
         if request.vehicle_id and self.vehicle_repo:

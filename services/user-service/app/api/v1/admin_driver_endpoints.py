@@ -134,6 +134,7 @@ async def create_driver(
     specialty: str | None = Form(None),
     date_of_birth: date | None = Form(None),
     account_status: str = Form("active"),
+    is_approved: bool = Form(False, description="Approve driver immediately (default: False)"),
     vehicle_insurance_file: UploadFile | None = File(None),
     drivers_license_file: UploadFile | None = File(None),
     certificate_file: UploadFile | None = File(None),
@@ -167,6 +168,7 @@ async def create_driver(
         specialty=specialty,
         date_of_birth=date_of_birth,
         account_status=account_status,
+        is_approved=is_approved,
     )
 
     documents: dict[str, UploadFile] = {}

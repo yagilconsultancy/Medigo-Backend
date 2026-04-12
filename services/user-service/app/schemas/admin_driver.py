@@ -166,6 +166,7 @@ class CreateDriverRequest(BaseModel):
     specialty: str | None = None
     date_of_birth: date | None = None
     account_status: str = "pending"
+    is_approved: bool = False
 
 
 class UpdateDriverRequest(BaseModel):
