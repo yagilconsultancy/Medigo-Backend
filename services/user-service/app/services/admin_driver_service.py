@@ -233,6 +233,8 @@ class AdminDriverService:
             specialty=request.specialty,
             date_of_birth=request.date_of_birth,
             account_status=request.account_status,
+            is_approved=True,  # Auto-approve drivers created by admin
+            approved_at=utc_now(),  # Set approval timestamp
         )
 
         # Assign vehicle if provided
@@ -248,13 +250,19 @@ class AdminDriverService:
                     file_data = await upload.read()
                     if not file_data:
                         continue
-                    await self.document_service.upload_document(
+                    document = await self.document_service.upload_document(
                         user_id=user_id,
                         document_type=doc_type,
                         file_data=file_data,
                         file_name=upload.filename or f"{doc_type}",
                         content_type=upload.content_type or "application/octet-stream",
                         business_id=request.fleet_id,
+                    )
+                    # Auto-approve documents uploaded during admin driver creation
+                    await self.document_service.verify_document(
+                        document_id=document.id,
+                        admin_id=admin_id,
+                        status="approved",
                     )
                 except Exception as e:
                     logger.warning(
