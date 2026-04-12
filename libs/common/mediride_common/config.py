@@ -20,6 +20,9 @@ class BaseServiceSettings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Internal service authentication
+    INTERNAL_SERVICE_TOKEN: str = "dev-internal-token-change-in-production"
+
     # S3-compatible storage (MinIO in dev, AWS S3 in prod)
     S3_ENDPOINT_URL: str = "http://minio:9000"
     S3_ACCESS_KEY: str = "minioadmin"
