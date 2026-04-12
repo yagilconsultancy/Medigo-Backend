@@ -98,6 +98,7 @@ class RideResponse(BaseModel):
     highway_407_route: str | None = None
     is_dialysis_trip: bool = False
     created_at: datetime
+    rider_name: str | None = None  # Enriched field for admin endpoints
 
     model_config = {"from_attributes": True}
 

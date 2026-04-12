@@ -60,14 +60,63 @@ class AdminBookingService:
         search: str | None,
         offset: int,
         limit: int,
-    ) -> tuple[list[Ride], int]:
-        return await self.booking_repo.get_all_bookings(
+    ) -> tuple[list[dict], int]:
+        """Get all bookings with rider names enriched."""
+        rides, total = await self.booking_repo.get_all_bookings(
             status_filter=status_filter,
             ride_type_filter=ride_type_filter,
             search=search,
             offset=offset,
             limit=limit,
         )
+
+        # Batch fetch rider names
+        rider_ids = [r.rider_id for r in rides]
+        rider_details = {}
+        if rider_ids:
+            try:
+                riders_data = await self.user_client.batch_get_users(rider_ids)
+                rider_details = {
+                    UUID(u["id"]): f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+                    for u in riders_data if u.get("id")
+                }
+            except Exception as e:
+                logger.error(f"Failed to fetch rider names: {e}")
+
+        # Enrich rides with rider names
+        enriched_rides = []
+        for ride in rides:
+            ride_dict = {
+                "id": ride.id,
+                "rider_id": ride.rider_id,
+                "driver_id": ride.driver_id,
+                "caregiver_id": ride.caregiver_id,
+                "business_id": ride.business_id,
+                "ride_type": ride.ride_type,
+                "trip_type": ride.trip_type,
+                "trip_structure": ride.trip_structure,
+                "pickup_address": ride.pickup_address,
+                "destination_address": ride.destination_address,
+                "scheduled_at": ride.scheduled_at,
+                "status": ride.status,
+                "estimated_distance_miles": ride.estimated_distance_miles,
+                "estimated_duration_minutes": ride.estimated_duration_minutes,
+                "estimated_fare": ride.estimated_fare,
+                "final_fare": ride.final_fare,
+                "special_instructions": ride.special_instructions,
+                "visit_type": ride.visit_type,
+                "facility_name": ride.facility_name,
+                "booking_channel": ride.booking_channel,
+                "facility_id": ride.facility_id,
+                "use_highway_407": ride.use_highway_407,
+                "highway_407_route": ride.highway_407_route,
+                "is_dialysis_trip": ride.is_dialysis_trip,
+                "created_at": ride.created_at,
+                "rider_name": rider_details.get(ride.rider_id, f"Rider {str(ride.rider_id)[:8]}"),
+            }
+            enriched_rides.append(ride_dict)
+
+        return enriched_rides, total
 
     # ==================== Pending Bookings ====================
 
