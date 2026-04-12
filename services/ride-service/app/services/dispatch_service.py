@@ -53,7 +53,7 @@ class DispatchService:
                 pickup_address=r.pickup_address,
                 destination_address=r.destination_address,
                 scheduled_at=r.scheduled_at,
-                distance_km=float(r.estimated_distance_miles * 1.60934)
+                distance_km=float(r.estimated_distance_miles) * 1.60934
                 if r.estimated_distance_miles
                 else None,
                 estimated_fare=float(r.estimated_fare) if r.estimated_fare else None,
@@ -120,7 +120,7 @@ class DispatchService:
                 pickup_address=r.pickup_address,
                 destination_address=r.destination_address,
                 scheduled_at=r.scheduled_at,
-                distance_km=float(r.estimated_distance_miles * 1.60934)
+                distance_km=float(r.estimated_distance_miles) * 1.60934
                 if r.estimated_distance_miles
                 else None,
                 estimated_fare=float(r.estimated_fare) if r.estimated_fare else None,
