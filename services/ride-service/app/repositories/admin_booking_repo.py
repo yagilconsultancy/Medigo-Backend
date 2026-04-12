@@ -11,14 +11,7 @@ from mediride_common.utils import utc_now
 # Dashboard tab → DB status mapping
 _STATUS_MAP = {
     "pending": [RideStatus.REQUESTED],
-    "approved": [
-        RideStatus.CONFIRMED,
-        RideStatus.DRIVER_ASSIGNED,
-        RideStatus.DRIVER_EN_ROUTE,
-        RideStatus.DRIVER_ARRIVED,
-        RideStatus.IN_PROGRESS,
-        RideStatus.COMPLETED,
-    ],
+    "approved": [RideStatus.CONFIRMED],  # Approved but not yet assigned to driver
     "declined": [RideStatus.CANCELLED, RideStatus.NO_SHOW],
 }
 
