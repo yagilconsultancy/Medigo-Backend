@@ -44,11 +44,25 @@ class DispatchService:
 
         # Get unassigned rides
         rides, _ = await self.repo.get_unassigned_rides(limit=50)
+
+        # Fetch rider names in batch
+        rider_ids = [r.rider_id for r in rides]
+        rider_details = {}
+        if rider_ids:
+            try:
+                riders_data = await self.user_client.batch_get_users(rider_ids)
+                rider_details = {
+                    UUID(u["id"]): f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+                    for u in riders_data if u.get("id")
+                }
+            except Exception as e:
+                logger.error(f"Failed to fetch rider names: {e}")
+
         unassigned_rides = [
             UnassignedRideItem(
                 ride_id=r.id,
                 booking_number=f"BK-{str(r.id)[:8].upper()}",
-                rider_name=f"Rider {str(r.rider_id)[:8]}",  # Will be enriched
+                rider_name=rider_details.get(r.rider_id, f"Rider {str(r.rider_id)[:8]}"),
                 ride_type=r.ride_type,
                 pickup_address=r.pickup_address,
                 destination_address=r.destination_address,
@@ -111,11 +125,24 @@ class DispatchService:
         offset = (page - 1) * limit
         rides, total = await self.repo.get_unassigned_rides(limit=limit, offset=offset)
 
+        # Fetch rider names in batch
+        rider_ids = [r.rider_id for r in rides]
+        rider_details = {}
+        if rider_ids:
+            try:
+                riders_data = await self.user_client.batch_get_users(rider_ids)
+                rider_details = {
+                    UUID(u["id"]): f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+                    for u in riders_data if u.get("id")
+                }
+            except Exception as e:
+                logger.error(f"Failed to fetch rider names: {e}")
+
         items = [
             UnassignedRideItem(
                 ride_id=r.id,
                 booking_number=f"BK-{str(r.id)[:8].upper()}",
-                rider_name=f"Rider {str(r.rider_id)[:8]}",
+                rider_name=rider_details.get(r.rider_id, f"Rider {str(r.rider_id)[:8]}"),
                 ride_type=r.ride_type,
                 pickup_address=r.pickup_address,
                 destination_address=r.destination_address,

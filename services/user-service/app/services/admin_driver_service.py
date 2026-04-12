@@ -218,6 +218,7 @@ class AdminDriverService:
             role="driver",
             business_id=request.fleet_id,
             date_of_birth=request.date_of_birth,
+            is_active=True,  # Auto-activate driver
         )
 
         # Create driver profile

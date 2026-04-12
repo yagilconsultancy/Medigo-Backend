@@ -125,7 +125,7 @@ async def create_driver(
     license_number: str | None = Form(None),
     license_expiry: date | None = Form(None),
     medical_transport_certification: str | None = Form(None),
-    background_check_status: str = Form("pending"),
+    background_check_status: str = Form("approved"),
     vehicle_id: UUID | None = Form(None),
     service_capabilities: str | None = Form(
         None,
@@ -133,7 +133,7 @@ async def create_driver(
     ),
     specialty: str | None = Form(None),
     date_of_birth: date | None = Form(None),
-    account_status: str = Form("pending"),
+    account_status: str = Form("active"),
     vehicle_insurance_file: UploadFile | None = File(None),
     drivers_license_file: UploadFile | None = File(None),
     certificate_file: UploadFile | None = File(None),
