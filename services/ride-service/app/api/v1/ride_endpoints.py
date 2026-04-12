@@ -88,6 +88,52 @@ async def get_my_rides(
     )
 
 
+@router.get("/rider/me/active", response_model=StandardResponse[RideResponse | None])
+async def get_my_active_ride(
+    user: UserClaims = Depends(require_role([UserRole.RIDER])),
+    service: RideService = Depends(_get_ride_service),
+):
+    """Get rider's current active ride (excludes requested, pending, cancelled, completed, no-show)."""
+    ride = await service.get_active_ride_for_rider(user.id)
+    return StandardResponse(
+        data=RideResponse.model_validate(ride) if ride else None,
+        message="Active ride retrieved" if ride else "No active ride",
+    )
+
+
+@router.get("/driver/me", response_model=PaginatedResponse[RideResponse])
+async def get_driver_rides(
+    status: str | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
+    service: RideService = Depends(_get_ride_service),
+):
+    """Get all rides assigned to this driver."""
+    offset = (page - 1) * limit
+    rides, total = await service.get_driver_trips(user.id, status, offset, limit)
+    return PaginatedResponse(
+        data=[RideResponse.model_validate(r) for r in rides],
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=(total + limit - 1) // limit if total > 0 else 0,
+    )
+
+
+@router.get("/driver/me/active", response_model=StandardResponse[RideResponse | None])
+async def get_driver_active_ride(
+    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
+    service: RideService = Depends(_get_ride_service),
+):
+    """Get driver's current active ride (excludes requested, pending, cancelled, completed, no-show)."""
+    ride = await service.get_active_ride_for_driver(user.id)
+    return StandardResponse(
+        data=RideResponse.model_validate(ride) if ride else None,
+        message="Active ride retrieved" if ride else "No active ride",
+    )
+
+
 @router.get("/{ride_id}", response_model=StandardResponse[RideDetailResponse])
 async def get_ride_detail(
     ride_id: UUID,

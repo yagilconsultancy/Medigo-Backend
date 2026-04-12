@@ -358,6 +358,14 @@ class RideService:
     ) -> tuple[list[Ride], int]:
         return await self.ride_repo.get_by_rider(rider_id, status_filter, offset, limit)
 
+    async def get_active_ride_for_rider(self, rider_id: UUID) -> Ride | None:
+        """Get rider's current active ride (confirmed, assigned, en route, arrived, or in progress)."""
+        return await self.ride_repo.get_active_ride_for_rider(rider_id)
+
+    async def get_active_ride_for_driver(self, driver_id: UUID) -> Ride | None:
+        """Get driver's current active ride (confirmed, assigned, en route, arrived, or in progress)."""
+        return await self.ride_repo.get_active_ride_for_driver(driver_id)
+
     # ---- Ratings ----
 
     async def submit_rating(

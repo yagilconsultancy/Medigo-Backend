@@ -246,6 +246,40 @@ class RideRepository:
         )
         return list(result.scalars().all())
 
+    async def get_active_ride_for_rider(self, rider_id: UUID) -> Ride | None:
+        """Get rider's current active ride (not requested, pending, cancelled, completed, or no-show)."""
+        result = await self.session.execute(
+            select(Ride).where(
+                Ride.rider_id == rider_id,
+                Ride.status.in_([
+                    RideStatus.CONFIRMED,
+                    RideStatus.DRIVER_ASSIGNED,
+                    RideStatus.DRIVER_EN_ROUTE,
+                    RideStatus.DRIVER_ARRIVED,
+                    RideStatus.IN_PROGRESS,
+                ]),
+                Ride.deleted_at.is_(None),
+            ).order_by(Ride.scheduled_at.desc())
+        )
+        return result.scalar_one_or_none()
+
+    async def get_active_ride_for_driver(self, driver_id: UUID) -> Ride | None:
+        """Get driver's current active ride (not requested, pending, cancelled, completed, or no-show)."""
+        result = await self.session.execute(
+            select(Ride).where(
+                Ride.driver_id == driver_id,
+                Ride.status.in_([
+                    RideStatus.CONFIRMED,
+                    RideStatus.DRIVER_ASSIGNED,
+                    RideStatus.DRIVER_EN_ROUTE,
+                    RideStatus.DRIVER_ARRIVED,
+                    RideStatus.IN_PROGRESS,
+                ]),
+                Ride.deleted_at.is_(None),
+            ).order_by(Ride.scheduled_at.desc())
+        )
+        return result.scalar_one_or_none()
+
     async def get_completed_today_count(self) -> int:
         """Count rides completed today (since midnight UTC)."""
         today_start = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
