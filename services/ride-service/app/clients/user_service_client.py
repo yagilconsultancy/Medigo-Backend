@@ -150,3 +150,47 @@ class UserServiceClient:
         except httpx.RequestError as e:
             logger.error(f"Error fetching fleet vehicle counts: {e}")
             return {}
+
+    async def batch_get_users(self, user_ids: list[UUID]) -> list[dict]:
+        """Batch get user details (id, first_name, last_name) for multiple users."""
+        if not user_ids:
+            return []
+        try:
+            ids_str = ",".join(str(uid) for uid in user_ids)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/users/batch",
+                    params={"user_ids": ids_str},
+                    headers={"X-Internal-Service": "ride-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("users", [])
+                logger.warning(
+                    f"Failed to batch fetch users: {resp.status_code}"
+                )
+                return []
+        except httpx.RequestError as e:
+            logger.error(f"Error batch fetching users: {e}")
+            return []
+
+    async def get_drivers_with_details(self, driver_ids: list[UUID]) -> list[dict]:
+        """Batch get driver details with fleet info."""
+        if not driver_ids:
+            return []
+        try:
+            ids_str = ",".join(str(did) for did in driver_ids)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/drivers/with-details",
+                    params={"driver_ids": ids_str},
+                    headers={"X-Internal-Service": "ride-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("drivers", [])
+                logger.warning(
+                    f"Failed to batch fetch drivers: {resp.status_code}"
+                )
+                return []
+        except httpx.RequestError as e:
+            logger.error(f"Error batch fetching drivers: {e}")
+            return []

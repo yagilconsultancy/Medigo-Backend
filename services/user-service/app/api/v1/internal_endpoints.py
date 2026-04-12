@@ -93,6 +93,40 @@ async def get_user_profile_internal(
     }
 
 
+@router.get("/users/batch")
+async def batch_get_users_internal(
+    user_ids: str = "",
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Batch get user details (id, first_name, last_name). Called by ride-service for enrichment."""
+    from app.models.user import User
+
+    if not user_ids.strip():
+        return {"users": []}
+
+    ids = [UUID(u.strip()) for u in user_ids.split(",") if u.strip()]
+
+    result = await session.execute(
+        select(User).where(User.id.in_(ids))
+    )
+    users = result.scalars().all()
+
+    return {
+        "users": [
+            {
+                "id": str(u.id),
+                "first_name": u.first_name,
+                "last_name": u.last_name,
+                "email": u.email,
+                "phone": u.phone,
+                "avatar_url": u.avatar_url,
+            }
+            for u in users
+        ]
+    }
+
+
 @router.get("/drivers/{driver_id}/profile")
 async def get_driver_profile_internal(
     driver_id: UUID,
@@ -234,8 +268,14 @@ async def get_available_drivers_internal(
     result = []
     for d in drivers:
         user = await user_repo.get_by_id(d.user_id)
+        fleet = None
+        if d.business_id:
+            fleet = await FleetRepository(session).get_by_id(d.business_id)
+
         result.append({
             "user_id": str(d.user_id),
+            "first_name": user.first_name if user else "",
+            "last_name": user.last_name if user else "",
             "name": f"{user.first_name} {user.last_name}" if user else "Unknown",
             "phone": user.phone if user else None,
             "avatar_url": user.avatar_url if user else None,
@@ -245,7 +285,10 @@ async def get_available_drivers_internal(
             "vehicle_type": d.vehicle_type,
             "vehicle_make": d.vehicle_make,
             "vehicle_model": d.vehicle_model,
+            "vehicle_year": d.vehicle_year,
             "vehicle_plate": d.vehicle_plate,
+            "specialty": getattr(d, "specialty", None),
+            "fleet_name": fleet.name if fleet else None,
             "business_id": str(d.business_id) if d.business_id else None,
         })
 
