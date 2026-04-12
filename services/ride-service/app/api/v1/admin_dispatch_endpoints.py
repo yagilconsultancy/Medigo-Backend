@@ -19,6 +19,7 @@ from app.schemas.dispatch import (
 from app.services.dispatch_service import DispatchService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
+from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import StandardResponse
@@ -141,8 +142,8 @@ async def manually_assign_driver(
 
     # Publish event
     await service.publisher.publish(
-        "rides",
-        "ride.driver.assigned",
+        Exchanges.RIDES,
+        RoutingKeys.RIDE_DRIVER_ASSIGNED,
         {
             "ride_id": str(ride_id),
             "driver_id": str(request.driver_id),
