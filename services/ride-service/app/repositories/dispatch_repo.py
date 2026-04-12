@@ -16,12 +16,12 @@ class DispatchRepository:
 
     async def get_dispatch_kpis(self) -> dict:
         """Get KPIs for dispatch center dashboard."""
-        # Pending assignments (approved but no driver assigned)
+        # Pending assignments (confirmed but no driver assigned)
         pending_result = await self.session.execute(
             select(func.count())
             .select_from(Ride)
             .where(
-                Ride.status == "approved",
+                Ride.status == "confirmed",
                 Ride.driver_id.is_(None),
                 Ride.deleted_at.is_(None),
             )
@@ -66,7 +66,7 @@ class DispatchRepository:
         query = (
             select(Ride)
             .where(
-                Ride.status == "approved",
+                Ride.status == "confirmed",
                 Ride.driver_id.is_(None),
                 Ride.deleted_at.is_(None),
             )
@@ -133,7 +133,7 @@ class DispatchRepository:
     ) -> list[Ride]:
         """
         Get rides eligible for auto-dispatch.
-        Criteria: approved, no driver, scheduled within next N hours.
+        Criteria: confirmed, no driver, scheduled within next N hours.
         """
         now = datetime.utcnow()
         window_end = now + timedelta(hours=scheduled_window_hours)
@@ -142,7 +142,7 @@ class DispatchRepository:
             select(Ride)
             .where(
                 and_(
-                    Ride.status == "approved",
+                    Ride.status == "confirmed",
                     Ride.driver_id.is_(None),
                     Ride.scheduled_at >= now,
                     Ride.scheduled_at <= window_end,

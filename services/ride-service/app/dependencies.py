@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import settings
+from mediride_common.auth.permissions import ModuleAccessChecker
 from mediride_common.database.base import get_async_engine, get_async_session_factory
 from mediride_common.events.broker import RabbitMQBroker
 from mediride_common.events.publisher import EventPublisher
@@ -11,6 +12,12 @@ _engine = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 _broker: RabbitMQBroker | None = None
 _publisher: EventPublisher | None = None
+
+# Module access checker for cross-service permission validation
+module_access_checker = ModuleAccessChecker(
+    user_service_url=settings.USER_SERVICE_URL,
+    internal_service_token=settings.INTERNAL_SERVICE_TOKEN,
+)
 
 
 async def init_db() -> None:
