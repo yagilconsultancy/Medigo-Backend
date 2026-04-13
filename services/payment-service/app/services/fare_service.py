@@ -49,7 +49,11 @@ class FareService:
         return result
 
     async def estimate_fare(self, ride_data: dict) -> dict:
-        """Estimate fare without persisting. Returns a dict of the breakdown."""
+        """Estimate fare without persisting. Returns a dict of the breakdown.
+
+        Includes ALL components: base fare, accessibility fees, attendant fees, care assistant,
+        highway 407 tolls, surcharges (capped), dialysis rate overrides, and platform fees.
+        """
         return await self._compute_fare(ride_data, persist=False)
 
     async def get_fare_breakdown(self, ride_id) -> FareBreakdown | None:

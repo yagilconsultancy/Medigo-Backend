@@ -6,6 +6,9 @@ class NotificationSettings(BaseServiceSettings):
     SERVICE_NAME: str = "notification-service"
     PORT: int = 8007
 
+    # Internal service URLs
+    USER_SERVICE_URL: str = "http://user-service:8002"
+
     # AWS SES (legacy)
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""

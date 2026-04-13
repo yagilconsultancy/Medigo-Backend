@@ -121,3 +121,60 @@ async def send_password_reset_email(to: str, reset_token: str) -> bool:
         </html>
         """
     return await send_email(to, "MediRide - Password Reset", html)
+
+
+async def send_ride_notification_email(
+    to: str,
+    name: str,
+    subject: str,
+    title: str,
+    body: str,
+    ride_details: dict | None = None,
+) -> bool:
+    """Send ride notification email (generic template for all ride events)."""
+    ride_info = ""
+    if ride_details:
+        ride_info = f"""
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin-top: 0;">Ride Details</h3>
+            <p><strong>Ride ID:</strong> #{ride_details.get('ride_id', 'N/A')[:8]}</p>
+            <p><strong>Pickup:</strong> {ride_details.get('pickup_address', 'N/A')}</p>
+            <p><strong>Destination:</strong> {ride_details.get('destination_address', 'N/A')}</p>
+            <p><strong>Scheduled:</strong> {ride_details.get('scheduled_at', 'N/A')}</p>
+        </div>
+        """
+
+    html = f"""
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+            .header {{ background-color: #3B5998; color: white; padding: 20px; text-align: center; }}
+            .content {{ padding: 20px; background-color: #ffffff; }}
+            .button {{ background-color: #3B5998; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0; }}
+            .footer {{ text-align: center; padding: 20px; color: #888; font-size: 12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>MediRide</h1>
+            </div>
+            <div class="content">
+                <p>Hi {name},</p>
+                <h2>{title}</h2>
+                <p>{body}</p>
+                {ride_info}
+                <p>You can view your ride details in the MediRide app.</p>
+                <p>Thank you for choosing MediRide!</p>
+            </div>
+            <div class="footer">
+                <p>&copy; 2026 MediRide. All rights reserved.</p>
+                <p>This is an automated notification. Please do not reply to this email.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return await send_email(to, subject, html)

@@ -7,9 +7,12 @@ from app.repositories.message_repo import MessageRepository
 from app.repositories.notification_repo import NotificationRepository
 from app.repositories.reaction_repo import ReactionRepository
 from app.services.chat_service import ChatService
+from app.clients.user_service_client import UserServiceClient
+from app.config import settings
 from app.services.email_service import (
     send_driver_invite_email,
     send_password_reset_email,
+    send_ride_notification_email,
 )
 from app.services.notification_service import NotificationService
 from mediride_common.events.broker import RabbitMQBroker
@@ -20,6 +23,7 @@ from mediride_common.events.schemas import (
     EventEnvelope,
     PasswordResetRequestedPayload,
     PaymentCompletedPayload,
+    RideCreatedPayload,
     RideRequestPayload,
     RideStatusChangedPayload,
     UserRegisteredPayload,
@@ -61,104 +65,217 @@ class AuthEventConsumer(BaseEventConsumer):
 
 
 class RideEventConsumer(BaseEventConsumer):
-    """Consumes ride events to create in-app notification records."""
+    """Consumes ride events to send push notifications and emails."""
 
     def __init__(self, broker: RabbitMQBroker, session_factory: async_sessionmaker[AsyncSession]):
         super().__init__(broker)
         self.session_factory = session_factory
+        self.user_client = UserServiceClient(settings.USER_SERVICE_URL)
+
+    async def _send_notification(
+        self,
+        svc: NotificationService,
+        user_id: UUID,
+        title: str,
+        body: str,
+        data: dict,
+        ride_details: dict | None = None,
+    ) -> None:
+        """Send both push notification and email."""
+        # Create in-app push notification
+        await svc.create_notification(
+            user_id=user_id,
+            title=title,
+            body=body,
+            notification_type=NotificationType.RIDE_UPDATE,
+            data=data,
+        )
+
+        # Send email notification
+        user_info = await self.user_client.get_user_email(user_id)
+        if user_info and user_info.get("email"):
+            await send_ride_notification_email(
+                to=user_info["email"],
+                name=user_info["name"],
+                subject=f"MediRide - {title}",
+                title=title,
+                body=body,
+                ride_details=ride_details,
+            )
 
     async def handle(self, envelope: EventEnvelope) -> None:
         async with self.session_factory() as session:
             try:
                 svc = NotificationService(NotificationRepository(session))
 
-                if envelope.event_type == RoutingKeys.RIDE_CONFIRMED:
+                # RIDE CREATED - Rider books a new ride
+                if envelope.event_type == RoutingKeys.RIDE_CREATED:
+                    payload = RideCreatedPayload(**envelope.payload)
+                    ride_details = {
+                        "ride_id": str(payload.ride_id),
+                        "pickup_address": payload.pickup_address,
+                        "destination_address": payload.destination_address,
+                        "scheduled_at": str(payload.scheduled_at),
+                    }
+                    await self._send_notification(
+                        svc=svc,
+                        user_id=payload.rider_id,
+                        title="Ride Request Received",
+                        body="Your ride request has been received and is awaiting approval.",
+                        data={"ride_id": str(payload.ride_id), "screen": "ride_detail"},
+                        ride_details=ride_details,
+                    )
+
+                # RIDE CONFIRMED - Admin approves the ride
+                elif envelope.event_type == RoutingKeys.RIDE_CONFIRMED:
                     payload = RideStatusChangedPayload(**envelope.payload)
-                    await svc.create_notification(
+                    await self._send_notification(
+                        svc=svc,
                         user_id=payload.rider_id,
                         title="Ride Confirmed",
                         body="Your ride has been confirmed and is being processed.",
-                        notification_type=NotificationType.RIDE_UPDATE,
                         data={"ride_id": str(payload.ride_id), "screen": "ride_detail"},
                     )
 
+                # DRIVER ASSIGNED - Driver is assigned to the ride
                 elif envelope.event_type == RoutingKeys.RIDE_DRIVER_ASSIGNED:
                     payload = RideStatusChangedPayload(**envelope.payload)
-                    await svc.create_notification(
+                    # Notify rider
+                    await self._send_notification(
+                        svc=svc,
                         user_id=payload.rider_id,
                         title="Driver Assigned",
                         body="A driver has been assigned to your ride.",
-                        notification_type=NotificationType.RIDE_UPDATE,
                         data={
                             "ride_id": str(payload.ride_id),
-                            "driver_id": str(payload.driver_id),
+                            "driver_id": str(payload.driver_id) if payload.driver_id else None,
                             "screen": "ride_detail",
                         },
                     )
+                    # Notify driver
+                    if payload.driver_id:
+                        await self._send_notification(
+                            svc=svc,
+                            user_id=payload.driver_id,
+                            title="New Ride Assignment",
+                            body="You have been assigned to a new ride.",
+                            data={"ride_id": str(payload.ride_id), "screen": "ride_detail"},
+                        )
 
+                # DRIVER EN ROUTE - Driver is on the way
                 elif envelope.event_type == RoutingKeys.RIDE_DRIVER_EN_ROUTE:
                     payload = RideStatusChangedPayload(**envelope.payload)
-                    await svc.create_notification(
+                    await self._send_notification(
+                        svc=svc,
                         user_id=payload.rider_id,
                         title="Driver En Route",
                         body="Your driver is on the way to pick you up.",
-                        notification_type=NotificationType.RIDE_UPDATE,
                         data={"ride_id": str(payload.ride_id), "screen": "ride_tracking"},
                     )
 
+                # DRIVER ARRIVED - Driver has arrived at pickup
                 elif envelope.event_type == RoutingKeys.RIDE_DRIVER_ARRIVED:
                     payload = RideStatusChangedPayload(**envelope.payload)
-                    await svc.create_notification(
+                    await self._send_notification(
+                        svc=svc,
                         user_id=payload.rider_id,
                         title="Driver Arrived",
                         body="Your driver has arrived at the pickup location.",
-                        notification_type=NotificationType.RIDE_UPDATE,
                         data={"ride_id": str(payload.ride_id), "screen": "ride_tracking"},
                     )
 
+                # RIDE IN PROGRESS - Ride has started
+                elif envelope.event_type == RoutingKeys.RIDE_IN_PROGRESS:
+                    payload = RideStatusChangedPayload(**envelope.payload)
+                    # Notify rider
+                    await self._send_notification(
+                        svc=svc,
+                        user_id=payload.rider_id,
+                        title="Ride Started",
+                        body="Your ride is now in progress.",
+                        data={"ride_id": str(payload.ride_id), "screen": "ride_tracking"},
+                    )
+                    # Notify driver
+                    if payload.driver_id:
+                        await self._send_notification(
+                            svc=svc,
+                            user_id=payload.driver_id,
+                            title="Ride Started",
+                            body="The ride is now in progress.",
+                            data={"ride_id": str(payload.ride_id), "screen": "ride_tracking"},
+                        )
+
+                # RIDE COMPLETED - Ride has finished successfully
                 elif envelope.event_type == RoutingKeys.RIDE_COMPLETED:
                     payload = RideStatusChangedPayload(**envelope.payload)
-                    await svc.create_notification(
+                    # Notify rider
+                    await self._send_notification(
+                        svc=svc,
                         user_id=payload.rider_id,
                         title="Ride Completed",
                         body="Your ride has been completed. Please rate your experience.",
-                        notification_type=NotificationType.RIDE_UPDATE,
                         data={"ride_id": str(payload.ride_id), "screen": "ride_rating"},
                     )
+                    # Notify driver
                     if payload.driver_id:
-                        await svc.create_notification(
+                        await self._send_notification(
+                            svc=svc,
                             user_id=payload.driver_id,
                             title="Ride Completed",
-                            body="You have completed the ride.",
-                            notification_type=NotificationType.RIDE_UPDATE,
+                            body="You have successfully completed the ride.",
                             data={"ride_id": str(payload.ride_id), "screen": "ride_summary"},
                         )
 
+                # RIDE CANCELLED - Ride was cancelled
                 elif envelope.event_type == RoutingKeys.RIDE_CANCELLED:
                     payload = RideStatusChangedPayload(**envelope.payload)
-                    await svc.create_notification(
+                    # Notify rider
+                    await self._send_notification(
+                        svc=svc,
                         user_id=payload.rider_id,
                         title="Ride Cancelled",
                         body="Your ride has been cancelled.",
-                        notification_type=NotificationType.RIDE_UPDATE,
                         data={"ride_id": str(payload.ride_id), "screen": "ride_history"},
                     )
+                    # Notify driver if assigned
                     if payload.driver_id:
-                        await svc.create_notification(
+                        await self._send_notification(
+                            svc=svc,
                             user_id=payload.driver_id,
                             title="Ride Cancelled",
                             body="A ride you were assigned to has been cancelled.",
-                            notification_type=NotificationType.RIDE_UPDATE,
                             data={"ride_id": str(payload.ride_id), "screen": "ride_history"},
                         )
 
+                # NO SHOW - Rider didn't show up
+                elif envelope.event_type == RoutingKeys.RIDE_NO_SHOW:
+                    payload = RideStatusChangedPayload(**envelope.payload)
+                    # Notify rider
+                    await self._send_notification(
+                        svc=svc,
+                        user_id=payload.rider_id,
+                        title="Ride Marked as No-Show",
+                        body="Your ride was marked as a no-show. Please contact support if this is incorrect.",
+                        data={"ride_id": str(payload.ride_id), "screen": "support"},
+                    )
+                    # Notify driver
+                    if payload.driver_id:
+                        await self._send_notification(
+                            svc=svc,
+                            user_id=payload.driver_id,
+                            title="Ride Marked as No-Show",
+                            body="The ride has been marked as a no-show.",
+                            data={"ride_id": str(payload.ride_id), "screen": "ride_summary"},
+                        )
+
+                # RIDE REQUEST (legacy - for direct driver requests)
                 elif envelope.event_type == RoutingKeys.RIDE_REQUEST_SENT:
                     payload = RideRequestPayload(**envelope.payload)
-                    await svc.create_notification(
+                    await self._send_notification(
+                        svc=svc,
                         user_id=payload.driver_id,
                         title="New Ride Request",
                         body=f"New ride request from {payload.rider_name}.",
-                        notification_type=NotificationType.RIDE_UPDATE,
                         data={"ride_id": str(payload.ride_id), "screen": "ride_request"},
                     )
 
@@ -274,13 +391,16 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
         queue_name=Queues.NOTIFICATION_RIDE_EVENTS,
         exchange_name=Exchanges.RIDES,
         routing_keys=[
-            RoutingKeys.RIDE_CONFIRMED,
-            RoutingKeys.RIDE_DRIVER_ASSIGNED,
-            RoutingKeys.RIDE_DRIVER_EN_ROUTE,
-            RoutingKeys.RIDE_DRIVER_ARRIVED,
-            RoutingKeys.RIDE_COMPLETED,
-            RoutingKeys.RIDE_CANCELLED,
-            RoutingKeys.RIDE_REQUEST_SENT,
+            RoutingKeys.RIDE_CREATED,  # When rider books a ride
+            RoutingKeys.RIDE_CONFIRMED,  # When admin approves
+            RoutingKeys.RIDE_DRIVER_ASSIGNED,  # When driver is assigned
+            RoutingKeys.RIDE_DRIVER_EN_ROUTE,  # Driver on the way
+            RoutingKeys.RIDE_DRIVER_ARRIVED,  # Driver arrived at pickup
+            RoutingKeys.RIDE_IN_PROGRESS,  # Ride started
+            RoutingKeys.RIDE_COMPLETED,  # Ride finished
+            RoutingKeys.RIDE_CANCELLED,  # Ride cancelled
+            RoutingKeys.RIDE_NO_SHOW,  # Rider no-show
+            RoutingKeys.RIDE_REQUEST_SENT,  # Legacy direct request
         ],
     )
 
