@@ -1,20 +1,22 @@
+import logging
 import secrets
 from datetime import timedelta
 from uuid import UUID
 
+from app.config import settings
 from app.models.admin_invitation import AdminInvitation
 from app.models.admin_role import AdminRole
 from app.models.user import User
 from app.repositories.admin_invitation_repo import AdminInvitationRepository
 from app.repositories.admin_role_repo import AdminRoleRepository
 from app.repositories.user_repo import UserRepository
-from mediride_common.config import settings
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.events.schemas import AdminInviteSentPayload
 from mediride_common.exceptions import ConflictError, NotFoundError, ValidationError
-from mediride_common.logger import logger
 from mediride_common.utils import utc_now
+
+logger = logging.getLogger(__name__)
 
 
 class AdminInvitationService:
