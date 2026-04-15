@@ -70,6 +70,15 @@ class DriverRegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
 
 
+class AdminVerifyInviteRequest(BaseModel):
+    invite_token: str
+
+
+class AdminRegisterRequest(BaseModel):
+    invite_token: str
+    password: str = Field(..., min_length=8, max_length=128)
+
+
 # Response schemas
 class RegisterResponse(BaseModel):
     user_id: UUID

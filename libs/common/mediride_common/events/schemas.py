@@ -46,6 +46,15 @@ class DriverInviteSentPayload(BaseModel):
     temporary_password: str | None = None
 
 
+class AdminInviteSentPayload(BaseModel):
+    invitation_id: UUID
+    email: str
+    full_name: str
+    role_display_name: str
+    invite_token: str
+    invited_by_name: str
+
+
 # User event payloads
 class ProfileCreatedPayload(BaseModel):
     user_id: UUID

@@ -3,6 +3,8 @@ import secrets
 from datetime import timedelta
 from uuid import UUID
 
+import httpx
+
 from app.config import settings
 from app.models.password_reset import PasswordResetToken
 from app.models.refresh_token import RefreshToken
@@ -28,6 +30,7 @@ from mediride_common.events.schemas import (
 )
 from mediride_common.exceptions import (
     AuthenticationError,
+    ConflictError,
     ConflictError,
     NotFoundError,
     ValidationError,
@@ -624,3 +627,110 @@ class AuthService:
             f"Driver registered: {credential.id}, business={business_id}"
         )
         return credential.id, otp_code
+
+    async def verify_admin_invite(self, invite_token: str) -> dict:
+        """Verify an admin invitation token via user-service."""
+        if not self.user_service_client:
+            raise ValidationError("Admin registration is not configured")
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{self.user_service_client._base_url}/internal/admin-invitations/verify",
+                    params={"token": invite_token},
+                    headers={"X-Internal-Service": "auth-service"},
+                )
+        except httpx.ConnectError:
+            raise ValidationError("User service is unavailable")
+        except httpx.TimeoutException:
+            raise ValidationError("User service request timed out")
+
+        if response.status_code == 404:
+            raise NotFoundError("Invalid or expired invitation token")
+        if response.status_code == 400:
+            raise ValidationError(response.json().get("detail", "Invalid invitation"))
+        if response.status_code != 200:
+            raise ValidationError("Failed to verify invitation")
+
+        return response.json()
+
+    async def register_admin(
+        self, invite_token: str, password: str
+    ) -> TokenPair:
+        """Register an admin using an invitation token. Returns tokens (auto-login)."""
+        if not self.user_service_client:
+            raise ValidationError("Admin registration is not configured")
+
+        # Verify and get invite details
+        invite_data = await self.verify_admin_invite(invite_token)
+        email = invite_data["email"]
+        full_name = invite_data["full_name"]
+
+        # Check if user already exists
+        existing = await self.credential_repo.get_by_email_or_phone(email, None)
+        if existing:
+            raise ConflictError("A user with this email already exists")
+
+        validate_password_strength(password)
+
+        # Create credential with ADMIN role
+        credential = UserCredential(
+            email=email,
+            password_hash=hash_password(password),
+            role=UserRole.ADMIN,
+            business_id=None,
+            is_verified=True,  # Admins are pre-verified via invite
+        )
+        await self.credential_repo.create(credential)
+
+        # Accept the invitation in user-service (creates role assignment)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{self.user_service_client._base_url}/internal/admin-invitations/accept",
+                    json={"token": invite_token, "user_id": str(credential.id)},
+                    headers={"X-Internal-Service": "auth-service"},
+                )
+            if response.status_code != 200:
+                logger.error(
+                    f"Failed to accept admin invitation: {response.status_code} {response.text}"
+                )
+                raise ValidationError("Failed to accept invitation")
+        except httpx.ConnectError:
+            raise ValidationError("User service is unavailable")
+        except httpx.TimeoutException:
+            raise ValidationError("User service request timed out")
+
+        # Publish registration event
+        await self.publisher.publish(
+            Exchanges.AUTH,
+            RoutingKeys.USER_REGISTERED,
+            UserRegisteredPayload(
+                user_id=credential.id,
+                email=email,
+                phone=None,
+                role=UserRole.ADMIN,
+                business_id=None,
+            ).model_dump(mode="json"),
+        )
+
+        # Create tokens (auto-login)
+        token_pair = self.jwt_handler.create_token_pair(
+            user_id=str(credential.id),
+            role=credential.role,
+            business_id=None,
+            email=email,
+        )
+        token_pair.role = credential.role
+        refresh_token_record = RefreshToken(
+            user_id=credential.id,
+            token_hash=hash_token(token_pair.refresh_token),
+            expires_at=utc_now()
+            + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+        await self.token_repo.create(refresh_token_record)
+
+        logger.info(
+            f"Admin registered: {credential.id}, email={email}, full_name={full_name}"
+        )
+        return token_pair

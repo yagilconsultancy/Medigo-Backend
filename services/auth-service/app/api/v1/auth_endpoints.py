@@ -11,19 +11,21 @@ from app.repositories.otp_repo import OTPRepository
 from app.repositories.password_reset_repo import PasswordResetRepository
 from app.repositories.token_repo import TokenRepository
 from app.schemas.auth import (
+    AdminRegisterRequest,
+    AdminVerifyInviteRequest,
     ChangePasswordRequest,
     DriverRegisterRequest,
     DriverVerifyInviteRequest,
     ForgotPasswordRequest,
     InviteVerifyResponse,
     LoginRequest,
+    OTPVerifyResponse,
     RefreshTokenRequest,
     RegisterRequest,
     RegisterResponse,
     ResetPasswordRequest,
     TokenResponse,
     VerifyOTPRequest,
-    OTPVerifyResponse,
 )
 from app.services.auth_service import AuthService
 from mediride_common.auth.models import TokenPair
@@ -285,4 +287,48 @@ async def register_driver(
     return StandardResponse(
         data=RegisterResponse(user_id=user_id, message=message),
         message=message,
+    )
+
+
+@router.post(
+    "/admin/verify-invite",
+    response_model=StandardResponse[InviteVerifyResponse],
+)
+async def verify_admin_invite(
+    request: AdminVerifyInviteRequest,
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    result = await auth_service.verify_admin_invite(request.invite_token)
+    return StandardResponse(
+        data=InviteVerifyResponse(
+            valid=True,
+            fleet_name=result.get("role_display_name"),  # Reuse fleet_name field for role display
+            email=result.get("email"),
+        ),
+        message="Invitation is valid",
+    )
+
+
+@router.post(
+    "/admin/register",
+    response_model=StandardResponse[TokenResponse],
+)
+async def register_admin(
+    request: AdminRegisterRequest,
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    token_pair = await auth_service.register_admin(
+        invite_token=request.invite_token,
+        password=request.password,
+    )
+
+    return StandardResponse(
+        data=TokenResponse(
+            access_token=token_pair.access_token,
+            refresh_token=token_pair.refresh_token,
+            token_type=token_pair.token_type,
+            expires_in=token_pair.expires_in,
+            role=token_pair.role,
+        ),
+        message="Admin registration successful. You are now logged in.",
     )

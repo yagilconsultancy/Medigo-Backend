@@ -123,6 +123,42 @@ async def send_password_reset_email(to: str, reset_token: str) -> bool:
     return await send_email(to, "MediRide - Password Reset", html)
 
 
+async def send_admin_invite_email(
+    to: str,
+    full_name: str,
+    role_display_name: str,
+    invite_token: str,
+    invited_by_name: str,
+) -> bool:
+    """Send admin invitation email."""
+    try:
+        template = _template_env.get_template("admin_invite.html")
+        html = template.render(
+            email=to,
+            full_name=full_name,
+            role_display_name=role_display_name,
+            invite_token=invite_token,
+            invited_by_name=invited_by_name,
+        )
+    except Exception:
+        # Fallback if template not found
+        html = f"""
+        <html>
+        <body>
+            <h2>Welcome to the MediRide Team!</h2>
+            <p>Hi <strong>{full_name}</strong>,</p>
+            <p>You've been invited to join the MediRide admin team as a <strong>{role_display_name}</strong>.</p>
+            <p><strong>Invited by:</strong> {invited_by_name}</p>
+            <p>Use this invitation code to register:</p>
+            <h3 style="color: #8B5CF6;">{invite_token}</h3>
+            <p><strong>Email:</strong> {to}</p>
+            <p style="color: #dc2626;">This invitation expires in 7 days.</p>
+        </body>
+        </html>
+        """
+    return await send_email(to, "MediRide - Admin Invitation", html)
+
+
 async def send_ride_notification_email(
     to: str,
     name: str,

@@ -16,6 +16,7 @@ class RoutingKeys:
     USER_PASSWORD_CHANGED = "user.password_changed"
     PASSWORD_RESET_REQUESTED = "user.password_reset_requested"
     DRIVER_INVITE_SENT = "driver.invite.sent"
+    ADMIN_INVITE_SENT = "admin.invite.sent"
 
     # User events
     PROFILE_CREATED = "profile.created"

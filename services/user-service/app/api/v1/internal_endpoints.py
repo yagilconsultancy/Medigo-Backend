@@ -436,6 +436,82 @@ async def accept_invitation(
     return {"accepted": True, "invitation_id": str(invitation.id)}
 
 
+@router.get("/admin-invitations/verify")
+async def verify_admin_invitation(
+    token: str,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Verify an admin invitation token. Called by auth-service."""
+    from app.repositories.admin_invitation_repo import AdminInvitationRepository
+    from app.repositories.admin_role_repo import AdminRoleRepository
+
+    invitation_repo = AdminInvitationRepository(session)
+    role_repo = AdminRoleRepository(session)
+
+    invitation = await invitation_repo.get_by_token(token)
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    if invitation.status != "pending":
+        raise HTTPException(status_code=400, detail="Invitation already used or revoked")
+
+    if invitation.expires_at < utc_now():
+        raise HTTPException(status_code=400, detail="Invitation has expired")
+
+    role = await role_repo.get_by_name(invitation.role_name)
+    role_display_name = role.display_name if role else invitation.role_name
+
+    return {
+        "valid": True,
+        "email": invitation.email,
+        "full_name": invitation.full_name,
+        "role_name": invitation.role_name,
+        "role_display_name": role_display_name,
+        "invitation_id": str(invitation.id),
+    }
+
+
+@router.post("/admin-invitations/accept")
+async def accept_admin_invitation(
+    request: AcceptInvitationRequest,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Mark an admin invitation as accepted and create admin role assignment. Called by auth-service after admin registration."""
+    from app.repositories.admin_invitation_repo import AdminInvitationRepository
+    from app.repositories.admin_role_repo import AdminRoleRepository
+    from app.models.admin_role import AdminRoleAssignment
+
+    invitation_repo = AdminInvitationRepository(session)
+    role_repo = AdminRoleRepository(session)
+
+    invitation = await invitation_repo.get_by_token(request.token)
+    if not invitation:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+
+    # Get the role
+    role = await role_repo.get_by_name(invitation.role_name)
+    if not role:
+        raise HTTPException(status_code=400, detail="Admin role not found")
+
+    # Create role assignment
+    assignment = AdminRoleAssignment(
+        user_id=UUID(request.user_id),
+        role_id=role.id,
+        assigned_by=invitation.invited_by,
+    )
+    await role_repo.assign_role(assignment)
+
+    # Mark invitation as accepted
+    await invitation_repo.mark_accepted(invitation.id)
+    logger.info(
+        f"Admin invitation {invitation.id} accepted by user {request.user_id}"
+    )
+
+    return {"accepted": True, "invitation_id": str(invitation.id)}
+
+
 class CheckModuleAccessRequest(BaseModel):
     user_id: str
     module_name: str

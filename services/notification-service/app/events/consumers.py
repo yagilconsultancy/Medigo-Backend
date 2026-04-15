@@ -10,6 +10,7 @@ from app.services.chat_service import ChatService
 from app.clients.user_service_client import UserServiceClient
 from app.config import settings
 from app.services.email_service import (
+    send_admin_invite_email,
     send_driver_invite_email,
     send_password_reset_email,
     send_ride_notification_email,
@@ -19,6 +20,7 @@ from mediride_common.events.broker import RabbitMQBroker
 from mediride_common.events.constants import Exchanges, Queues, RoutingKeys
 from mediride_common.events.consumer import BaseEventConsumer
 from mediride_common.events.schemas import (
+    AdminInviteSentPayload,
     DriverInviteSentPayload,
     EventEnvelope,
     PasswordResetRequestedPayload,
@@ -54,6 +56,17 @@ class AuthEventConsumer(BaseEventConsumer):
                 temporary_password=payload.temporary_password,
             )
             logger.info(f"Driver invite email sent to {payload.email}")
+
+        elif envelope.event_type == RoutingKeys.ADMIN_INVITE_SENT:
+            payload = AdminInviteSentPayload(**envelope.payload)
+            await send_admin_invite_email(
+                to=payload.email,
+                full_name=payload.full_name,
+                role_display_name=payload.role_display_name,
+                invite_token=payload.invite_token,
+                invited_by_name=payload.invited_by_name,
+            )
+            logger.info(f"Admin invite email sent to {payload.email}")
 
         elif envelope.event_type == RoutingKeys.PASSWORD_RESET_REQUESTED:
             payload = PasswordResetRequestedPayload(**envelope.payload)
