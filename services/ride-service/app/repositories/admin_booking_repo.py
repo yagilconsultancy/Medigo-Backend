@@ -32,10 +32,23 @@ class AdminBookingRepository:
     ) -> tuple[list[Ride], int]:
         conditions = [Ride.deleted_at.is_(None)]
 
-        if status_filter and status_filter in _STATUS_MAP:
-            conditions.append(Ride.status.in_(_STATUS_MAP[status_filter]))
-        elif status_filter:
-            conditions.append(Ride.status == status_filter)
+        if status_filter:
+            # Support comma-separated multiple statuses
+            status_values = [s.strip() for s in status_filter.split(",")]
+            all_statuses = []
+
+            for status_val in status_values:
+                if status_val in _STATUS_MAP:
+                    # Grouped alias (e.g., "pending" -> [REQUESTED])
+                    all_statuses.extend(_STATUS_MAP[status_val])
+                else:
+                    # Individual status (e.g., "driver_assigned")
+                    all_statuses.append(status_val)
+
+            if len(all_statuses) == 1:
+                conditions.append(Ride.status == all_statuses[0])
+            elif len(all_statuses) > 1:
+                conditions.append(Ride.status.in_(all_statuses))
 
         if ride_type_filter:
             conditions.append(Ride.ride_type == ride_type_filter)

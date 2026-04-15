@@ -80,7 +80,7 @@ class Ride(Base):
     )
 
     # Medical info
-    visit_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    visit_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     appointment_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     facility_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     special_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)

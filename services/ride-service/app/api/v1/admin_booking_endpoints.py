@@ -77,7 +77,16 @@ def _get_service(
 
 @router.get("/bookings", response_model=PaginatedResponse[RideResponse])
 async def get_all_bookings(
-    status: str | None = Query(default=None, description="pending|approved|declined"),
+    status: str | None = Query(
+        default=None,
+        description=(
+            "Filter by status. Supports single value, comma-separated multiple values, or grouped aliases. "
+            "Grouped aliases: pending|approved|declined. "
+            "Individual statuses: requested|pending_business_assignment|confirmed|driver_assigned|"
+            "driver_en_route|driver_arrived|in_progress|completed|cancelled|no_show. "
+            "Examples: ?status=requested or ?status=requested,confirmed,driver_assigned or ?status=pending,approved"
+        ),
+    ),
     ride_type: str | None = Query(default=None),
     search: str | None = Query(default=None),
     page: int = Query(1, ge=1),
