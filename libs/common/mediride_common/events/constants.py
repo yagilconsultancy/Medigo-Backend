@@ -103,6 +103,7 @@ class RoutingKeys:
 class Queues:
     # user-service queues
     USER_SERVICE_USER_REGISTERED = "user-service.user-registered"
+    USER_SERVICE_RIDE_EVENTS = "user-service.ride-events"
 
     # notification-service queues
     NOTIFICATION_AUTH_EVENTS = "notification-service.auth-events"

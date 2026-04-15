@@ -106,6 +106,55 @@ class RideRatingConsumer(BaseEventConsumer):
             )
 
 
+class RideLifecycleConsumer(BaseEventConsumer):
+    """
+    Consumes ride lifecycle events to manage driver trip status.
+
+    When a driver is assigned to a ride (RIDE_DRIVER_ASSIGNED), sets is_on_trip = True.
+    When a ride ends (RIDE_COMPLETED, RIDE_CANCELLED, RIDE_NO_SHOW), sets is_on_trip = False.
+    """
+
+    async def handle(self, envelope: EventEnvelope) -> None:
+        payload = envelope.payload
+
+        driver_id_str = payload.get("driver_id")
+        ride_id = payload.get("ride_id")
+
+        # If no driver, nothing to do
+        if not driver_id_str:
+            logger.debug(
+                f"No driver_id in {envelope.event_type} event for ride {ride_id}"
+            )
+            return
+
+        try:
+            driver_id = UUID(driver_id_str)
+        except (ValueError, TypeError):
+            logger.error(f"Invalid driver_id format: {driver_id_str}")
+            return
+
+        # Get a database session
+        async for session in get_db():
+            driver_repo = DriverRepository(session)
+
+            if envelope.event_type == RoutingKeys.RIDE_DRIVER_ASSIGNED:
+                # Driver assigned - mark as on trip
+                await driver_repo.set_trip_status(driver_id, is_on_trip=True)
+                logger.info(f"Driver {driver_id} marked as on trip for ride {ride_id}")
+
+            elif envelope.event_type in (
+                RoutingKeys.RIDE_COMPLETED,
+                RoutingKeys.RIDE_CANCELLED,
+                RoutingKeys.RIDE_NO_SHOW,
+            ):
+                # Ride ended - mark driver as available
+                await driver_repo.set_trip_status(driver_id, is_on_trip=False)
+                logger.info(
+                    f"Driver {driver_id} marked as available after ride {ride_id} "
+                    f"ended ({envelope.event_type})"
+                )
+
+
 async def setup_consumers() -> None:
     """Set up all event consumers for the user service."""
     broker = get_broker()
@@ -125,6 +174,19 @@ async def setup_consumers() -> None:
         queue_name=Queues.USER_SERVICE_RATING_SUBMITTED,
         exchange_name=Exchanges.RIDES,
         routing_keys=[RoutingKeys.RIDE_RATING_SUBMITTED],
+    )
+
+    # Ride lifecycle consumer - manages driver is_on_trip status
+    ride_lifecycle_consumer = RideLifecycleConsumer(broker)
+    await ride_lifecycle_consumer.setup_queue(
+        queue_name=Queues.USER_SERVICE_RIDE_EVENTS,
+        exchange_name=Exchanges.RIDES,
+        routing_keys=[
+            RoutingKeys.RIDE_DRIVER_ASSIGNED,
+            RoutingKeys.RIDE_COMPLETED,
+            RoutingKeys.RIDE_CANCELLED,
+            RoutingKeys.RIDE_NO_SHOW,
+        ],
     )
 
     logger.info("User service consumers initialized")

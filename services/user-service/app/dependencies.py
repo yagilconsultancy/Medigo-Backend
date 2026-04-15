@@ -65,3 +65,10 @@ def get_s3_client() -> S3StorageClient:
     if not _s3_client:
         raise RuntimeError("S3 client not initialized")
     return _s3_client
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Get the session factory for creating new sessions (used by consumers)."""
+    if not _session_factory:
+        raise RuntimeError("Database not initialized")
+    return _session_factory
