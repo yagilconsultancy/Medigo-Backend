@@ -10,10 +10,10 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.models import (  # noqa: F401
-    AdminRole, AdminRoleAssignment, Fleet, DriverDocument, DriverInvitation, DriverProfile,
-    DriverSuspensionLog, EmergencyContact, FleetApplication, FleetDocument,
-    ModulePermission, Passenger, RiderIssue, RiderIssueNote, SavedLocation, User, UserSettings,
-    Vehicle, VehicleCategoryConfig, VehicleDocument, VehicleMaintenanceLog,
+    AdminInvitation, AdminRole, AdminRoleAssignment, CaregiverProfile, Fleet, DriverDocument,
+    DriverInvitation, DriverProfile, DriverSuspensionLog, EmergencyContact, FleetApplication,
+    FleetDocument, ModulePermission, Passenger, RiderIssue, RiderIssueNote, SavedLocation,
+    User, UserSettings, Vehicle, VehicleCategoryConfig, VehicleDocument, VehicleMaintenanceLog,
 )
 from mediride_common.database.base import Base
 
