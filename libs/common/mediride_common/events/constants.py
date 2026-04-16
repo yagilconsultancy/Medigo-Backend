@@ -33,6 +33,7 @@ class RoutingKeys:
     RIDE_CREATED = "ride.created"
     RIDE_CONFIRMED = "ride.confirmed"
     RIDE_DRIVER_ASSIGNED = "ride.driver_assigned"
+    RIDE_DRIVER_UNASSIGNED = "ride.driver_unassigned"
     RIDE_DRIVER_EN_ROUTE = "ride.driver_en_route"
     RIDE_DRIVER_ARRIVED = "ride.driver_arrived"
     RIDE_IN_PROGRESS = "ride.in_progress"

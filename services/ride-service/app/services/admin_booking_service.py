@@ -25,6 +25,7 @@ from app.schemas.admin_booking import (
     StatusLogEntry,
 )
 from app.services.ride_service import RideService
+from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.exceptions import NotFoundError, ValidationError
 from mediride_common.schemas.enums import RideStatus
 from mediride_common.utils import utc_now
@@ -50,6 +51,8 @@ class AdminBookingService:
         self.ride_service = ride_service
         self.user_client = user_client
         self.payment_client = payment_client
+        # Access publisher through ride_service
+        self.publisher = ride_service.publisher
 
     # ==================== All Bookings ====================
 
@@ -464,6 +467,33 @@ class AdminBookingService:
 
         old_driver_id = ride.driver_id
         await self.ride_repo.update(ride_id, driver_id=new_driver_id)
+
+        # Publish event to free old driver
+        if old_driver_id:
+            await self.publisher.publish(
+                Exchanges.RIDES,
+                RoutingKeys.RIDE_DRIVER_UNASSIGNED,
+                {
+                    "ride_id": str(ride_id),
+                    "driver_id": str(old_driver_id),
+                    "reason": "driver_reassigned",
+                    "reassigned_to": str(new_driver_id),
+                    "reassigned_by": str(admin_id),
+                },
+            )
+
+        # Publish event to assign new driver
+        await self.publisher.publish(
+            Exchanges.RIDES,
+            RoutingKeys.RIDE_DRIVER_ASSIGNED,
+            {
+                "ride_id": str(ride_id),
+                "driver_id": str(new_driver_id),
+                "assigned_by": str(admin_id),
+                "assigned_via": "reassignment",
+                "previous_driver": str(old_driver_id) if old_driver_id else None,
+            },
+        )
 
         # Log the reassignment
         log = RideStatusLog(

@@ -142,6 +142,15 @@ class RideLifecycleConsumer(BaseEventConsumer):
                 await driver_repo.set_trip_status(driver_id, is_on_trip=True)
                 logger.info(f"Driver {driver_id} marked as on trip for ride {ride_id}")
 
+            elif envelope.event_type == RoutingKeys.RIDE_DRIVER_UNASSIGNED:
+                # Driver unassigned (reassigned to someone else) - mark as available
+                await driver_repo.set_trip_status(driver_id, is_on_trip=False)
+                reason = payload.get("reason", "unassigned")
+                logger.info(
+                    f"Driver {driver_id} marked as available after being unassigned "
+                    f"from ride {ride_id} ({reason})"
+                )
+
             elif envelope.event_type in (
                 RoutingKeys.RIDE_COMPLETED,
                 RoutingKeys.RIDE_CANCELLED,
@@ -183,6 +192,7 @@ async def setup_consumers() -> None:
         exchange_name=Exchanges.RIDES,
         routing_keys=[
             RoutingKeys.RIDE_DRIVER_ASSIGNED,
+            RoutingKeys.RIDE_DRIVER_UNASSIGNED,
             RoutingKeys.RIDE_COMPLETED,
             RoutingKeys.RIDE_CANCELLED,
             RoutingKeys.RIDE_NO_SHOW,
