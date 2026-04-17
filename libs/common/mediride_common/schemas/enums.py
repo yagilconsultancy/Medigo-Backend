@@ -422,6 +422,18 @@ class ActivityLogSeverity(StrEnum):
     CRITICAL = "critical"
 
 
+class DisputeType(StrEnum):
+    FARE_DISPUTE = "fare_dispute"
+    REFUND_REQUEST = "refund_request"
+    TRIP_FRAUD = "trip_fraud"
+
+
+class DisputeStatus(StrEnum):
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class LoginStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"

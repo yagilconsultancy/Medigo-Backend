@@ -10,10 +10,10 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.models import (  # noqa: F401
-    CancellationPolicy, CommissionConfig, DialysisRatePlan, DriverEarnings,
-    EarningsPeriod, FareBreakdown, Holiday, PaymentMethod, PricingChangeLog,
-    RateCard, RefundRequest, RidePackage, ServiceTypeConfig, SurchargeRule,
-    Transaction, WeatherCondition, Withdrawal,
+    CancellationPolicy, CommissionConfig, DialysisRatePlan, Dispute, DisputeNote,
+    DriverEarnings, EarningsPeriod, FareBreakdown, Holiday, PaymentMethod,
+    PricingChangeLog, RateCard, RefundRequest, RidePackage, ServiceTypeConfig,
+    SurchargeRule, Transaction, WeatherCondition, Withdrawal,
 )
 from mediride_common.database.base import Base
 

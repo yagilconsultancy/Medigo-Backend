@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.v1.admin_dispute_endpoints import router as admin_dispute_router
 from app.api.v1.admin_payout_endpoints import router as admin_payout_router
 from app.api.v1.admin_refund_endpoints import router as admin_refund_router
 from app.api.v1.admin_revenue_endpoints import router as admin_revenue_router
@@ -36,6 +37,7 @@ router.include_router(admin_tx_router, prefix="/admin", tags=["Admin Transaction
 router.include_router(admin_revenue_router, prefix="/admin", tags=["Admin Revenue"])
 router.include_router(admin_payout_router, prefix="/admin", tags=["Admin Payouts"])
 router.include_router(admin_refund_router, prefix="/admin", tags=["Admin Refunds"])
+router.include_router(admin_dispute_router, prefix="/admin", tags=["Admin Disputes"])
 router.include_router(ride_type_router, tags=["Ride Types"])
 
 # Pricing management endpoints

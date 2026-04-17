@@ -51,3 +51,12 @@ class LocationUpdateRequest(BaseModel):
     longitude: float
     heading: float | None = None
     speed: float | None = None
+
+
+class SimulateLocationUpdateRequest(BaseModel):
+    """Public test endpoint schema for simulating driver location updates."""
+    driver_id: UUID
+    latitude: float
+    longitude: float
+    heading: float | None = None
+    speed: float | None = None

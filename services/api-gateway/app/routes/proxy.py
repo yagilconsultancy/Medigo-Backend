@@ -39,6 +39,7 @@ PUBLIC_PATHS = {
     "/auth/driver/register",
     "/payments/webhooks/stripe",
     "/payments/fare-estimate",  # Public fare estimates for riders
+    "/tracking/test/simulate-location",  # Public test endpoint for simulating driver GPS
 }
 
 

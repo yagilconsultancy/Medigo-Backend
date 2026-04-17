@@ -70,6 +70,11 @@ class RoutingKeys:
     REFUND_REQUEST_APPROVED = "refund.request.approved"
     REFUND_REQUEST_REJECTED = "refund.request.rejected"
 
+    # Dispute events
+    DISPUTE_CREATED = "dispute.created"
+    DISPUTE_APPROVED = "dispute.approved"
+    DISPUTE_REJECTED = "dispute.rejected"
+
     # Payout events
     PAYOUT_INITIATED = "payout.initiated"
     PAYOUT_COMPLETED = "payout.completed"
