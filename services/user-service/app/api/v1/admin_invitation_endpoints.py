@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db
+from app.dependencies import get_db, get_publisher
 from app.repositories.admin_invitation_repo import AdminInvitationRepository
 from app.repositories.admin_role_repo import AdminRoleRepository
 from app.repositories.user_repo import UserRepository
@@ -22,12 +22,15 @@ from mediride_common.schemas.responses import PaginatedResponse, StandardRespons
 router = APIRouter()
 
 
-def _get_service(session: AsyncSession = Depends(get_db)) -> AdminInvitationService:
+def _get_service(
+    session: AsyncSession = Depends(get_db),
+    publisher: EventPublisher = Depends(get_publisher),
+) -> AdminInvitationService:
     return AdminInvitationService(
         invitation_repo=AdminInvitationRepository(session),
         user_repo=UserRepository(session),
         admin_role_repo=AdminRoleRepository(session),
-        publisher=EventPublisher(),
+        publisher=publisher,
     )
 
 
