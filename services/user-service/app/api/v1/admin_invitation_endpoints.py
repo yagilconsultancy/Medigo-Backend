@@ -62,18 +62,20 @@ async def invite_admin(
     response_model=PaginatedResponse[AdminInvitationResponse],
 )
 async def list_pending_invitations(
-    offset: int = 0,
+    page: int = 1,
     limit: int = 20,
     _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: AdminInvitationService = Depends(_get_service),
 ):
     """List all pending admin invitations."""
+    offset = (page - 1) * limit
     invitations, total = await service.list_pending_invitations(offset, limit)
     return PaginatedResponse(
         data=[AdminInvitationResponse(**inv) for inv in invitations],
         total=total,
-        offset=offset,
+        page=page,
         limit=limit,
+        total_pages=(total + limit - 1) // limit if total > 0 else 0,
     )
 
 
