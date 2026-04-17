@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Numeric, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,7 +44,7 @@ class DisputeNote(Base):
     __tablename__ = "dispute_notes"
 
     id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    dispute_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
+    dispute_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("disputes.id"), nullable=False, index=True)
     admin_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False)
     admin_name: Mapped[str] = mapped_column(String(200), nullable=False)
     note: Mapped[str] = mapped_column(Text, nullable=False)

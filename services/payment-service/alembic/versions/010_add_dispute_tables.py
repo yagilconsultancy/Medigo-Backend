@@ -1,7 +1,7 @@
 """add dispute tables
 
 Revision ID: 010_add_dispute_tables
-Revises: 009_caregiver_commission_config
+Revises: 008_fare_breakdown_type_columns
 Create Date: 2026-04-17
 
 """
@@ -10,7 +10,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "010_add_dispute_tables"
-down_revision = "009_caregiver_commission_config"
+down_revision = "008_fare_breakdown_type_columns"
 branch_label = None
 depends_on = None
 
@@ -62,6 +62,7 @@ def upgrade() -> None:
         sa.Column("note", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["dispute_id"], ["disputes.id"], ),
     )
     op.create_index(op.f("ix_dispute_notes_dispute_id"), "dispute_notes", ["dispute_id"], unique=False)
 
