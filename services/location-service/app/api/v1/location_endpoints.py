@@ -23,6 +23,26 @@ from mediride_common.schemas.responses import StandardResponse
 router = APIRouter()
 
 
+@router.get("/public/check-address", response_model=StandardResponse[GeocodeResponse])
+async def check_address_public(
+    address: str = Query(..., min_length=3, max_length=500),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Public endpoint to validate and geocode an address without authentication.
+    Useful for address validation during signup or booking flows.
+    """
+    gmaps = get_gmaps_client()
+    service = GeocodingService(GeocodingCacheRepository(session), gmaps)
+    result = await service.geocode(address)
+    if not result:
+        raise NotFoundError("Could not validate address. Please check the address and try again.")
+    return StandardResponse(
+        data=GeocodeResponse(**result),
+        message="Address validated successfully",
+    )
+
+
 @router.get("/geocode", response_model=StandardResponse[GeocodeResponse])
 async def geocode_address(
     address: str = Query(..., min_length=3, max_length=500),
