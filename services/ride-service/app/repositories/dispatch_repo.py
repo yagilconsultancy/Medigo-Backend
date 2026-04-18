@@ -174,13 +174,13 @@ class DispatchRepository:
 
     async def get_active_trips(self) -> list[Ride]:
         """
-        Get all active trips (rides with driver_arrived or in_progress status).
-        Used for live dispatch map view.
+        Get all active trips for live dispatch map view.
+        Includes trips with driver assigned, en route, arrived, or in progress.
         """
         result = await self.session.execute(
             select(Ride)
             .where(
-                Ride.status.in_(["driver_arrived", "in_progress"]),
+                Ride.status.in_(["driver_assigned", "driver_en_route", "driver_arrived", "in_progress"]),
                 Ride.deleted_at.is_(None),
             )
             .order_by(Ride.scheduled_at.desc())

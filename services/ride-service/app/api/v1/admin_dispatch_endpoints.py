@@ -63,7 +63,7 @@ async def get_active_trips(
 ):
     """
     Get all active trips for live dispatch map.
-    Returns trips with driver_arrived or in_progress status.
+    Returns trips with statuses: driver_assigned, driver_en_route, driver_arrived, in_progress.
     Use Socket.IO /tracking namespace to get real-time location updates.
     Requires: dispatch_center module access
     """
