@@ -11,7 +11,7 @@ from mediride_common.events.schemas import EventEnvelope, RideStatusChangedPaylo
 logger = logging.getLogger(__name__)
 
 # Ride statuses that need tracking
-TRACKING_START_STATUSES = {RoutingKeys.RIDE_DRIVER_EN_ROUTE}
+TRACKING_START_STATUSES = {RoutingKeys.RIDE_DRIVER_ASSIGNED, RoutingKeys.RIDE_DRIVER_EN_ROUTE}
 TRACKING_END_STATUSES = {RoutingKeys.RIDE_COMPLETED, RoutingKeys.RIDE_CANCELLED, RoutingKeys.RIDE_NO_SHOW}
 
 
@@ -21,7 +21,7 @@ class RideLifecycleConsumer(BaseEventConsumer):
     async def handle(self, envelope: EventEnvelope) -> None:
         event_type = envelope.event_type
 
-        if event_type == RoutingKeys.RIDE_DRIVER_EN_ROUTE:
+        if event_type in TRACKING_START_STATUSES:
             await self._handle_tracking_start(envelope)
         elif event_type in TRACKING_END_STATUSES:
             await self._handle_tracking_end(envelope)
@@ -92,6 +92,7 @@ async def setup_consumers() -> None:
         queue_name=Queues.TRACKING_RIDE_LIFECYCLE,
         exchange_name=Exchanges.RIDES,
         routing_keys=[
+            RoutingKeys.RIDE_DRIVER_ASSIGNED,
             RoutingKeys.RIDE_DRIVER_EN_ROUTE,
             RoutingKeys.RIDE_DRIVER_ARRIVED,
             RoutingKeys.RIDE_COMPLETED,
