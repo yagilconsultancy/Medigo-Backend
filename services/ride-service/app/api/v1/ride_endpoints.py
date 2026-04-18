@@ -95,9 +95,33 @@ async def get_my_active_ride(
 ):
     """Get rider's current active ride (excludes requested, pending, cancelled, completed, no-show)."""
     ride = await service.get_active_ride_for_rider(user.id)
+
+    if not ride:
+        return StandardResponse(
+            data=None,
+            message="No active ride",
+        )
+
+    # Build base response
+    ride_data = RideResponse.model_validate(ride)
+
+    # Enrich with driver details if driver is assigned
+    if ride.driver_id:
+        driver_profile = await service.user_client.get_driver_profile(ride.driver_id)
+        if driver_profile:
+            ride_data.driver_name = f"{driver_profile.get('first_name', '')} {driver_profile.get('last_name', '')}".strip()
+            ride_data.driver_phone = driver_profile.get('phone')
+            ride_data.driver_avatar_url = driver_profile.get('avatar_url')
+            ride_data.driver_rating = driver_profile.get('rating')
+            ride_data.driver_vehicle_type = driver_profile.get('vehicle_type')
+            ride_data.driver_vehicle_make = driver_profile.get('vehicle_make')
+            ride_data.driver_vehicle_model = driver_profile.get('vehicle_model')
+            ride_data.driver_vehicle_color = driver_profile.get('vehicle_color')
+            ride_data.driver_vehicle_plate = driver_profile.get('vehicle_plate')
+
     return StandardResponse(
-        data=RideResponse.model_validate(ride) if ride else None,
-        message="Active ride retrieved" if ride else "No active ride",
+        data=ride_data,
+        message="Active ride retrieved",
     )
 
 

@@ -100,6 +100,17 @@ class RideResponse(BaseModel):
     created_at: datetime
     rider_name: str | None = None  # Enriched field for admin endpoints
 
+    # Enriched driver fields for rider endpoints
+    driver_name: str | None = None
+    driver_phone: str | None = None
+    driver_avatar_url: str | None = None
+    driver_rating: float | None = None
+    driver_vehicle_type: str | None = None
+    driver_vehicle_make: str | None = None
+    driver_vehicle_model: str | None = None
+    driver_vehicle_color: str | None = None
+    driver_vehicle_plate: str | None = None
+
     model_config = {"from_attributes": True}
 
 
