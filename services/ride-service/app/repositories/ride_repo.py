@@ -237,6 +237,7 @@ class RideRepository:
         result = await self.session.execute(
             select(Ride).where(
                 Ride.status.in_([
+                    RideStatus.DRIVER_ASSIGNED,
                     RideStatus.DRIVER_EN_ROUTE,
                     RideStatus.DRIVER_ARRIVED,
                     RideStatus.IN_PROGRESS,
