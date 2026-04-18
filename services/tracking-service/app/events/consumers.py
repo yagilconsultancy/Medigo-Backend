@@ -40,20 +40,33 @@ class RideLifecycleConsumer(BaseEventConsumer):
                 publisher=publisher,
             )
 
-            # We need the ride details for pickup/destination coordinates
-            # For now, create with placeholder coords - will be updated on first location update
-            # In production, we'd fetch ride details from ride-service
+            # Fetch ride details from ride-service to get pickup/destination coordinates
+            from app.clients.ride_service_client import RideServiceClient
+            from app.config import settings
+
+            ride_client = RideServiceClient(settings.RIDE_SERVICE_URL)
+            ride_data = await ride_client.get_ride(payload.ride_id)
+
+            # Extract coordinates from ride data
+            pickup_lat = ride_data.get("pickup_latitude", 0.0) if ride_data else 0.0
+            pickup_lng = ride_data.get("pickup_longitude", 0.0) if ride_data else 0.0
+            dest_lat = ride_data.get("destination_latitude", 0.0) if ride_data else 0.0
+            dest_lng = ride_data.get("destination_longitude", 0.0) if ride_data else 0.0
+
             try:
                 tracking_session = await service.start_session(
                     ride_id=payload.ride_id,
                     driver_id=payload.driver_id,
                     rider_id=payload.rider_id,
-                    pickup_latitude=0.0,
-                    pickup_longitude=0.0,
-                    destination_latitude=0.0,
-                    destination_longitude=0.0,
+                    pickup_latitude=pickup_lat,
+                    pickup_longitude=pickup_lng,
+                    destination_latitude=dest_lat,
+                    destination_longitude=dest_lng,
                 )
-                logger.info(f"Tracking session created: {tracking_session.id}")
+                logger.info(
+                    f"Tracking session created: {tracking_session.id} "
+                    f"(pickup: {pickup_lat},{pickup_lng}, dest: {dest_lat},{dest_lng})"
+                )
 
                 # Emit Socket.IO event
                 from app.realtime.socket_manager import emit_tracking_started
