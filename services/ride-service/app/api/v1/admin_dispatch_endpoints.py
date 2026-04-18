@@ -71,6 +71,56 @@ async def get_active_trips(
     return StandardResponse(data=trips)
 
 
+@router.post("/active-trips/{ride_id}/assign-driver", response_model=StandardResponse)
+async def assign_driver_to_active_trip(
+    ride_id: UUID,
+    request: ManualAssignmentRequest,
+    admin: UserClaims = Depends(module_access_checker.require_module_access("dispatch_center")),
+    service: DispatchService = Depends(_get_service),
+):
+    """
+    Assign or reassign a driver to an active trip.
+    Can be used to:
+    - Assign a driver to unassigned active trips
+    - Reassign a different driver to an active trip
+    - Replace a driver who is unable to complete the trip
+    Requires: dispatch_center module access
+    """
+    # Get driver details to fetch business_id
+    driver_profile = await service.user_client.get_driver_profile(request.driver_id)
+    business_id = None
+    if driver_profile and driver_profile.get("business_id"):
+        business_id = UUID(driver_profile["business_id"])
+
+    # Assign/reassign driver
+    ride = await service.repo.assign_driver_to_ride(
+        ride_id, request.driver_id, business_id
+    )
+
+    if not ride:
+        return StandardResponse(
+            success=False, message="Active trip not found", data=None
+        )
+
+    # Publish event
+    await service.publisher.publish(
+        Exchanges.RIDES,
+        RoutingKeys.RIDE_DRIVER_ASSIGNED,
+        {
+            "ride_id": str(ride_id),
+            "driver_id": str(request.driver_id),
+            "business_id": str(business_id) if business_id else None,
+            "assigned_by": str(admin.id),
+            "assigned_via": "active_trip_dispatch",
+        },
+    )
+
+    return StandardResponse(
+        data={"ride_id": str(ride_id), "driver_id": str(request.driver_id)},
+        message="Driver assigned to active trip successfully",
+    )
+
+
 # --- Unassigned Rides ---
 
 
