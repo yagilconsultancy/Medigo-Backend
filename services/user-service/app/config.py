@@ -10,5 +10,8 @@ class UserSettings(BaseServiceSettings):
     AUTH_SERVICE_URL: str = "http://auth-service:8001"
     RIDE_SERVICE_URL: str = "http://ride-service:8003"
 
+    # Default password for newly created drivers
+    DEFAULT_DRIVER_PASSWORD: str = "MediRide2026!"
+
 
 settings = UserSettings()

@@ -192,15 +192,15 @@ class AdminDriverService:
         request: CreateDriverRequest,
         documents: "dict[str, UploadFile] | None" = None,
     ) -> AdminDriverDetailResponse:
-        # Auto-generate password for auth credential
-        auto_password = secrets.token_urlsafe(16)
+        # Use default password for driver credential
+        default_password = settings.DEFAULT_DRIVER_PASSWORD
 
         # Create credential in auth-service
         try:
             cred_result = await self.auth_client.create_driver_credential(
                 email=request.email,
                 phone=request.phone,
-                password=auto_password,
+                password=default_password,
                 business_id=request.fleet_id,
             )
         except RuntimeError as e:
@@ -311,7 +311,7 @@ class AdminDriverService:
                         fleet_name=fleet_name,
                         email=request.email,
                         invite_token=token,
-                        temporary_password=auto_password,
+                        temporary_password=default_password,
                     ).model_dump(mode="json"),
                 )
 
