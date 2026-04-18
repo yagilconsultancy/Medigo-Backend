@@ -172,6 +172,14 @@ class AdminTrackingService:
             driver = driver_profiles.get(str(s.driver_id), {})
             ride_data = ride_map.get(str(s.ride_id), {})
 
+            # Build driver name from first_name and last_name
+            driver_name_parts = [
+                driver.get("first_name", ""),
+                driver.get("last_name", ""),
+            ]
+            driver_name = " ".join(p for p in driver_name_parts if p) or None
+
+            # Build vehicle string
             vehicle_parts = [
                 driver.get("vehicle_make", ""),
                 driver.get("vehicle_model", ""),
@@ -180,7 +188,7 @@ class AdminTrackingService:
 
             entries.append(LiveDriverEntry(
                 driver_id=s.driver_id,
-                driver_name=driver.get("name"),
+                driver_name=driver_name,
                 driver_avatar=driver.get("avatar_url"),
                 driver_vehicle=vehicle_str,
                 current_latitude=float(s.current_latitude) if s.current_latitude else None,
@@ -205,11 +213,26 @@ class AdminTrackingService:
     def _build_overview(
         self, session, ride_data: dict, driver: dict, rider: dict,
     ) -> ActiveTripOverview:
+        # Build driver name from first_name and last_name
+        driver_name_parts = [
+            driver.get("first_name", ""),
+            driver.get("last_name", ""),
+        ]
+        driver_name = " ".join(p for p in driver_name_parts if p) or None
+
+        # Build vehicle string
         vehicle_parts = [
             driver.get("vehicle_make", ""),
             driver.get("vehicle_model", ""),
         ]
         vehicle_str = " ".join(p for p in vehicle_parts if p) or None
+
+        # Build rider name from first_name and last_name
+        rider_name_parts = [
+            rider.get("first_name", ""),
+            rider.get("last_name", ""),
+        ]
+        rider_name = " ".join(p for p in rider_name_parts if p) or None
 
         eta = float(session.eta_minutes) if session.eta_minutes else None
         distance_remaining = float(session.distance_remaining_miles) if session.distance_remaining_miles else None
@@ -224,11 +247,11 @@ class AdminTrackingService:
             trip_id_display=_generate_trip_display_id(session.ride_id),
             status=_derive_trip_status(eta, session.status),
             driver_id=session.driver_id,
-            driver_name=driver.get("name"),
+            driver_name=driver_name,
             driver_avatar=driver.get("avatar_url"),
             driver_vehicle=vehicle_str,
             rider_id=session.rider_id,
-            patient_name=rider.get("name"),
+            patient_name=rider_name,
             current_latitude=float(session.current_latitude) if session.current_latitude else None,
             current_longitude=float(session.current_longitude) if session.current_longitude else None,
             current_heading=float(session.current_heading) if session.current_heading else None,
