@@ -193,10 +193,12 @@ services:
       DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_payments
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       RIDE_SERVICE_URL: http://ride-service:8003
-      MONERIS_CLIENT_ID: ${MONERIS_CLIENT_ID}
-      MONERIS_CLIENT_SECRET: ${MONERIS_CLIENT_SECRET}
-      MONERIS_STORE_ID: ${MONERIS_STORE_ID}
-      MONERIS_SANDBOX: ${MONERIS_SANDBOX:-true}
+      USER_SERVICE_URL: http://user-service:8002
+      LOCATION_SERVICE_URL: http://location-service:8004
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_MOCK_IN_DEVELOPMENT: ${STRIPE_MOCK_IN_DEVELOPMENT:-false}
     depends_on:
       postgres:
         condition: service_healthy

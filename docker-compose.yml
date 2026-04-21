@@ -316,6 +316,7 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      STRIPE_MOCK_IN_DEVELOPMENT: ${STRIPE_MOCK_IN_DEVELOPMENT:-true}
     depends_on:
       postgres-payments:
         condition: service_healthy

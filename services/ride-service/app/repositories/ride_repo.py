@@ -275,7 +275,7 @@ class RideRepository:
         return list(result.scalars().all())
 
     async def get_active_ride_for_rider(self, rider_id: UUID) -> Ride | None:
-        """Get rider's current active ride (not requested, pending, cancelled, completed, or no-show)."""
+        """Get rider's current active ride (not cancelled, completed, or no-show)."""
         result = await self.session.execute(
             select(Ride).where(
                 Ride.rider_id == rider_id,
@@ -292,7 +292,7 @@ class RideRepository:
         return result.scalars().first()
 
     async def get_active_ride_for_driver(self, driver_id: UUID) -> Ride | None:
-        """Get driver's current active ride (not requested, pending, cancelled, completed, or no-show)."""
+        """Get driver's current active ride (not cancelled, completed, or no-show)."""
         result = await self.session.execute(
             select(Ride).where(
                 Ride.driver_id == driver_id,

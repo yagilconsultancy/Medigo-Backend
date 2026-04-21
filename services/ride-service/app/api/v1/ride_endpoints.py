@@ -93,7 +93,7 @@ async def get_my_active_ride(
     user: UserClaims = Depends(require_role([UserRole.RIDER])),
     service: RideService = Depends(_get_ride_service),
 ):
-    """Get rider's current active ride (excludes requested, pending, cancelled, completed, no-show)."""
+    """Get rider's current active ride (excludes cancelled, completed, no-show)."""
     ride = await service.get_active_ride_for_rider(user.id)
 
     if not ride:
@@ -150,7 +150,7 @@ async def get_driver_active_ride(
     user: UserClaims = Depends(require_role([UserRole.DRIVER])),
     service: RideService = Depends(_get_ride_service),
 ):
-    """Get driver's current active ride (excludes requested, pending, cancelled, completed, no-show)."""
+    """Get driver's current active ride (excludes cancelled, completed, no-show)."""
     ride = await service.get_active_ride_for_driver(user.id)
     return StandardResponse(
         data=RideResponse.model_validate(ride) if ride else None,

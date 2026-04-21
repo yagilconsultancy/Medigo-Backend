@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator
+import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -13,6 +14,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 _broker: RabbitMQBroker | None = None
 _publisher: EventPublisher | None = None
 _stripe_client: StripeClient | None = None
+logger = logging.getLogger(__name__)
 
 
 async def init_db() -> None:
@@ -30,8 +32,15 @@ async def init_broker() -> None:
 
 def init_stripe() -> None:
     global _stripe_client
+    stripe_key = settings.STRIPE_SECRET_KEY.strip()
+    logger.info(
+        "Stripe initialization: configured=%s, environment=%s, mock_in_development=%s",
+        bool(stripe_key),
+        settings.ENVIRONMENT,
+        settings.STRIPE_MOCK_IN_DEVELOPMENT,
+    )
     _stripe_client = StripeClient(
-        secret_key=settings.STRIPE_SECRET_KEY,
+        secret_key=stripe_key,
         publishable_key=settings.STRIPE_PUBLISHABLE_KEY,
         webhook_secret=settings.STRIPE_WEBHOOK_SECRET,
         environment=settings.ENVIRONMENT,
