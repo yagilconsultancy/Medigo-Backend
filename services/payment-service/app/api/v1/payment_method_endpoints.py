@@ -49,6 +49,12 @@ async def add_payment_method(
         expiry_year=body.expiry_year,
         holder_name=body.holder_name,
         cvd=body.cvd,
+        billing_country=body.billing_country,
+        billing_postal_code=body.billing_postal_code,
+        billing_line1=body.billing_line1,
+        billing_line2=body.billing_line2,
+        billing_city=body.billing_city,
+        billing_state=body.billing_state,
     )
     return StandardResponse(
         data=PaymentMethodResponse.model_validate(method),

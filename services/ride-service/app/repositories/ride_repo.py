@@ -1,12 +1,39 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import Numeric, func, select, update
+from sqlalchemy import Numeric, case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ride import Ride
 from mediride_common.schemas.enums import RideStatus
 from mediride_common.utils import utc_now
+
+
+ACTIVE_RIDE_STATUSES = [
+    RideStatus.CONFIRMED,
+    RideStatus.DRIVER_ASSIGNED,
+    RideStatus.DRIVER_EN_ROUTE,
+    RideStatus.DRIVER_ARRIVED,
+    RideStatus.IN_PROGRESS,
+]
+
+ACTIVE_RIDE_STATUS_PRIORITY = {
+    RideStatus.IN_PROGRESS: 5,
+    RideStatus.DRIVER_ARRIVED: 4,
+    RideStatus.DRIVER_EN_ROUTE: 3,
+    RideStatus.DRIVER_ASSIGNED: 2,
+    RideStatus.CONFIRMED: 1,
+}
+
+
+def _active_ride_priority_order():
+    return case(
+        *(
+            (Ride.status == status, priority)
+            for status, priority in ACTIVE_RIDE_STATUS_PRIORITY.items()
+        ),
+        else_=0,
+    ).desc()
 
 
 class RideRepository:
@@ -252,34 +279,34 @@ class RideRepository:
         result = await self.session.execute(
             select(Ride).where(
                 Ride.rider_id == rider_id,
-                Ride.status.in_([
-                    RideStatus.CONFIRMED,
-                    RideStatus.DRIVER_ASSIGNED,
-                    RideStatus.DRIVER_EN_ROUTE,
-                    RideStatus.DRIVER_ARRIVED,
-                    RideStatus.IN_PROGRESS,
-                ]),
+                Ride.status.in_(ACTIVE_RIDE_STATUSES),
                 Ride.deleted_at.is_(None),
-            ).order_by(Ride.scheduled_at.desc())
+            )
+            .order_by(
+                _active_ride_priority_order(),
+                Ride.scheduled_at.desc(),
+                Ride.created_at.desc(),
+            )
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_active_ride_for_driver(self, driver_id: UUID) -> Ride | None:
         """Get driver's current active ride (not requested, pending, cancelled, completed, or no-show)."""
         result = await self.session.execute(
             select(Ride).where(
                 Ride.driver_id == driver_id,
-                Ride.status.in_([
-                    RideStatus.CONFIRMED,
-                    RideStatus.DRIVER_ASSIGNED,
-                    RideStatus.DRIVER_EN_ROUTE,
-                    RideStatus.DRIVER_ARRIVED,
-                    RideStatus.IN_PROGRESS,
-                ]),
+                Ride.status.in_(ACTIVE_RIDE_STATUSES),
                 Ride.deleted_at.is_(None),
-            ).order_by(Ride.scheduled_at.desc())
+            )
+            .order_by(
+                _active_ride_priority_order(),
+                Ride.scheduled_at.desc(),
+                Ride.created_at.desc(),
+            )
+            .limit(1)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_completed_today_count(self) -> int:
         """Count rides completed today (since midnight UTC)."""
@@ -440,4 +467,3 @@ class RideRepository:
                 "trips_prev_month": trips_pm.get(rid, 0),
             }
         return result
-

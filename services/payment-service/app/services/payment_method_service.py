@@ -28,6 +28,12 @@ class PaymentMethodService:
         holder_name: str,
         *,
         cvd: str | None = None,
+        billing_country: str | None = None,
+        billing_postal_code: str | None = None,
+        billing_line1: str | None = None,
+        billing_line2: str | None = None,
+        billing_city: str | None = None,
+        billing_state: str | None = None,
     ) -> PaymentMethod:
         """Tokenize card via Stripe and store the PaymentMethod ID locally."""
         # Look up existing Stripe customer_id for this user
@@ -44,6 +50,12 @@ class PaymentMethodService:
             expiry_year=expiry_year,
             holder_name=holder_name,
             cvd=cvd,
+            billing_country=billing_country,
+            billing_postal_code=billing_postal_code,
+            billing_line1=billing_line1,
+            billing_line2=billing_line2,
+            billing_city=billing_city,
+            billing_state=billing_state,
             user_id=str(user_id),
             existing_customer_id=existing_customer_id,
         )

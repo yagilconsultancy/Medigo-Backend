@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from uuid import uuid4
 
 import stripe
 from stripe import error as stripe_error
@@ -40,11 +41,52 @@ class StripeClient:
         *,
         publishable_key: str = "",
         webhook_secret: str = "",
+        environment: str = "development",
+        mock_in_development: bool = True,
     ):
-        self._secret_key = secret_key
+        self._secret_key = secret_key.strip()
         self._publishable_key = publishable_key
         self._webhook_secret = webhook_secret
-        stripe.api_key = secret_key
+        self._environment = environment.lower()
+        self._mock_in_development = mock_in_development
+        stripe.api_key = self._secret_key
+
+    @property
+    def _mock_enabled(self) -> bool:
+        return self._environment == "development" and self._mock_in_development
+
+    def _mock_vault_result(
+        self,
+        user_id: str,
+        *,
+        existing_customer_id: str | None = None,
+        reason: str,
+    ) -> StripeVaultResult:
+        customer_id = existing_customer_id or f"cus_mock_{user_id.replace('-', '')[:24]}"
+        payment_method_id = f"pm_mock_{uuid4().hex}"
+        logger.warning(
+            "Using mock Stripe PaymentMethod in development: %s",
+            reason,
+        )
+        return StripeVaultResult(
+            success=True,
+            data_key=payment_method_id,
+            customer_id=customer_id,
+            message="Card tokenized in development mock mode",
+        )
+
+    @staticmethod
+    def _is_mock_payment_method(
+        data_key: str | None,
+        customer_id: str | None = None,
+    ) -> bool:
+        if not data_key or not data_key.startswith("pm_mock_"):
+            return False
+        return customer_id is None or customer_id.startswith("cus_mock_")
+
+    @staticmethod
+    def _is_mock_transaction(transaction_id: str | None) -> bool:
+        return bool(transaction_id and transaction_id.startswith("pi_mock_"))
 
     # ------------------------------------------------------------------ #
     # Customer Management
@@ -61,6 +103,8 @@ class StripeClient:
         """Return existing Stripe Customer ID or create a new one."""
         if existing_customer_id:
             return existing_customer_id
+        if not self._secret_key and self._mock_enabled:
+            return f"cus_mock_{user_id.replace('-', '')[:24]}"
 
         try:
             customer = await stripe.Customer.create_async(
@@ -85,6 +129,12 @@ class StripeClient:
         holder_name: str,
         *,
         cvd: str | None = None,
+        billing_country: str | None = None,
+        billing_postal_code: str | None = None,
+        billing_line1: str | None = None,
+        billing_line2: str | None = None,
+        billing_city: str | None = None,
+        billing_state: str | None = None,
         user_id: str,
         existing_customer_id: str | None = None,
     ) -> StripeVaultResult:
@@ -92,8 +142,37 @@ class StripeClient:
 
         Returns data_key = pm_xxx (PaymentMethod ID) for compatibility.
         """
+        if not self._secret_key:
+            if self._mock_enabled:
+                return self._mock_vault_result(
+                    user_id,
+                    existing_customer_id=existing_customer_id,
+                    reason="STRIPE_SECRET_KEY is not configured",
+                )
+            logger.error("Stripe tokenization failed: STRIPE_SECRET_KEY is not configured")
+            return StripeVaultResult(
+                success=False,
+                message="Stripe is not configured",
+            )
+
         try:
-            exp_year = int(expiry_year) if len(expiry_year) == 4 else int(f"20{expiry_year}")
+            exp_year = (
+                int(expiry_year)
+                if len(expiry_year) == 4
+                else int(f"20{expiry_year}")
+            )
+            billing_details = {"name": holder_name}
+            address = {
+                "country": billing_country,
+                "postal_code": billing_postal_code,
+                "line1": billing_line1,
+                "line2": billing_line2,
+                "city": billing_city,
+                "state": billing_state,
+            }
+            address = {key: val for key, val in address.items() if val}
+            if address:
+                billing_details["address"] = address
 
             pm = await stripe.PaymentMethod.create_async(
                 type="card",
@@ -103,7 +182,7 @@ class StripeClient:
                     "exp_year": exp_year,
                     "cvc": cvd,
                 },
-                billing_details={"name": holder_name},
+                billing_details=billing_details,
             )
 
             customer_id = await self.get_or_create_customer(
@@ -124,10 +203,18 @@ class StripeClient:
             return StripeVaultResult(success=False, message=str(e.user_message))
         except stripe_error.StripeError as e:
             logger.error(f"Stripe tokenization failed: {e}")
+            if self._mock_enabled:
+                return self._mock_vault_result(
+                    user_id,
+                    existing_customer_id=existing_customer_id,
+                    reason=str(e),
+                )
             return StripeVaultResult(success=False, message=str(e))
 
     async def delete_vault_profile(self, data_key: str) -> bool:
         """Detach a PaymentMethod from its Customer."""
+        if self._is_mock_payment_method(data_key):
+            return True
         try:
             await stripe.PaymentMethod.detach_async(data_key)
             return True
@@ -152,6 +239,14 @@ class StripeClient:
         if not data_key or not customer_id:
             raise ValidationError(
                 "PaymentMethod ID (data_key) and customer_id required for Stripe purchase"
+            )
+        if self._is_mock_payment_method(data_key, customer_id):
+            return StripePaymentResult(
+                success=True,
+                transaction_id=f"pi_mock_{uuid4().hex}",
+                reference_number=f"ch_mock_{uuid4().hex}",
+                response_code="succeeded",
+                message="Payment succeeded in development mock mode",
             )
 
         amount_cents = int(round(amount * 100))
@@ -196,6 +291,13 @@ class StripeClient:
     ) -> StripePaymentResult:
         """Pre-authorize an amount (capture_method=manual)."""
         amount_cents = int(round(amount * 100))
+        if self._is_mock_payment_method(data_key, customer_id):
+            return StripePaymentResult(
+                success=True,
+                transaction_id=f"pi_mock_{uuid4().hex}",
+                response_code="requires_capture",
+                message="Pre-authorization succeeded in development mock mode",
+            )
 
         try:
             intent = await stripe.PaymentIntent.create_async(
@@ -227,6 +329,14 @@ class StripeClient:
         amount: float,
     ) -> StripePaymentResult:
         """Capture a previously pre-authorized PaymentIntent."""
+        if self._is_mock_transaction(transaction_id):
+            return StripePaymentResult(
+                success=True,
+                transaction_id=transaction_id,
+                response_code="succeeded",
+                message="Capture succeeded in development mock mode",
+            )
+
         amount_cents = int(round(amount * 100))
 
         try:
@@ -253,6 +363,14 @@ class StripeClient:
         amount: float,
     ) -> StripePaymentResult:
         """Refund a completed PaymentIntent."""
+        if self._is_mock_transaction(transaction_id):
+            return StripePaymentResult(
+                success=True,
+                transaction_id=f"re_mock_{uuid4().hex}",
+                response_code="succeeded",
+                message="Refund succeeded in development mock mode",
+            )
+
         amount_cents = int(round(amount * 100))
 
         try:
@@ -280,6 +398,14 @@ class StripeClient:
         transaction_id: str,
     ) -> StripePaymentResult:
         """Cancel an uncaptured PaymentIntent."""
+        if self._is_mock_transaction(transaction_id):
+            return StripePaymentResult(
+                success=True,
+                transaction_id=transaction_id,
+                response_code="canceled",
+                message="PaymentIntent cancelled in development mock mode",
+            )
+
         try:
             intent = await stripe.PaymentIntent.cancel_async(transaction_id)
             return StripePaymentResult(

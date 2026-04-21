@@ -17,6 +17,7 @@ class PaymentSettings(BaseServiceSettings):
     STRIPE_SECRET_KEY: str = ""
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_MOCK_IN_DEVELOPMENT: bool = True
 
 
 settings = PaymentSettings()

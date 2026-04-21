@@ -34,6 +34,8 @@ def init_stripe() -> None:
         secret_key=settings.STRIPE_SECRET_KEY,
         publishable_key=settings.STRIPE_PUBLISHABLE_KEY,
         webhook_secret=settings.STRIPE_WEBHOOK_SECRET,
+        environment=settings.ENVIRONMENT,
+        mock_in_development=settings.STRIPE_MOCK_IN_DEVELOPMENT,
     )
 
 
