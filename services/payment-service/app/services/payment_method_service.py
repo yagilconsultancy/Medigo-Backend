@@ -22,12 +22,10 @@ class PaymentMethodService:
         self,
         user_id: UUID,
         method_type: str,
-        card_number: str,
-        expiry_month: str,
-        expiry_year: str,
         holder_name: str,
         *,
-        cvd: str | None = None,
+        stripe_token: str | None = None,
+        stripe_payment_method_id: str | None = None,
         billing_country: str | None = None,
         billing_postal_code: str | None = None,
         billing_line1: str | None = None,
@@ -35,7 +33,13 @@ class PaymentMethodService:
         billing_city: str | None = None,
         billing_state: str | None = None,
     ) -> PaymentMethod:
-        """Tokenize card via Stripe and store the PaymentMethod ID locally."""
+        """Attach a Stripe-tokenized card and store the PaymentMethod ID locally."""
+        if not stripe_token and not stripe_payment_method_id:
+            raise ValidationError(
+                "Raw card data is not accepted. Tokenize the card with the Stripe SDK "
+                "and send stripe_token or stripe_payment_method_id."
+            )
+
         # Look up existing Stripe customer_id for this user
         existing = await self.pm_repo.get_by_user(user_id)
         existing_customer_id = None
@@ -45,11 +49,9 @@ class PaymentMethodService:
                 break
 
         vault_result = await self.stripe.tokenize_card(
-            card_number=card_number,
-            expiry_month=expiry_month,
-            expiry_year=expiry_year,
             holder_name=holder_name,
-            cvd=cvd,
+            stripe_token=stripe_token,
+            stripe_payment_method_id=stripe_payment_method_id,
             billing_country=billing_country,
             billing_postal_code=billing_postal_code,
             billing_line1=billing_line1,
@@ -68,8 +70,8 @@ class PaymentMethodService:
                 f"Card tokenization failed: {vault_result.message or 'Unknown error'}"
             )
 
-        last_four = card_number[-4:]
-        brand = _detect_card_brand(card_number)
+        last_four = vault_result.last_four or "0000"
+        brand = vault_result.brand or "Unknown"
 
         # First payment method becomes the default
         is_default = len(existing) == 0
@@ -114,16 +116,3 @@ class PaymentMethodService:
                 )
 
         await self.pm_repo.soft_delete(pm_id)
-
-
-def _detect_card_brand(card_number: str) -> str:
-    """Detect card brand from the card number prefix."""
-    if card_number.startswith("4"):
-        return "Visa"
-    if card_number[:2] in ("51", "52", "53", "54", "55"):
-        return "Mastercard"
-    if card_number[:2] in ("34", "37"):
-        return "Amex"
-    if card_number[:4] == "6011" or card_number[:2] == "65":
-        return "Discover"
-    return "Unknown"

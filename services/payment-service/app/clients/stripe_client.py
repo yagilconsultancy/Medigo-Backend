@@ -25,6 +25,8 @@ class StripeVaultResult:
     success: bool
     data_key: str | None = None  # Stripe PaymentMethod ID (pm_xxx)
     customer_id: str | None = None  # Stripe Customer ID (cus_xxx)
+    last_four: str | None = None
+    brand: str | None = None
     message: str | None = None
     raw_response: dict | None = None
 
@@ -72,6 +74,8 @@ class StripeClient:
             success=True,
             data_key=payment_method_id,
             customer_id=customer_id,
+            last_four="0000",
+            brand="Mock",
             message="Card tokenized in development mock mode",
         )
 
@@ -87,6 +91,23 @@ class StripeClient:
     @staticmethod
     def _is_mock_transaction(transaction_id: str | None) -> bool:
         return bool(transaction_id and transaction_id.startswith("pi_mock_"))
+
+    @staticmethod
+    def _card_attr(payment_method, attr: str) -> str | None:
+        card = getattr(payment_method, "card", None)
+        if not card:
+            return None
+        if isinstance(card, dict):
+            return card.get(attr)
+        return getattr(card, attr, None)
+
+    @staticmethod
+    def _display_brand(brand: str | None) -> str | None:
+        if not brand:
+            return None
+        if brand.lower() == "amex":
+            return "Amex"
+        return brand.replace("_", " ").title()
 
     # ------------------------------------------------------------------ #
     # Customer Management
@@ -123,12 +144,10 @@ class StripeClient:
 
     async def tokenize_card(
         self,
-        card_number: str,
-        expiry_month: str,
-        expiry_year: str,
         holder_name: str,
         *,
-        cvd: str | None = None,
+        stripe_token: str | None = None,
+        stripe_payment_method_id: str | None = None,
         billing_country: str | None = None,
         billing_postal_code: str | None = None,
         billing_line1: str | None = None,
@@ -156,11 +175,6 @@ class StripeClient:
             )
 
         try:
-            exp_year = (
-                int(expiry_year)
-                if len(expiry_year) == 4
-                else int(f"20{expiry_year}")
-            )
             billing_details = {"name": holder_name}
             address = {
                 "country": billing_country,
@@ -174,29 +188,36 @@ class StripeClient:
             if address:
                 billing_details["address"] = address
 
-            pm = await stripe.PaymentMethod.create_async(
-                type="card",
-                card={
-                    "number": card_number,
-                    "exp_month": int(expiry_month),
-                    "exp_year": exp_year,
-                    "cvc": cvd,
-                },
-                billing_details=billing_details,
-            )
-
             customer_id = await self.get_or_create_customer(
                 user_id=user_id,
                 name=holder_name,
                 existing_customer_id=existing_customer_id,
             )
 
-            await stripe.PaymentMethod.attach_async(pm.id, customer=customer_id)
+            if stripe_payment_method_id:
+                pm = await stripe.PaymentMethod.retrieve_async(stripe_payment_method_id)
+                if getattr(pm, "customer", None) != customer_id:
+                    await stripe.PaymentMethod.attach_async(pm.id, customer=customer_id)
+            else:
+                if not stripe_token:
+                    return StripeVaultResult(
+                        success=False,
+                        message="Missing Stripe token or PaymentMethod ID",
+                    )
+
+                pm = await stripe.PaymentMethod.create_async(
+                    type="card",
+                    card={"token": stripe_token},
+                    billing_details=billing_details,
+                )
+                await stripe.PaymentMethod.attach_async(pm.id, customer=customer_id)
 
             return StripeVaultResult(
                 success=True,
                 data_key=pm.id,
                 customer_id=customer_id,
+                last_four=self._card_attr(pm, "last4"),
+                brand=self._display_brand(self._card_attr(pm, "brand")),
                 message="Card tokenized successfully",
             )
         except stripe_error.CardError as e:

@@ -44,11 +44,9 @@ async def add_payment_method(
     method = await service.add_payment_method(
         user_id=user.id,
         method_type=body.method_type,
-        card_number=body.card_number,
-        expiry_month=body.expiry_month,
-        expiry_year=body.expiry_year,
         holder_name=body.holder_name,
-        cvd=body.cvd,
+        stripe_token=body.stripe_token,
+        stripe_payment_method_id=body.stripe_payment_method_id,
         billing_country=body.billing_country,
         billing_postal_code=body.billing_postal_code,
         billing_line1=body.billing_line1,

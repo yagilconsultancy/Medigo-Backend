@@ -14,11 +14,8 @@ async def test_tokenize_card_uses_mock_when_stripe_key_missing_in_development():
     )
 
     result = await client.tokenize_card(
-        card_number="4242424242424242",
-        expiry_month="04",
-        expiry_year="28",
         holder_name="Test Card",
-        cvd="123",
+        stripe_token="tok_visa",
         user_id="47d71b6d-dd77-4d27-9c7c-531accb515b1",
     )
 
@@ -26,6 +23,8 @@ async def test_tokenize_card_uses_mock_when_stripe_key_missing_in_development():
     assert result.data_key is not None
     assert result.data_key.startswith("pm_mock_")
     assert result.customer_id == "cus_mock_47d71b6ddd774d279c7c531a"
+    assert result.last_four == "0000"
+    assert result.brand == "Mock"
 
 
 @pytest.mark.asyncio
@@ -37,11 +36,8 @@ async def test_tokenize_card_does_not_mock_when_disabled():
     )
 
     result = await client.tokenize_card(
-        card_number="4242424242424242",
-        expiry_month="04",
-        expiry_year="28",
         holder_name="Test Card",
-        cvd="123",
+        stripe_token="tok_visa",
         user_id="47d71b6d-dd77-4d27-9c7c-531accb515b1",
     )
 

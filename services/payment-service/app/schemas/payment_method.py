@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 _COUNTRY_NAME_TO_CODE = {
@@ -19,6 +19,27 @@ _COUNTRY_NAME_TO_CODE = {
     "uk": "GB",
     "great britain": "GB",
     "gb": "GB",
+}
+_RAW_CARD_FIELD_ALIASES = {
+    "card_number",
+    "cardNumber",
+    "number",
+    "expiry_month",
+    "expiryMonth",
+    "exp_month",
+    "expMonth",
+    "expiry_year",
+    "expiryYear",
+    "exp_year",
+    "expYear",
+    "expiry_date",
+    "expiryDate",
+    "expiration_date",
+    "expirationDate",
+    "cvd",
+    "cvv",
+    "cvc",
+    "cvc2",
 }
 
 
@@ -53,11 +74,9 @@ class AddPaymentMethodRequest(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     method_type: str = Field(..., description="e.g. 'credit_card', 'debit_card'")
-    card_number: str = Field(..., min_length=13, max_length=19)
-    expiry_month: str = Field(..., min_length=1, max_length=2, pattern=r"^(0?[1-9]|1[0-2])$")
-    expiry_year: str = Field(..., min_length=2, max_length=4, pattern=r"^\d{2,4}$")
     holder_name: str = Field(..., min_length=1, max_length=200)
-    cvd: str | None = Field(None, min_length=3, max_length=4)
+    stripe_token: str | None = Field(None, max_length=255)
+    stripe_payment_method_id: str | None = Field(None, max_length=255)
     billing_country: str | None = Field(None, min_length=2, max_length=2)
     billing_postal_code: str | None = Field(None, max_length=20)
     billing_line1: str | None = Field(None, max_length=200)
@@ -72,35 +91,16 @@ class AddPaymentMethodRequest(BaseModel):
             return value
 
         data = dict(value)
+        raw_keys = sorted(key for key in data if key in _RAW_CARD_FIELD_ALIASES)
+        if raw_keys:
+            raise ValueError(
+                "Raw card fields are not accepted. Tokenize the card with the "
+                "Stripe SDK and send stripeToken or paymentMethodId."
+            )
 
         method_type = _first_present(data, "method_type", "methodType", "type")
         if method_type is not None:
             data["method_type"] = str(method_type)
-
-        card_number = _first_present(data, "card_number", "cardNumber", "number")
-        if card_number is not None:
-            data["card_number"] = re.sub(r"\D", "", str(card_number))
-
-        expiry_month = _first_present(
-            data, "expiry_month", "expiryMonth", "exp_month", "expMonth"
-        )
-        expiry_year = _first_present(
-            data, "expiry_year", "expiryYear", "exp_year", "expYear"
-        )
-        expiry_date = _first_present(
-            data, "expiry_date", "expiryDate", "expiration_date", "expirationDate"
-        )
-
-        if expiry_date and (expiry_month is None or expiry_year is None):
-            parts = re.findall(r"\d+", str(expiry_date))
-            if len(parts) >= 2:
-                expiry_month = expiry_month or parts[0]
-                expiry_year = expiry_year or parts[1]
-
-        if expiry_month is not None:
-            data["expiry_month"] = str(expiry_month).zfill(2)
-        if expiry_year is not None:
-            data["expiry_year"] = str(expiry_year)
 
         holder_name = _first_present(
             data,
@@ -115,9 +115,19 @@ class AddPaymentMethodRequest(BaseModel):
         if holder_name is not None:
             data["holder_name"] = str(holder_name).strip()
 
-        cvd = _first_present(data, "cvd", "cvv", "cvc", "cvc2")
-        if cvd is not None:
-            data["cvd"] = str(cvd)
+        stripe_token = _first_present(data, "stripe_token", "stripeToken", "token")
+        if stripe_token is not None:
+            data["stripe_token"] = str(stripe_token).strip()
+
+        stripe_payment_method_id = _first_present(
+            data,
+            "stripe_payment_method_id",
+            "stripePaymentMethodId",
+            "payment_method_id",
+            "paymentMethodId",
+        )
+        if stripe_payment_method_id is not None:
+            data["stripe_payment_method_id"] = str(stripe_payment_method_id).strip()
 
         billing_country = _first_present(
             data,
@@ -180,12 +190,11 @@ class AddPaymentMethodRequest(BaseModel):
 
         return data
 
-    @field_validator("expiry_year")
-    @classmethod
-    def normalize_expiry_year(cls, value: str) -> str:
-        if len(value) == 4:
-            return value
-        return value.zfill(2)
+    @model_validator(mode="after")
+    def require_stripe_source(self) -> "AddPaymentMethodRequest":
+        if not self.stripe_token and not self.stripe_payment_method_id:
+            raise ValueError("stripe_token or stripe_payment_method_id is required")
+        return self
 
 
 class PaymentMethodResponse(BaseModel):
