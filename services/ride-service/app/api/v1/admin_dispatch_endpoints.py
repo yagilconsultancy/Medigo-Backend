@@ -21,7 +21,8 @@ from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
-from mediride_common.schemas.enums import UserRole
+from mediride_common.events.schemas import RideStatusChangedPayload
+from mediride_common.schemas.enums import RideStatus, UserRole
 from mediride_common.schemas.responses import StandardResponse
 
 router = APIRouter(prefix="/admin/dispatch")
@@ -106,13 +107,14 @@ async def assign_driver_to_active_trip(
     await service.publisher.publish(
         Exchanges.RIDES,
         RoutingKeys.RIDE_DRIVER_ASSIGNED,
-        {
-            "ride_id": str(ride_id),
-            "driver_id": str(request.driver_id),
-            "business_id": str(business_id) if business_id else None,
-            "assigned_by": str(admin.id),
-            "assigned_via": "active_trip_dispatch",
-        },
+        RideStatusChangedPayload(
+            ride_id=ride.id,
+            rider_id=ride.rider_id,
+            driver_id=ride.driver_id,
+            from_status=None,
+            to_status=RideStatus.DRIVER_ASSIGNED,
+            changed_by=admin.id,
+        ).model_dump(mode="json"),
     )
 
     return StandardResponse(
@@ -194,13 +196,14 @@ async def manually_assign_driver(
     await service.publisher.publish(
         Exchanges.RIDES,
         RoutingKeys.RIDE_DRIVER_ASSIGNED,
-        {
-            "ride_id": str(ride_id),
-            "driver_id": str(request.driver_id),
-            "business_id": str(business_id) if business_id else None,
-            "assigned_by": str(admin.id),
-            "assigned_via": "manual_dispatch",
-        },
+        RideStatusChangedPayload(
+            ride_id=ride.id,
+            rider_id=ride.rider_id,
+            driver_id=ride.driver_id,
+            from_status=None,
+            to_status=RideStatus.DRIVER_ASSIGNED,
+            changed_by=admin.id,
+        ).model_dump(mode="json"),
     )
 
     return StandardResponse(

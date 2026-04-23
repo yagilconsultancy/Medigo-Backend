@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -30,7 +31,7 @@ from mediride_common.events.schemas import (
     RideStatusChangedPayload,
     UserRegisteredPayload,
 )
-from mediride_common.schemas.enums import NotificationType
+from mediride_common.schemas.enums import NotificationType, RideStatus
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,34 @@ class RideEventConsumer(BaseEventConsumer):
         super().__init__(broker)
         self.session_factory = session_factory
         self.user_client = UserServiceClient(settings.USER_SERVICE_URL)
+        self._status_by_event = {
+            RoutingKeys.RIDE_CONFIRMED: RideStatus.CONFIRMED,
+            RoutingKeys.RIDE_DRIVER_ASSIGNED: RideStatus.DRIVER_ASSIGNED,
+            RoutingKeys.RIDE_DRIVER_EN_ROUTE: RideStatus.DRIVER_EN_ROUTE,
+            RoutingKeys.RIDE_DRIVER_ARRIVED: RideStatus.DRIVER_ARRIVED,
+            RoutingKeys.RIDE_IN_PROGRESS: RideStatus.IN_PROGRESS,
+            RoutingKeys.RIDE_COMPLETED: RideStatus.COMPLETED,
+            RoutingKeys.RIDE_CANCELLED: RideStatus.CANCELLED,
+            RoutingKeys.RIDE_NO_SHOW: RideStatus.NO_SHOW,
+        }
+
+    def _parse_status_payload(
+        self, envelope: EventEnvelope,
+    ) -> RideStatusChangedPayload | None:
+        payload_data = dict(envelope.payload or {})
+        payload_data.setdefault("to_status", self._status_by_event.get(envelope.event_type))
+
+        if not payload_data.get("ride_id") or not payload_data.get("rider_id"):
+            logger.warning(
+                "Skipping ride status notification: missing ride_id or rider_id",
+                extra={
+                    "event_type": envelope.event_type,
+                    "payload_keys": sorted(payload_data.keys()),
+                },
+            )
+            return None
+
+        return RideStatusChangedPayload(**payload_data)
 
     async def _send_notification(
         self,
@@ -141,7 +170,9 @@ class RideEventConsumer(BaseEventConsumer):
 
                 # RIDE CONFIRMED - Admin approves the ride
                 elif envelope.event_type == RoutingKeys.RIDE_CONFIRMED:
-                    payload = RideStatusChangedPayload(**envelope.payload)
+                    payload = self._parse_status_payload(envelope)
+                    if not payload:
+                        return
                     await self._send_notification(
                         svc=svc,
                         user_id=payload.rider_id,
@@ -152,7 +183,9 @@ class RideEventConsumer(BaseEventConsumer):
 
                 # DRIVER ASSIGNED - Driver is assigned to the ride
                 elif envelope.event_type == RoutingKeys.RIDE_DRIVER_ASSIGNED:
-                    payload = RideStatusChangedPayload(**envelope.payload)
+                    payload = self._parse_status_payload(envelope)
+                    if not payload:
+                        return
                     # Notify rider
                     await self._send_notification(
                         svc=svc,
@@ -177,7 +210,9 @@ class RideEventConsumer(BaseEventConsumer):
 
                 # DRIVER EN ROUTE - Driver is on the way
                 elif envelope.event_type == RoutingKeys.RIDE_DRIVER_EN_ROUTE:
-                    payload = RideStatusChangedPayload(**envelope.payload)
+                    payload = self._parse_status_payload(envelope)
+                    if not payload:
+                        return
                     await self._send_notification(
                         svc=svc,
                         user_id=payload.rider_id,
@@ -188,7 +223,9 @@ class RideEventConsumer(BaseEventConsumer):
 
                 # DRIVER ARRIVED - Driver has arrived at pickup
                 elif envelope.event_type == RoutingKeys.RIDE_DRIVER_ARRIVED:
-                    payload = RideStatusChangedPayload(**envelope.payload)
+                    payload = self._parse_status_payload(envelope)
+                    if not payload:
+                        return
                     await self._send_notification(
                         svc=svc,
                         user_id=payload.rider_id,
@@ -199,7 +236,9 @@ class RideEventConsumer(BaseEventConsumer):
 
                 # RIDE IN PROGRESS - Ride has started
                 elif envelope.event_type == RoutingKeys.RIDE_IN_PROGRESS:
-                    payload = RideStatusChangedPayload(**envelope.payload)
+                    payload = self._parse_status_payload(envelope)
+                    if not payload:
+                        return
                     # Notify rider
                     await self._send_notification(
                         svc=svc,
@@ -220,7 +259,9 @@ class RideEventConsumer(BaseEventConsumer):
 
                 # RIDE COMPLETED - Ride has finished successfully
                 elif envelope.event_type == RoutingKeys.RIDE_COMPLETED:
-                    payload = RideStatusChangedPayload(**envelope.payload)
+                    payload = self._parse_status_payload(envelope)
+                    if not payload:
+                        return
                     # Notify rider
                     await self._send_notification(
                         svc=svc,
@@ -241,7 +282,9 @@ class RideEventConsumer(BaseEventConsumer):
 
                 # RIDE CANCELLED - Ride was cancelled
                 elif envelope.event_type == RoutingKeys.RIDE_CANCELLED:
-                    payload = RideStatusChangedPayload(**envelope.payload)
+                    payload = self._parse_status_payload(envelope)
+                    if not payload:
+                        return
                     # Notify rider
                     await self._send_notification(
                         svc=svc,
@@ -262,7 +305,9 @@ class RideEventConsumer(BaseEventConsumer):
 
                 # NO SHOW - Rider didn't show up
                 elif envelope.event_type == RoutingKeys.RIDE_NO_SHOW:
-                    payload = RideStatusChangedPayload(**envelope.payload)
+                    payload = self._parse_status_payload(envelope)
+                    if not payload:
+                        return
                     # Notify rider
                     await self._send_notification(
                         svc=svc,
