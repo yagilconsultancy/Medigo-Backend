@@ -186,15 +186,32 @@ class RideEventConsumer(BaseEventConsumer):
                     payload = self._parse_status_payload(envelope)
                     if not payload:
                         return
+                    driver_name = None
+                    if payload.driver_id:
+                        driver_profile = await self.user_client.get_driver_profile(
+                            payload.driver_id
+                        )
+                        if driver_profile:
+                            driver_name = (
+                                f"{driver_profile.get('first_name', '')} "
+                                f"{driver_profile.get('last_name', '')}"
+                            ).strip() or None
                     # Notify rider
                     await self._send_notification(
                         svc=svc,
                         user_id=payload.rider_id,
                         title="Driver Assigned",
-                        body="A driver has been assigned to your ride.",
+                        body=(
+                            f"{driver_name} has been assigned to your ride."
+                            if driver_name else
+                            "A driver has been assigned to your ride."
+                        ),
                         data={
                             "ride_id": str(payload.ride_id),
                             "driver_id": str(payload.driver_id) if payload.driver_id else None,
+                            "driver_name": driver_name,
+                            "status": str(RideStatus.DRIVER_ASSIGNED),
+                            "status_label": "Driver Assigned",
                             "screen": "ride_detail",
                         },
                     )

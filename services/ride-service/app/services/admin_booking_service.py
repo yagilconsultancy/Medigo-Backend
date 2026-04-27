@@ -466,6 +466,12 @@ class AdminBookingService:
             raise ValidationError("Driver not found or not approved")
 
         old_driver_id = ride.driver_id
+        old_driver_profile = (
+            await self.user_client.get_driver_profile(old_driver_id)
+            if old_driver_id else None
+        )
+        old_driver_name = _display_name(old_driver_profile, old_driver_id)
+        new_driver_name = _display_name(driver_profile, new_driver_id)
         await self.ride_repo.update(ride_id, driver_id=new_driver_id)
 
         # Publish event to free old driver
@@ -501,12 +507,12 @@ class AdminBookingService:
             from_status=ride.status,
             to_status=ride.status,
             changed_by=admin_id,
-            notes=f"Driver reassigned: {old_driver_id} → {new_driver_id}",
+            notes=f"Driver reassigned: {old_driver_name} → {new_driver_name}",
         )
         await self.status_log_repo.create(log)
 
         # Admin note
-        note_text = f"Driver reassigned from {old_driver_id} to {new_driver_id}"
+        note_text = f"Driver reassigned from {old_driver_name} to {new_driver_name}"
         if reason:
             note_text += f": {reason}"
         await self._create_system_note(ride_id, admin_id, note_text)
@@ -623,3 +629,10 @@ def _extract_name(profile: dict | None) -> str:
         f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
         or "Unknown"
     )
+
+
+def _display_name(profile: dict | None, user_id: UUID | None) -> str:
+    name = _extract_name(profile)
+    if name != "Unknown":
+        return name
+    return str(user_id) if user_id else "Unknown"

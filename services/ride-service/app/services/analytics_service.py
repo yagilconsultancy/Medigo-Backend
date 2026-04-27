@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from datetime import timedelta
 from uuid import UUID
 
@@ -28,23 +29,27 @@ from app.schemas.analytics import (
     TripVolumePoint,
     TripVolumeTrendResponse,
 )
+from mediride_common.schemas.enums import RideStatus
 from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
 
 # Status transition -> human-readable activity
 _EVENT_MAP = {
-    "REQUESTED": ("booking_created", "New booking request received"),
-    "PENDING_BUSINESS_ASSIGNMENT": ("business_assigned", "Ride assigned to fleet"),
-    "CONFIRMED": ("ride_confirmed", "Ride confirmed"),
-    "DRIVER_ASSIGNED": ("driver_assigned", "Driver assigned to trip"),
-    "DRIVER_EN_ROUTE": ("driver_en_route", "Driver en route to pickup"),
-    "DRIVER_ARRIVED": ("driver_arrived", "Driver arrived at pickup"),
-    "IN_PROGRESS": ("trip_started", "Trip started"),
-    "COMPLETED": ("trip_completed", "Trip completed"),
-    "CANCELLED": ("trip_cancelled", "Trip cancelled"),
-    "NO_SHOW": ("no_show", "Rider no-show recorded"),
+    RideStatus.REQUESTED: ("booking_created", "New booking request received"),
+    RideStatus.PENDING_BUSINESS_ASSIGNMENT: ("business_assigned", "Ride assigned to fleet"),
+    RideStatus.CONFIRMED: ("ride_confirmed", "Ride confirmed"),
+    RideStatus.DRIVER_ASSIGNED: ("driver_assigned", "Driver assigned to trip"),
+    RideStatus.DRIVER_EN_ROUTE: ("driver_en_route", "Driver en route to pickup"),
+    RideStatus.DRIVER_ARRIVED: ("driver_arrived", "Driver arrived at pickup"),
+    RideStatus.IN_PROGRESS: ("trip_started", "Trip started"),
+    RideStatus.COMPLETED: ("trip_completed", "Trip completed"),
+    RideStatus.CANCELLED: ("trip_cancelled", "Trip cancelled"),
+    RideStatus.NO_SHOW: ("no_show", "Rider no-show recorded"),
 }
+_UUID_PATTERN = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+)
 
 
 class AnalyticsService:
@@ -169,15 +174,18 @@ class AnalyticsService:
         self, limit: int = 20, business_id: UUID | None = None
     ) -> RecentActivityResponse:
         rows = await self.repo.get_recent_activity(limit=limit, business_id=business_id)
+        name_by_id = await self._get_activity_name_map(rows)
         activities = []
         for row in rows:
             to_status = row["to_status"]
             event_type, title = _EVENT_MAP.get(
-                to_status, ("status_change", f"Status changed to {to_status}")
+                to_status,
+                ("status_change", f"Status changed to {_format_status_label(to_status)}"),
             )
             description = title
-            if row["notes"]:
-                description = f"{title} — {row['notes']}"
+            notes = _format_activity_notes(row["notes"], name_by_id)
+            if notes:
+                description = f"{title} - {notes}"
 
             activities.append(ActivityEntry(
                 id=row["id"],
@@ -188,6 +196,31 @@ class AnalyticsService:
                 timestamp=row["timestamp"],
             ))
         return RecentActivityResponse(activities=activities)
+
+    async def _get_activity_name_map(self, rows: list[dict]) -> dict[str, str]:
+        ids: set[UUID] = set()
+        for row in rows:
+            for match in _UUID_PATTERN.findall(row.get("notes") or ""):
+                ids.add(UUID(match))
+
+        if not ids:
+            return {}
+
+        try:
+            users = await self.user_client.batch_get_users(list(ids))
+        except Exception as exc:
+            logger.error(f"Failed to resolve activity names: {exc}")
+            return {}
+
+        name_by_id: dict[str, str] = {}
+        for user in users:
+            user_id = user.get("id")
+            if not user_id:
+                continue
+            name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+            if name:
+                name_by_id[user_id] = name
+        return name_by_id
 
     async def get_transport_distribution(
         self, days: int = 30, business_id: UUID | None = None
@@ -349,3 +382,29 @@ def _build_kpi(total_value: float, current: float, previous: float) -> KPIChange
         trend = "flat"
 
     return KPIChange(value=total_value, change_percent=change, trend=trend)
+
+
+def _format_status_label(status: str | None) -> str:
+    if not status:
+        return "Status Updated"
+    return status.replace("_", " ").strip().title()
+
+
+def _format_activity_notes(notes: str | None, name_by_id: dict[str, str]) -> str | None:
+    if not notes:
+        return None
+
+    formatted = notes
+    for match in _UUID_PATTERN.findall(notes):
+        replacement = name_by_id.get(match)
+        if replacement:
+            formatted = formatted.replace(match, replacement)
+
+    if formatted.startswith("Admin assigned driver "):
+        return f"Assigned to {formatted.removeprefix('Admin assigned driver ')}"
+    if formatted.startswith("Admin assigned caregiver "):
+        return f"Caregiver assigned: {formatted.removeprefix('Admin assigned caregiver ')}"
+    if formatted.startswith("Driver reassigned: "):
+        return formatted.replace(" → ", " to ")
+
+    return formatted

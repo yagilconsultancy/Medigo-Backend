@@ -29,3 +29,17 @@ class UserServiceClient:
         except Exception as e:
             logger.error(f"Error fetching user email: {e}")
             return None
+
+    async def get_driver_profile(self, driver_id: UUID) -> dict | None:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/drivers/{driver_id}/profile",
+                    headers={"X-Internal-Service": "notification-service"},
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                return None
+        except Exception as e:
+            logger.error(f"Error fetching driver profile: {e}")
+            return None

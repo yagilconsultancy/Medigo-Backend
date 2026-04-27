@@ -243,9 +243,10 @@ class RideService:
             )
 
         await self.ride_repo.update(ride_id, driver_id=driver_id)
+        driver_name = _extract_name(driver_info)
         await self.transition_status(
             ride_id, RideStatus.DRIVER_ASSIGNED, admin_id,
-            notes=f"Admin assigned driver {driver_id}"
+            notes=f"Admin assigned driver {driver_name}"
         )
 
         return await self.ride_repo.get_by_id(ride_id)
@@ -302,7 +303,7 @@ class RideService:
             from_status=ride.status,
             to_status=ride.status,
             changed_by=admin_id,
-            notes=f"Admin assigned caregiver {caregiver_id}",
+            notes=f"Admin assigned caregiver {_extract_name(caregiver_info)}",
         )
         await self.status_log_repo.create(log)
 
@@ -550,3 +551,12 @@ class RideService:
             "vehicle_plate": driver_info.get("vehicle_plate"),
             "vehicle_color": driver_info.get("vehicle_color"),
         }
+
+
+def _extract_name(profile: dict | None) -> str:
+    if not profile:
+        return "Unknown"
+    return (
+        f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
+        or "Unknown"
+    )
