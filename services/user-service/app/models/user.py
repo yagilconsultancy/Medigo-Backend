@@ -28,6 +28,7 @@ class User(Base):
         PGUUID(as_uuid=True), ForeignKey("businesses.id"), nullable=True, index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_guest: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     # Insurance (rider)
     insurance_provider: Mapped[str | None] = mapped_column(String(255), nullable=True)

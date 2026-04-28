@@ -59,6 +59,10 @@ class RideService:
                     "(care assistant needs advance notice)"
                 )
 
+        if ride_data.get("guest_session_id"):
+            ride_data.setdefault("booking_channel", "website_guest")
+            ride_data.setdefault("share_token", secrets.token_urlsafe(32))
+
         ride = Ride(rider_id=rider_id, **ride_data)
         ride = await self.ride_repo.create(ride)
 

@@ -71,6 +71,8 @@ class AuthService:
         password: str,
         role: UserRole,
         business_id: UUID | None = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
     ) -> tuple[UUID, str]:
         """Register a new user. Returns (user_id, otp_code)."""
         validate_password_strength(password)
@@ -105,6 +107,8 @@ class AuthService:
                 user_id=credential.id,
                 email=email,
                 phone=phone,
+                first_name=first_name,
+                last_name=last_name,
                 role=role,
                 business_id=business_id,
             ).model_dump(mode="json"),

@@ -19,18 +19,22 @@ class UserService:
         user_id: UUID,
         email: str | None,
         phone: str | None,
+        first_name: str | None,
+        last_name: str | None,
         role: str,
         business_id: UUID | None = None,
+        is_guest: bool = False,
     ) -> User:
         """Create initial user profile from auth registration event."""
         user = User(
             id=user_id,
             email=email,
             phone=phone,
-            first_name="",
-            last_name="",
+            first_name=first_name or "",
+            last_name=last_name or "",
             role=role,
             business_id=business_id,
+            is_guest=is_guest,
         )
         await self.user_repo.create(user)
         logger.info(f"Created profile for user {user_id}")

@@ -18,6 +18,7 @@ class UserProfileResponse(BaseModel):
     role: str
     business_id: UUID | None = None
     is_active: bool
+    is_guest: bool = False
     consent_emergency_services: bool = False
     consent_privacy_policy: bool = False
     consent_terms_of_service: bool = False

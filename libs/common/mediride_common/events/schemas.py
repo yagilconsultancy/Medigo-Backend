@@ -21,6 +21,8 @@ class UserRegisteredPayload(BaseModel):
     user_id: UUID
     email: str | None = None
     phone: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     role: str
     business_id: UUID | None = None
 

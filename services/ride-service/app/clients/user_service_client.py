@@ -27,6 +27,39 @@ class UserServiceClient:
             logger.error(f"Error calling user-service for user {user_id}: {e}")
             return None
 
+    async def create_guest_rider(
+        self,
+        *,
+        email: str | None = None,
+        phone: str | None = None,
+        full_name: str | None = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
+    ) -> dict | None:
+        payload = {
+            "email": email,
+            "phone": phone,
+            "full_name": full_name,
+            "first_name": first_name,
+            "last_name": last_name,
+        }
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/internal/guest-riders",
+                    headers={"X-Internal-Service": "ride-service"},
+                    json=payload,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                logger.warning(
+                    f"Failed to create guest rider profile: {resp.status_code} {resp.text}"
+                )
+                return None
+        except httpx.RequestError as e:
+            logger.error(f"Error creating guest rider profile: {e}")
+            return None
+
     async def get_driver_profile(self, driver_id: UUID) -> dict | None:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

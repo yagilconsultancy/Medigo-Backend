@@ -4,16 +4,20 @@ These endpoints are NOT exposed through the API gateway.
 They are called directly by other services within the Docker network.
 """
 import logging
+import uuid
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
 from app.repositories.fleet_repo import FleetRepository
 from app.repositories.invitation_repo import InvitationRepository
+from app.repositories.user_repo import UserRepository
+from app.services.user_service import UserService
+from mediride_common.schemas.enums import UserRole
 from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
@@ -33,6 +37,24 @@ def _require_internal_service(
 class AcceptInvitationRequest(BaseModel):
     token: str
     user_id: str
+
+
+class CreateGuestRiderRequest(BaseModel):
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, min_length=10, max_length=20)
+    full_name: str | None = Field(None, min_length=1, max_length=200)
+    first_name: str | None = Field(None, min_length=1, max_length=100)
+    last_name: str | None = Field(None, min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_contact(self):
+        if not self.email and not self.phone:
+            raise ValueError("Either email or phone is required")
+        if self.full_name and not (self.first_name and self.last_name):
+            parts = self.full_name.strip().split(None, 1)
+            self.first_name = self.first_name or parts[0]
+            self.last_name = self.last_name or (parts[1] if len(parts) > 1 else "")
+        return self
 
 
 @router.get("/invitations/verify")
@@ -74,8 +96,6 @@ async def get_user_profile_internal(
     session: AsyncSession = Depends(get_db),
 ):
     """Get user profile for ride enrichment. Called by ride-service."""
-    from app.repositories.user_repo import UserRepository
-
     user_repo = UserRepository(session)
     user = await user_repo.get_by_id(user_id)
     if not user:
@@ -90,6 +110,35 @@ async def get_user_profile_internal(
         "role": user.role,
         "avatar_url": user.avatar_url,
         "is_active": user.is_active,
+        "is_guest": user.is_guest,
+    }
+
+
+@router.post("/guest-riders")
+async def create_guest_rider_internal(
+    body: CreateGuestRiderRequest,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Create a lightweight guest rider profile. Called by ride-service."""
+    service = UserService(UserRepository(session))
+    user = await service.create_profile_from_registration(
+        user_id=uuid.uuid4(),
+        email=body.email,
+        phone=body.phone,
+        first_name=body.first_name,
+        last_name=body.last_name,
+        role=UserRole.RIDER,
+        is_guest=True,
+    )
+    return {
+        "user_id": str(user.id),
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+        "role": user.role,
+        "is_guest": user.is_guest,
     }
 
 
@@ -121,6 +170,7 @@ async def batch_get_users_internal(
                 "email": u.email,
                 "phone": u.phone,
                 "avatar_url": u.avatar_url,
+                "is_guest": u.is_guest,
             }
             for u in users
         ]

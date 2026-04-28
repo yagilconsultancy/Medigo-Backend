@@ -43,6 +43,41 @@ async def check_address_public(
     )
 
 
+@router.get("/public/autocomplete", response_model=StandardResponse[list[AutocompleteResult]])
+async def autocomplete_address_public(
+    query: str = Query(..., min_length=2, max_length=200),
+    lat: float | None = Query(None, ge=-90, le=90),
+    lng: float | None = Query(None, ge=-180, le=180),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Public address autocomplete for pre-login booking flows.
+    """
+    gmaps = get_gmaps_client()
+    service = GeocodingService(GeocodingCacheRepository(session), gmaps)
+    results = await service.autocomplete(query, lat, lng)
+    return StandardResponse(
+        data=[AutocompleteResult(**r) for r in results],
+        message=f"{len(results)} suggestions found",
+    )
+
+
+@router.get("/public/place/{place_id}", response_model=StandardResponse[PlaceDetailsResponse])
+async def get_place_details_public(
+    place_id: str,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Public place-details lookup for booking address selection before authentication.
+    """
+    gmaps = get_gmaps_client()
+    service = GeocodingService(GeocodingCacheRepository(session), gmaps)
+    result = await service.place_details(place_id)
+    if not result:
+        raise NotFoundError("Place not found")
+    return StandardResponse(data=PlaceDetailsResponse(**result), message="Place details retrieved")
+
+
 @router.get("/geocode", response_model=StandardResponse[GeocodeResponse])
 async def geocode_address(
     address: str = Query(..., min_length=3, max_length=500),

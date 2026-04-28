@@ -39,6 +39,8 @@ class UserRegisteredConsumer(BaseEventConsumer):
                 user_id=payload.user_id,
                 email=payload.email,
                 phone=payload.phone,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
                 role=payload.role,
                 business_id=payload.business_id,
             )

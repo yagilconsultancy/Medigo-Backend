@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 
+from app.api.v1.booking_flow_endpoints import router as booking_flow_router
+from app.api.v1.guest_booking_endpoints import router as guest_booking_router
 from app.api.v1.admin_alert_endpoints import router as admin_alert_router
 from app.api.v1.admin_booking_endpoints import router as admin_booking_router
 from app.api.v1.admin_discipline_endpoints import router as admin_discipline_router
@@ -17,6 +19,8 @@ from app.api.v1.safety_endpoints import router as safety_router
 
 router = APIRouter()
 
+router.include_router(booking_flow_router, tags=["Public Booking Flow"])
+router.include_router(guest_booking_router, tags=["Public Guest Booking"])
 router.include_router(ride_router, tags=["Rides"])
 router.include_router(rider_router, tags=["Rider"])
 router.include_router(admin_router, prefix="/admin", tags=["Admin Rides"])

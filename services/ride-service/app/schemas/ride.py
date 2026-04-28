@@ -94,6 +94,7 @@ class RideResponse(BaseModel):
     facility_name: str | None = None
     booking_channel: str = "mobile_app"
     facility_id: UUID | None = None
+    guest_session_id: UUID | None = None
     use_highway_407: bool = False
     highway_407_route: str | None = None
     is_dialysis_trip: bool = False
@@ -144,6 +145,7 @@ class RideDetailResponse(BaseModel):
     facility_name: str | None = None
     booking_channel: str = "mobile_app"
     facility_id: UUID | None = None
+    guest_session_id: UUID | None = None
     special_instructions: str | None = None
     mobility_level: str | None = None
     assistance_level: str | None = None

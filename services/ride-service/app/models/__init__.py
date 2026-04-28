@@ -1,6 +1,7 @@
 from app.models.admin_note import AdminNote
 from app.models.disciplinary_action import DisciplinaryAction
 from app.models.dispatch_settings import DispatchSettings
+from app.models.guest_booking_session import GuestBookingSession
 from app.models.incident import Incident
 from app.models.incident_note import IncidentNote
 from app.models.investigation import Investigation
@@ -18,6 +19,7 @@ __all__ = [
     "AdminNote",
     "DisciplinaryAction",
     "DispatchSettings",
+    "GuestBookingSession",
     "Incident",
     "IncidentNote",
     "Investigation",

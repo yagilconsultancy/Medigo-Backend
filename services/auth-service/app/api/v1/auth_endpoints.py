@@ -79,6 +79,8 @@ async def register(
         phone=request.phone,
         password=request.password,
         role=request.role,
+        first_name=request.first_name,
+        last_name=request.last_name,
     )
     # In production, OTP is sent via notification service (email/SMS)
     # In development, we return it in the response for testing

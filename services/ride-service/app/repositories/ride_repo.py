@@ -155,6 +155,34 @@ class RideRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_guest_session_and_ride_id(
+        self, guest_session_id: UUID, ride_id: UUID
+    ) -> Ride | None:
+        result = await self.session.execute(
+            select(Ride).where(
+                Ride.id == ride_id,
+                Ride.guest_session_id == guest_session_id,
+                Ride.deleted_at.is_(None),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_latest_by_guest_session(self, guest_session_id: UUID) -> Ride | None:
+        result = await self.session.execute(
+            select(Ride)
+            .where(
+                Ride.guest_session_id == guest_session_id,
+                Ride.deleted_at.is_(None),
+            )
+            .order_by(
+                _active_ride_priority_order(),
+                Ride.scheduled_at.desc(),
+                Ride.created_at.desc(),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def get_driver_stats(self, driver_id: UUID) -> dict:
         completed_count = await self.session.execute(
             select(func.count()).where(

@@ -8,6 +8,9 @@ from mediride_common.schemas.enums import UserRole
 class RegisterRequest(BaseModel):
     email: EmailStr | None = None
     phone: str | None = Field(None, min_length=10, max_length=20)
+    full_name: str | None = Field(None, min_length=1, max_length=200)
+    first_name: str | None = Field(None, min_length=1, max_length=100)
+    last_name: str | None = Field(None, min_length=1, max_length=100)
     password: str = Field(..., min_length=8, max_length=128)
     role: UserRole = UserRole.RIDER
 
@@ -15,6 +18,10 @@ class RegisterRequest(BaseModel):
     def validate_contact(self):
         if not self.email and not self.phone:
             raise ValueError("Either email or phone is required")
+        if self.full_name and not (self.first_name and self.last_name):
+            parts = self.full_name.strip().split(None, 1)
+            self.first_name = self.first_name or parts[0]
+            self.last_name = self.last_name or (parts[1] if len(parts) > 1 else "")
         return self
 
 
