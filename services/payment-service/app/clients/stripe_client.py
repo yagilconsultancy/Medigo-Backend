@@ -31,6 +31,20 @@ class StripeVaultResult:
     raw_response: dict | None = None
 
 
+@dataclass
+class StripeMobilePaymentIntentResult:
+    success: bool
+    payment_intent_id: str | None = None
+    client_secret: str | None = None
+    customer_id: str | None = None
+    ephemeral_key_secret: str | None = None
+    publishable_key: str | None = None
+    amount: float | None = None
+    currency: str | None = None
+    message: str | None = None
+    raw_response: dict | None = None
+
+
 class StripeClient:
     """Async Stripe client for payment processing.
 
@@ -52,6 +66,10 @@ class StripeClient:
         self._environment = environment.lower()
         self._mock_in_development = mock_in_development
         stripe.api_key = self._secret_key
+
+    @property
+    def publishable_key(self) -> str:
+        return self._publishable_key
 
     @property
     def _mock_enabled(self) -> bool:
@@ -188,15 +206,15 @@ class StripeClient:
             if address:
                 billing_details["address"] = address
 
-            customer_id = await self.get_or_create_customer(
-                user_id=user_id,
-                name=holder_name,
-                existing_customer_id=existing_customer_id,
-            )
-
             if stripe_payment_method_id:
                 pm = await stripe.PaymentMethod.retrieve_async(stripe_payment_method_id)
-                if getattr(pm, "customer", None) != customer_id:
+                attached_customer_id = getattr(pm, "customer", None)
+                customer_id = attached_customer_id or await self.get_or_create_customer(
+                    user_id=user_id,
+                    name=holder_name,
+                    existing_customer_id=existing_customer_id,
+                )
+                if attached_customer_id != customer_id:
                     await stripe.PaymentMethod.attach_async(pm.id, customer=customer_id)
             else:
                 if not stripe_token:
@@ -205,6 +223,11 @@ class StripeClient:
                         message="Missing Stripe token or PaymentMethod ID",
                     )
 
+                customer_id = await self.get_or_create_customer(
+                    user_id=user_id,
+                    name=holder_name,
+                    existing_customer_id=existing_customer_id,
+                )
                 pm = await stripe.PaymentMethod.create_async(
                     type="card",
                     card={"token": stripe_token},
@@ -246,6 +269,80 @@ class StripeClient:
     # ------------------------------------------------------------------ #
     # Payments
     # ------------------------------------------------------------------ #
+
+    async def create_mobile_payment_intent(
+        self,
+        user_id: str,
+        amount: float,
+        *,
+        currency: str = "usd",
+        email: str | None = None,
+        description: str | None = None,
+        metadata: dict[str, str] | None = None,
+        existing_customer_id: str | None = None,
+        customer_session_api_version: str | None = None,
+        setup_future_usage: str | None = None,
+    ) -> StripeMobilePaymentIntentResult:
+        """Create a Stripe PaymentIntent for mobile SDK flows.
+
+        Returns a real client secret and, when requested, a customer-scoped
+        ephemeral key for Stripe's mobile SDKs.
+        """
+        if amount <= 0:
+            raise ValidationError("Amount must be greater than zero")
+        if not self._secret_key:
+            return StripeMobilePaymentIntentResult(
+                success=False,
+                message="Stripe mobile SDK setup requires STRIPE_SECRET_KEY",
+            )
+        if not self._publishable_key:
+            return StripeMobilePaymentIntentResult(
+                success=False,
+                message="Stripe mobile SDK setup requires STRIPE_PUBLISHABLE_KEY",
+            )
+
+        amount_cents = int(round(amount * 100))
+        normalized_currency = currency.lower()
+
+        try:
+            customer_id = await self.get_or_create_customer(
+                user_id=user_id,
+                email=email,
+                existing_customer_id=existing_customer_id,
+            )
+
+            intent = await stripe.PaymentIntent.create_async(
+                amount=amount_cents,
+                currency=normalized_currency,
+                customer=customer_id,
+                automatic_payment_methods={"enabled": True},
+                description=description,
+                metadata=metadata or {},
+                setup_future_usage=setup_future_usage,
+            )
+
+            ephemeral_key_secret = None
+            if customer_session_api_version:
+                ephemeral_key = await stripe.EphemeralKey.create_async(
+                    customer=customer_id,
+                    stripe_version=customer_session_api_version,
+                )
+                ephemeral_key_secret = getattr(ephemeral_key, "secret", None)
+
+            return StripeMobilePaymentIntentResult(
+                success=True,
+                payment_intent_id=intent.id,
+                client_secret=getattr(intent, "client_secret", None),
+                customer_id=customer_id,
+                ephemeral_key_secret=ephemeral_key_secret,
+                publishable_key=self._publishable_key,
+                amount=amount,
+                currency=normalized_currency.upper(),
+                message="PaymentIntent created",
+            )
+        except stripe_error.StripeError as e:
+            logger.error(f"Stripe mobile PaymentIntent error: {e}")
+            return StripeMobilePaymentIntentResult(success=False, message=str(e))
 
     async def purchase(
         self,
