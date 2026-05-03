@@ -1,7 +1,7 @@
 from app.models.cancellation_policy import CancellationPolicy
 from app.models.commission_config import CommissionConfig
 from app.models.dialysis_rate_plan import DialysisRatePlan
-# from app.models.dispute import Dispute, DisputeNote  # Temporarily disabled
+from app.models.dispute import Dispute, DisputeNote
 from app.models.driver_earnings import DriverEarnings
 from app.models.earnings_period import EarningsPeriod
 from app.models.fare_breakdown import FareBreakdown
@@ -21,8 +21,8 @@ __all__ = [
     "CancellationPolicy",
     "CommissionConfig",
     "DialysisRatePlan",
-    # "Dispute",  # Temporarily disabled
-    # "DisputeNote",  # Temporarily disabled
+    "Dispute",
+    "DisputeNote",
     "DriverEarnings",
     "EarningsPeriod",
     "FareBreakdown",
