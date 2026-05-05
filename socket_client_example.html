@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediRide Socket.IO Client Example</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #555;
+            padding-left: 10px;
+        }
+        .log-entry.info { border-left-color: #4CAF50; }
+        .log-entry.error { border-left-color: #f44336; }
+        .log-entry.event { border-left-color: #2196F3; }
+        input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 300px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚑 MediRide Socket.IO Client</h1>
+
+    <!-- Configuration -->
+    <div class="card">
+        <h3>Configuration</h3>
+        <label>
+            Environment:
+            <select id="envSelect" onchange="updateConfig()">
+                <option value="local">Local (localhost:8080)</option>
+                <option value="staging" selected>Staging (staging.getmedigo.com)</option>
+            </select>
+        </label>
+        <br><br>
+        <strong>Server:</strong> <span id="serverUrl"></span><br>
+        <strong>Path:</strong> <code id="socketPath"></code>
+    </div>
+
+    <!-- Tracking Connection -->
+    <div class="card">
+        <h3>📍 Tracking Service</h3>
+        <span class="status disconnected" id="trackingStatus">Disconnected</span>
+        <br><br>
+        <button onclick="connectTracking()">Connect</button>
+        <button onclick="disconnectTracking()">Disconnect</button>
+        <button onclick="joinRide()" id="joinRideBtn" disabled>Join Ride</button>
+        <button onclick="joinDispatch()" id="joinDispatchBtn" disabled>Join Dispatch Center</button>
+        <br><br>
+        <input type="text" id="rideIdInput" placeholder="Ride ID (UUID)" value="123e4567-e89b-12d3-a456-426614174000">
+    </div>
+
+    <!-- Chat Connection -->
+    <div class="card">
+        <h3>💬 Chat Service</h3>
+        <span class="status disconnected" id="chatStatus">Disconnected</span>
+        <br><br>
+        <input type="text" id="jwtToken" placeholder="JWT Token (required for chat)" style="width: 500px;">
+        <br>
+        <button onclick="connectChat()">Connect</button>
+        <button onclick="disconnectChat()">Disconnect</button>
+    </div>
+
+    <!-- Event Log -->
+    <div class="card">
+        <h3>📋 Event Log</h3>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        // Configuration
+        const configs = {
+            local: {
+                server: 'http://localhost:8080',
+                path: '/api/v1/ws/socket.io'
+            },
+            staging: {
+                server: 'https://staging.getmedigo.com',
+                path: '/api/v1/ws/socket.io'
+            }
+        };
+
+        let currentConfig = configs.staging;
+        let trackingSocket = null;
+        let chatSocket = null;
+
+        // Update UI with current config
+        function updateConfig() {
+            const env = document.getElementById('envSelect').value;
+            currentConfig = configs[env];
+            document.getElementById('serverUrl').textContent = currentConfig.server;
+            document.getElementById('socketPath').textContent = currentConfig.path;
+
+            // Disconnect any existing connections
+            if (trackingSocket?.connected) disconnectTracking();
+            if (chatSocket?.connected) disconnectChat();
+        }
+
+        // Logging
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Update status indicators
+        function updateStatus(service, connected) {
+            const statusEl = document.getElementById(`${service}Status`);
+            statusEl.className = `status ${connected ? 'connected' : 'disconnected'}`;
+            statusEl.textContent = connected ? 'Connected' : 'Disconnected';
+
+            if (service === 'tracking') {
+                document.getElementById('joinRideBtn').disabled = !connected;
+                document.getElementById('joinDispatchBtn').disabled = !connected;
+            }
+        }
+
+        // ========== TRACKING SERVICE ==========
+
+        function connectTracking() {
+            if (trackingSocket?.connected) {
+                log('Already connected to tracking service', 'info');
+                return;
+            }
+
+            log(`Connecting to tracking service at ${currentConfig.server}${currentConfig.path}`, 'info');
+
+            trackingSocket = io(currentConfig.server + '/tracking', {
+                path: currentConfig.path,
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5
+            });
+
+            // Connection events
+            trackingSocket.on('connect', () => {
+                log('✓ Connected to tracking service', 'info');
+                updateStatus('tracking', true);
+            });
+
+            trackingSocket.on('disconnect', (reason) => {
+                log(`✗ Disconnected from tracking: ${reason}`, 'error');
+                updateStatus('tracking', false);
+            });
+
+            trackingSocket.on('connect_error', (error) => {
+                log(`✗ Connection error: ${error.message}`, 'error');
+                updateStatus('tracking', false);
+            });
+
+            // Tracking events
+            trackingSocket.on('location_update', (data) => {
+                log(`📍 Location Update: Driver ${data.driver_id} at (${data.latitude}, ${data.longitude}), ETA: ${data.eta_minutes}min`, 'event');
+            });
+
+            trackingSocket.on('tracking_started', (data) => {
+                log(`🚀 Tracking Started: Ride ${data.ride_id}`, 'event');
+            });
+
+            trackingSocket.on('tracking_ended', (data) => {
+                log(`🏁 Tracking Ended: Ride ${data.ride_id} - ${data.reason}`, 'event');
+            });
+
+            trackingSocket.on('dispatch_location_update', (data) => {
+                log(`🗺️ Dispatch Update: Driver ${data.driver_id}`, 'event');
+            });
+        }
+
+        function disconnectTracking() {
+            if (trackingSocket) {
+                trackingSocket.disconnect();
+                trackingSocket = null;
+                log('Disconnected from tracking service', 'info');
+                updateStatus('tracking', false);
+            }
+        }
+
+        function joinRide() {
+            const rideId = document.getElementById('rideIdInput').value;
+            if (!rideId) {
+                alert('Please enter a ride ID');
+                return;
+            }
+
+            trackingSocket.emit('join_ride', { ride_id: rideId }, (response) => {
+                if (response.error) {
+                    log(`✗ Join ride failed: ${response.error}`, 'error');
+                } else {
+                    log(`✓ Joined ride room: ${response.room}`, 'info');
+                }
+            });
+        }
+
+        function joinDispatch() {
+            trackingSocket.emit('join_dispatch_center', {}, (response) => {
+                if (response.error) {
+                    log(`✗ Join dispatch failed: ${response.error} (requires admin role)`, 'error');
+                } else {
+                    log(`✓ Joined dispatch center`, 'info');
+                }
+            });
+        }
+
+        // ========== CHAT SERVICE ==========
+
+        function connectChat() {
+            const token = document.getElementById('jwtToken').value;
+
+            if (!token) {
+                alert('JWT token is required for chat service');
+                return;
+            }
+
+            if (chatSocket?.connected) {
+                log('Already connected to chat service', 'info');
+                return;
+            }
+
+            log(`Connecting to chat service at ${currentConfig.server}${currentConfig.path}`, 'info');
+
+            chatSocket = io(currentConfig.server + '/chat', {
+                path: currentConfig.path,
+                auth: { token: token },
+                transports: ['websocket', 'polling'],
+                reconnection: true
+            });
+
+            chatSocket.on('connect', () => {
+                log('✓ Connected to chat service', 'info');
+                updateStatus('chat', true);
+            });
+
+            chatSocket.on('disconnect', (reason) => {
+                log(`✗ Disconnected from chat: ${reason}`, 'error');
+                updateStatus('chat', false);
+            });
+
+            chatSocket.on('connect_error', (error) => {
+                log(`✗ Chat connection error: ${error.message}`, 'error');
+                updateStatus('chat', false);
+            });
+
+            chatSocket.on('new_message', (data) => {
+                log(`💬 Message from ${data.sender_name}: ${data.message}`, 'event');
+            });
+
+            chatSocket.on('user_typing', (data) => {
+                log(`✍️ ${data.user_name} is typing...`, 'event');
+            });
+        }
+
+        function disconnectChat() {
+            if (chatSocket) {
+                chatSocket.disconnect();
+                chatSocket = null;
+                log('Disconnected from chat service', 'info');
+                updateStatus('chat', false);
+            }
+        }
+
+        // Initialize
+        updateConfig();
+        log('Ready to connect. Select environment and click Connect.', 'info');
+    </script>
+</body>
+</html>
