@@ -1,0 +1,101 @@
+{
+  "info": {
+    "name": "MediRide Socket.IO Gateway",
+    "_postman_id": "mediride-socketio-gateway",
+    "description": "Socket.IO connections through API Gateway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Tracking Namespace",
+      "item": [
+        {
+          "name": "Connect to Tracking (Guest)",
+          "request": {
+            "method": "SOCKET",
+            "header": [],
+            "url": {
+              "raw": "ws://localhost:8080/api/v1/ws/socket.io/tracking",
+              "protocol": "ws",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "ws", "socket.io", "tracking"]
+            },
+            "description": "Connect to tracking namespace without authentication (guest mode)"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "open",
+              "script": {
+                "exec": [
+                  "console.log('Connected to tracking namespace');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "socketio": {
+            "namespace": "/tracking",
+            "path": "/api/v1/ws/socket.io"
+          }
+        },
+        {
+          "name": "Join Ride Room",
+          "request": {
+            "method": "SOCKET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ride_id\": \"123e4567-e89b-12d3-a456-426614174000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "ws://localhost:8080/api/v1/ws/socket.io/tracking",
+              "protocol": "ws",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "ws", "socket.io", "tracking"]
+            },
+            "description": "Emit 'join_ride' event to subscribe to ride updates"
+          },
+          "response": [],
+          "socketio": {
+            "namespace": "/tracking",
+            "path": "/api/v1/ws/socket.io",
+            "event": "join_ride"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat Namespace",
+      "item": [
+        {
+          "name": "Connect to Chat",
+          "request": {
+            "method": "SOCKET",
+            "header": [],
+            "url": {
+              "raw": "ws://localhost:8080/api/v1/ws/socket.io/chat",
+              "protocol": "ws",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "v1", "ws", "socket.io", "chat"]
+            },
+            "description": "Connect to chat namespace for real-time messaging"
+          },
+          "response": [],
+          "socketio": {
+            "namespace": "/chat",
+            "path": "/api/v1/ws/socket.io"
+          }
+        }
+      ]
+    }
+  ]
+}

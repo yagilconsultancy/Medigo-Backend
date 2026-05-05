@@ -1,9 +1,7 @@
 import logging
-from urllib.parse import urlparse
 
 import httpx
-import websockets
-from fastapi import APIRouter, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, Response
 
 from app.config import settings
 from app.middleware.auth_middleware import validate_jwt_and_get_claims
@@ -158,62 +156,3 @@ async def proxy_request(request: Request, path: str):
             status_code=504,
             media_type="application/json",
         )
-
-
-# ==================== WebSocket / Socket.IO Proxy ====================
-
-# Socket.IO namespace -> backend service URL mapping
-SOCKETIO_SERVICE_MAP = {
-    "/tracking": settings.TRACKING_SERVICE_URL,
-    "/chat": settings.NOTIFICATION_SERVICE_URL,
-}
-
-
-def _get_ws_url(http_url: str) -> str:
-    """Convert http(s) URL to ws(s) URL."""
-    return http_url.replace("http://", "ws://").replace("https://", "wss://")
-
-
-@router.websocket("/ws/socket.io/{namespace:path}")
-async def proxy_socketio_websocket(websocket: WebSocket, namespace: str):
-    """Proxy Socket.IO WebSocket connections to backend services."""
-    ns = f"/{namespace}"
-    service_url = SOCKETIO_SERVICE_MAP.get(ns)
-    if not service_url:
-        await websocket.close(code=4004)
-        return
-
-    # Build target WebSocket URL (Socket.IO path)
-    ws_base = _get_ws_url(service_url)
-    query = str(websocket.query_params) if websocket.query_params else ""
-    target_url = f"{ws_base}/socket.io/?{query}" if query else f"{ws_base}/socket.io/"
-
-    await websocket.accept()
-
-    try:
-        async with websockets.connect(target_url) as backend_ws:
-            import asyncio
-
-            async def client_to_backend():
-                try:
-                    while True:
-                        data = await websocket.receive_text()
-                        await backend_ws.send(data)
-                except WebSocketDisconnect:
-                    pass
-
-            async def backend_to_client():
-                try:
-                    async for message in backend_ws:
-                        await websocket.send_text(message)
-                except Exception:
-                    pass
-
-            await asyncio.gather(client_to_backend(), backend_to_client())
-    except Exception as e:
-        logger.error(f"WebSocket proxy error for {ns}: {e}")
-    finally:
-        try:
-            await websocket.close()
-        except Exception:
-            pass

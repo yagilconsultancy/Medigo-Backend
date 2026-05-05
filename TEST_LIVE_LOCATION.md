@@ -312,8 +312,8 @@ docker-compose logs tracking-service -f | grep "Simulated location"
 
 ### 2. Connect via Socket.IO (Browser)
 ```javascript
-const socket = io('http://localhost:8080', {
-  path: '/api/v1/ws/socket.io/tracking',
+const socket = io('http://localhost:8080/tracking', {
+  path: '/api/v1/ws/socket.io',
   auth: { token: 'YOUR_JWT_TOKEN' }
 });
 
