@@ -33,6 +33,15 @@ class UserVerifiedPayload(BaseModel):
     phone: str | None = None
 
 
+class UserOTPRequestedPayload(BaseModel):
+    user_id: UUID
+    purpose: str
+    channel: str
+    otp_code: str
+    email: str | None = None
+    phone: str | None = None
+
+
 class PasswordResetRequestedPayload(BaseModel):
     user_id: UUID
     email: str

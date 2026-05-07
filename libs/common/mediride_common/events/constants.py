@@ -12,6 +12,7 @@ class RoutingKeys:
     # Auth events
     USER_REGISTERED = "user.registered"
     USER_VERIFIED = "user.verified"
+    USER_OTP_REQUESTED = "user.otp_requested"
     USER_LOGIN = "user.login"
     USER_PASSWORD_CHANGED = "user.password_changed"
     PASSWORD_RESET_REQUESTED = "user.password_reset_requested"

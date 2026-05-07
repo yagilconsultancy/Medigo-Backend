@@ -82,8 +82,8 @@ async def register(
         first_name=request.first_name,
         last_name=request.last_name,
     )
-    # In production, OTP is sent via notification service (email/SMS)
-    # In development, we return it in the response for testing
+    # OTP is published for delivery via notification-service in all environments.
+    # In development, we also return it in the response for easier testing.
     message = "Registration successful. Please verify your account."
     if settings.ENVIRONMENT != "production":
         message += f" [DEV] OTP: {otp_code}"

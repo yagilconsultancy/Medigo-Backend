@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediRide Tracking - Test Page</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+        .card h2 {
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: auto;
+        }
+        .status-badge.connected { background: #d4edda; color: #155724; }
+        .status-badge.disconnected { background: #f8d7da; color: #721c24; }
+        .status-badge.connecting { background: #fff3cd; color: #856404; }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 5px 5px 5px 0;
+            transition: all 0.2s;
+        }
+        button:hover { background: #5568d3; transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        button.danger { background: #dc3545; }
+        button.danger:hover { background: #c82333; }
+        button.success { background: #28a745; }
+        button.success:hover { background: #218838; }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            margin: 8px 0;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .log-container {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px 5px 5px 15px;
+            border-left: 3px solid #555;
+        }
+        .log-entry.info { border-left-color: #4CAF50; }
+        .log-entry.error { border-left-color: #f44336; }
+        .log-entry.event { border-left-color: #2196F3; color: #90caf9; }
+        .log-entry.warn { border-left-color: #ff9800; color: #ffb74d; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .info-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        .info-box h4 {
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .info-box p {
+            color: #666;
+            font-size: 13px;
+            margin: 5px 0;
+        }
+        .info-box .value {
+            color: #333;
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+
+        .emoji {
+            font-size: 1.2em;
+        }
+
+        .location-display {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .location-display h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .location-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        .location-item {
+            text-align: center;
+        }
+        .location-item .label {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .location-item .value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+            margin-top: 5px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .pulsing { animation: pulse 2s ease-in-out infinite; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span class="emoji">🚑</span> MediRide Tracking Test</h1>
+
+        <!-- Configuration -->
+        <div class="card">
+            <h2><span class="emoji">⚙️</span> Configuration</h2>
+            <label>
+                Environment:
+                <select id="envSelect" onchange="updateConfig()">
+                    <option value="local">Local (localhost:8080)</option>
+                    <option value="staging" selected>Staging (staging.getmedigo.com)</option>
+                </select>
+            </label>
+            <div class="info-box" style="margin-top: 15px;">
+                <h4>Connection Details</h4>
+                <p><strong>Server:</strong> <code id="serverUrl"></code></p>
+                <p><strong>Path:</strong> <code id="socketPath"></code></p>
+            </div>
+        </div>
+
+        <!-- Rider Tracking -->
+        <div class="card">
+            <h2>
+                <span class="emoji">🚗</span> Rider - Track Your Ride
+                <span class="status-badge disconnected" id="riderStatus">Disconnected</span>
+            </h2>
+
+            <label>
+                Ride ID:
+                <input type="text" id="rideIdInput" placeholder="Enter ride UUID" value="123e4567-e89b-12d3-a456-426614174000">
+            </label>
+
+            <div class="controls">
+                <button onclick="connectRider()">Connect</button>
+                <button onclick="disconnectRider()">Disconnect</button>
+                <button onclick="joinRide()" id="joinRideBtn" disabled>Join Ride</button>
+                <button onclick="leaveRide()" id="leaveRideBtn" disabled>Leave Ride</button>
+            </div>
+
+            <div class="location-display" id="riderLocationDisplay" style="display: none;">
+                <h3>📍 Driver Location</h3>
+                <div class="location-grid">
+                    <div class="location-item">
+                        <div class="label">Latitude</div>
+                        <div class="value" id="riderLat">-</div>
+                    </div>
+                    <div class="location-item">
+                        <div class="label">Longitude</div>
+                        <div class="value" id="riderLng">-</div>
+                    </div>
+                    <div class="location-item">
+                        <div class="label">ETA</div>
+                        <div class="value" id="riderEta">-</div>
+                    </div>
+                    <div class="location-item">
+                        <div class="label">Speed</div>
+                        <div class="value" id="riderSpeed">-</div>
+                    </div>
+                    <div class="location-item">
+                        <div class="label">Heading</div>
+                        <div class="value" id="riderHeading">-</div>
+                    </div>
+                    <div class="location-item">
+                        <div class="label">Distance</div>
+                        <div class="value" id="riderDistance">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simulation Testing -->
+        <div class="card">
+            <h2><span class="emoji">🧪</span> Simulate Driver Movement (Testing)</h2>
+
+            <label>
+                Driver ID:
+                <input type="text" id="simDriverId" placeholder="Enter driver UUID">
+            </label>
+
+            <div class="controls">
+                <button class="success" onclick="simulateRoute()">Simulate Toronto Route</button>
+                <button class="success" onclick="simulateSingleUpdate()">Send Single Update</button>
+                <button class="danger" onclick="stopSimulation()">Stop Simulation</button>
+            </div>
+
+            <div class="info-box">
+                <h4>Test Route</h4>
+                <p>Union Station → Toronto General Hospital (10 waypoints, 3s intervals)</p>
+            </div>
+        </div>
+
+        <!-- Admin Dispatch Center -->
+        <div class="card">
+            <h2>
+                <span class="emoji">🗺️</span> Admin - Dispatch Center
+                <span class="status-badge disconnected" id="adminStatus">Disconnected</span>
+            </h2>
+
+            <label>
+                Admin JWT Token:
+                <input type="text" id="adminToken" placeholder="Paste your admin JWT token here">
+            </label>
+
+            <div class="controls">
+                <button onclick="connectAdmin()">Connect</button>
+                <button onclick="disconnectAdmin()">Disconnect</button>
+                <button onclick="joinDispatch()" id="joinDispatchBtn" disabled>Join Dispatch</button>
+                <button onclick="leaveDispatch()" id="leaveDispatchBtn" disabled>Leave Dispatch</button>
+            </div>
+
+            <div class="grid">
+                <div class="info-box">
+                    <h4>Active Drivers</h4>
+                    <p class="value" id="activeDriverCount">0</p>
+                </div>
+                <div class="info-box">
+                    <h4>Total Updates</h4>
+                    <p class="value" id="totalUpdates">0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="card">
+            <h2><span class="emoji">📋</span> Event Log</h2>
+            <div class="controls">
+                <button onclick="clearLog()">Clear Log</button>
+                <button onclick="exportLog()">Export Log</button>
+            </div>
+            <div class="log-container" id="logContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const configs = {
+            local: {
+                server: 'http://localhost:8080',
+                path: '/api/v1/ws/socket.io'
+            },
+            staging: {
+                server: 'https://staging.getmedigo.com',
+                path: '/api/v1/ws/socket.io'
+            }
+        };
+
+        let currentConfig = configs.staging;
+        let riderSocket = null;
+        let adminSocket = null;
+        let simulationInterval = null;
+        let updateCount = 0;
+        let activeDriversSet = new Set();
+
+        // Update configuration
+        function updateConfig() {
+            const env = document.getElementById('envSelect').value;
+            currentConfig = configs[env];
+            document.getElementById('serverUrl').textContent = currentConfig.server;
+            document.getElementById('socketPath').textContent = currentConfig.path;
+            log(`Configuration changed to: ${env}`, 'info');
+        }
+
+        // Logging
+        function log(message, type = 'info') {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '';
+            log('Log cleared', 'info');
+        }
+
+        function exportLog() {
+            const logText = document.getElementById('logContainer').innerText;
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tracking-log-${Date.now()}.txt`;
+            a.click();
+        }
+
+        // Status updates
+        function updateStatus(service, connected) {
+            const statusEl = document.getElementById(`${service}Status`);
+            statusEl.className = `status-badge ${connected ? 'connected' : 'disconnected'}`;
+            statusEl.textContent = connected ? 'Connected' : 'Disconnected';
+
+            if (service === 'rider') {
+                document.getElementById('joinRideBtn').disabled = !connected;
+                document.getElementById('leaveRideBtn').disabled = !connected;
+            } else if (service === 'admin') {
+                document.getElementById('joinDispatchBtn').disabled = !connected;
+                document.getElementById('leaveDispatchBtn').disabled = !connected;
+            }
+        }
+
+        // ============= RIDER FUNCTIONS =============
+
+        function connectRider() {
+            if (riderSocket?.connected) {
+                log('Already connected to tracking', 'warn');
+                return;
+            }
+
+            log(`Connecting to ${currentConfig.server}/tracking...`, 'info');
+
+            riderSocket = io(`${currentConfig.server}/tracking`, {
+                path: currentConfig.path,
+                transports: ['websocket', 'polling']
+            });
+
+            riderSocket.on('connect', () => {
+                log('✓ Rider connected to tracking service', 'info');
+                updateStatus('rider', true);
+            });
+
+            riderSocket.on('disconnect', (reason) => {
+                log(`✗ Rider disconnected: ${reason}`, 'error');
+                updateStatus('rider', false);
+                document.getElementById('riderLocationDisplay').style.display = 'none';
+            });
+
+            riderSocket.on('connect_error', (error) => {
+                log(`✗ Connection error: ${error.message}`, 'error');
+                updateStatus('rider', false);
+            });
+
+            riderSocket.on('location_update', (data) => {
+                log(`📍 Location: (${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}), ETA: ${Math.round(data.eta_minutes)}min`, 'event');
+
+                document.getElementById('riderLocationDisplay').style.display = 'block';
+                document.getElementById('riderLat').textContent = data.latitude.toFixed(6);
+                document.getElementById('riderLng').textContent = data.longitude.toFixed(6);
+                document.getElementById('riderEta').textContent = `${Math.round(data.eta_minutes)} min`;
+                document.getElementById('riderSpeed').textContent = `${Math.round(data.speed)} km/h`;
+                document.getElementById('riderHeading').textContent = `${Math.round(data.heading)}°`;
+                document.getElementById('riderDistance').textContent = `${data.distance_remaining_miles.toFixed(1)} mi`;
+            });
+
+            riderSocket.on('tracking_started', (data) => {
+                log(`🚀 Tracking started for ride ${data.ride_id}`, 'event');
+            });
+
+            riderSocket.on('tracking_ended', (data) => {
+                log(`🏁 Tracking ended: ${data.reason}`, 'event');
+                document.getElementById('riderLocationDisplay').style.display = 'none';
+            });
+        }
+
+        function disconnectRider() {
+            if (riderSocket) {
+                riderSocket.disconnect();
+                riderSocket = null;
+                log('Rider disconnected', 'info');
+                updateStatus('rider', false);
+            }
+        }
+
+        function joinRide() {
+            const rideId = document.getElementById('rideIdInput').value;
+            if (!rideId) {
+                alert('Please enter a ride ID');
+                return;
+            }
+
+            riderSocket.emit('join_ride', { ride_id: rideId }, (response) => {
+                if (response.error) {
+                    log(`✗ Join ride failed: ${response.error}`, 'error');
+                } else {
+                    log(`✓ Joined ride room: ${response.room}`, 'info');
+                }
+            });
+        }
+
+        function leaveRide() {
+            const rideId = document.getElementById('rideIdInput').value;
+            riderSocket.emit('leave_ride', { ride_id: rideId });
+            log('Left ride room', 'info');
+            document.getElementById('riderLocationDisplay').style.display = 'none';
+        }
+
+        // ============= ADMIN FUNCTIONS =============
+
+        function connectAdmin() {
+            const token = document.getElementById('adminToken').value;
+            if (!token) {
+                alert('Please enter admin JWT token');
+                return;
+            }
+
+            if (adminSocket?.connected) {
+                log('Already connected to admin tracking', 'warn');
+                return;
+            }
+
+            log(`Connecting admin to ${currentConfig.server}/tracking...`, 'info');
+
+            adminSocket = io(`${currentConfig.server}/tracking`, {
+                path: currentConfig.path,
+                auth: { token: token },
+                transports: ['websocket', 'polling']
+            });
+
+            adminSocket.on('connect', () => {
+                log('✓ Admin connected to tracking service', 'info');
+                updateStatus('admin', true);
+            });
+
+            adminSocket.on('disconnect', () => {
+                log('✗ Admin disconnected', 'error');
+                updateStatus('admin', false);
+            });
+
+            adminSocket.on('connect_error', (error) => {
+                log(`✗ Admin connection error: ${error.message}`, 'error');
+            });
+
+            adminSocket.on('dispatch_location_update', (data) => {
+                updateCount++;
+                activeDriversSet.add(data.driver_id);
+
+                document.getElementById('totalUpdates').textContent = updateCount;
+                document.getElementById('activeDriverCount').textContent = activeDriversSet.size;
+
+                log(`🗺️ Dispatch: Driver ${data.driver_id.substring(0, 8)} at (${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)})`, 'event');
+            });
+
+            adminSocket.on('tracking_ended', (data) => {
+                activeDriversSet.delete(data.driver_id);
+                document.getElementById('activeDriverCount').textContent = activeDriversSet.size;
+            });
+        }
+
+        function disconnectAdmin() {
+            if (adminSocket) {
+                adminSocket.disconnect();
+                adminSocket = null;
+                log('Admin disconnected', 'info');
+                updateStatus('admin', false);
+            }
+        }
+
+        function joinDispatch() {
+            adminSocket.emit('join_dispatch_center', {}, (response) => {
+                if (response.error) {
+                    log(`✗ Join dispatch failed: ${response.error}`, 'error');
+                    alert('Admin access required');
+                } else {
+                    log(`✓ Joined dispatch center`, 'info');
+                }
+            });
+        }
+
+        function leaveDispatch() {
+            adminSocket.emit('leave_dispatch_center');
+            log('Left dispatch center', 'info');
+        }
+
+        // ============= SIMULATION FUNCTIONS =============
+
+        async function simulateSingleUpdate() {
+            const driverId = document.getElementById('simDriverId').value;
+            if (!driverId) {
+                alert('Please enter driver ID');
+                return;
+            }
+
+            const lat = 43.6532 + (Math.random() - 0.5) * 0.01;
+            const lng = -79.3832 + (Math.random() - 0.5) * 0.01;
+
+            try {
+                const response = await fetch(`${currentConfig.server}/api/v1/tracking/test/simulate-location`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        driver_id: driverId,
+                        latitude: lat,
+                        longitude: lng,
+                        heading: Math.random() * 360,
+                        speed: 30 + Math.random() * 30
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    log(`✓ Simulated location update sent`, 'info');
+                } else {
+                    log(`✗ Simulation failed: ${result.message}`, 'error');
+                }
+            } catch (error) {
+                log(`✗ Simulation error: ${error.message}`, 'error');
+            }
+        }
+
+        async function simulateRoute() {
+            const driverId = document.getElementById('simDriverId').value;
+            if (!driverId) {
+                alert('Please enter driver ID');
+                return;
+            }
+
+            const route = [
+                { lat: 43.6456, lng: -79.3805, heading: 45, speed: 0 },
+                { lat: 43.6460, lng: -79.3795, heading: 45, speed: 35 },
+                { lat: 43.6470, lng: -79.3785, heading: 50, speed: 40 },
+                { lat: 43.6480, lng: -79.3775, heading: 55, speed: 38 },
+                { lat: 43.6490, lng: -79.3765, heading: 60, speed: 25 },
+                { lat: 43.6500, lng: -79.3760, heading: 90, speed: 30 },
+                { lat: 43.6510, lng: -79.3750, heading: 95, speed: 35 },
+                { lat: 43.6520, lng: -79.3740, heading: 100, speed: 20 },
+                { lat: 43.6525, lng: -79.3735, heading: 105, speed: 5 },
+                { lat: 43.6527, lng: -79.3733, heading: 105, speed: 0 }
+            ];
+
+            log(`🧪 Starting route simulation (${route.length} points)...`, 'info');
+
+            let index = 0;
+            simulationInterval = setInterval(async () => {
+                if (index >= route.length) {
+                    stopSimulation();
+                    log('✓ Route simulation complete', 'info');
+                    return;
+                }
+
+                const point = route[index];
+                try {
+                    const response = await fetch(`${currentConfig.server}/api/v1/tracking/test/simulate-location`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            driver_id: driverId,
+                            ...point
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        log(`🚗 Waypoint ${index + 1}/${route.length}: (${point.lat}, ${point.lng})`, 'info');
+                    }
+                } catch (error) {
+                    log(`✗ Simulation error: ${error.message}`, 'error');
+                }
+
+                index++;
+            }, 3000);
+        }
+
+        function stopSimulation() {
+            if (simulationInterval) {
+                clearInterval(simulationInterval);
+                simulationInterval = null;
+                log('Simulation stopped', 'warn');
+            }
+        }
+
+        // Initialize
+        updateConfig();
+        log('Ready to connect. Select environment and click Connect.', 'info');
+    </script>
+</body>
+</html>

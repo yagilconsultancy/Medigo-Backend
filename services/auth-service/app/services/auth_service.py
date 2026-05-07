@@ -25,6 +25,7 @@ from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.events.schemas import (
     PasswordResetRequestedPayload,
+    UserOTPRequestedPayload,
     UserRegisteredPayload,
     UserVerifiedPayload,
 )
@@ -64,6 +65,36 @@ class AuthService:
         self.user_service_client = user_service_client
         self.login_history_service = login_history_service
 
+    @staticmethod
+    def _verification_details(credential: UserCredential) -> dict:
+        return {
+            "otp_verified": bool(credential.is_verified),
+            "user_id": str(credential.id),
+            "next_step": "verify_otp" if not credential.is_verified else None,
+        }
+
+    async def _publish_otp_requested(
+        self,
+        user_id: UUID,
+        purpose: str,
+        channel: str,
+        otp_code: str,
+        email: str | None,
+        phone: str | None,
+    ) -> None:
+        await self.publisher.publish(
+            Exchanges.AUTH,
+            RoutingKeys.USER_OTP_REQUESTED,
+            UserOTPRequestedPayload(
+                user_id=user_id,
+                purpose=purpose,
+                channel=channel,
+                otp_code=otp_code,
+                email=email,
+                phone=phone,
+            ).model_dump(mode="json"),
+        )
+
     async def register(
         self,
         email: str | None,
@@ -80,6 +111,11 @@ class AuthService:
         # Check if user already exists
         existing = await self.credential_repo.get_by_email_or_phone(email, phone)
         if existing:
+            if not existing.is_verified:
+                raise ConflictError(
+                    "Registration not completed. Please verify your OTP.",
+                    details=self._verification_details(existing),
+                )
             raise ConflictError("An account with this email or phone already exists")
 
         # Create credential
@@ -97,6 +133,15 @@ class AuthService:
         channel = "email" if email else "sms"
         otp_code = await self.otp_service.generate_otp(
             credential.id, "registration", channel
+        )
+
+        await self._publish_otp_requested(
+            user_id=credential.id,
+            purpose="registration",
+            channel=channel,
+            otp_code=otp_code,
+            email=email,
+            phone=phone,
         )
 
         # Publish event
@@ -174,7 +219,10 @@ class AuthService:
 
         # Check if verified
         if not credential.is_verified:
-            raise AuthenticationError("Account not verified. Please verify your OTP.")
+            raise AuthenticationError(
+                "Account not verified. Please verify your OTP.",
+                details=self._verification_details(credential),
+            )
 
         # Reset failed attempts
         await self.credential_repo.reset_failed_attempts(credential.id)
@@ -282,7 +330,10 @@ class AuthService:
                 success=False,
                 failure_reason="Account not verified",
             )
-            raise AuthenticationError("Account not verified. Please verify your OTP.")
+            raise AuthenticationError(
+                "Account not verified. Please verify your OTP.",
+                details=self._verification_details(credential),
+            )
 
         # Admin-only check
         if credential.role != UserRole.ADMIN:
@@ -466,7 +517,16 @@ class AuthService:
             raise NotFoundError("User not found")
 
         channel = "email" if credential.email else "sms"
-        return await self.otp_service.generate_otp(user_id, purpose, channel)
+        otp_code = await self.otp_service.generate_otp(user_id, purpose, channel)
+        await self._publish_otp_requested(
+            user_id=user_id,
+            purpose=purpose,
+            channel=channel,
+            otp_code=otp_code,
+            email=credential.email,
+            phone=credential.phone,
+        )
+        return otp_code
 
     async def forgot_password(
         self, email: str | None, phone: str | None
@@ -607,6 +667,15 @@ class AuthService:
         # Generate OTP
         otp_code = await self.otp_service.generate_otp(
             credential.id, "registration", "email"
+        )
+
+        await self._publish_otp_requested(
+            user_id=credential.id,
+            purpose="registration",
+            channel="email",
+            otp_code=otp_code,
+            email=email,
+            phone=None,
         )
 
         # Accept the invitation in user-service

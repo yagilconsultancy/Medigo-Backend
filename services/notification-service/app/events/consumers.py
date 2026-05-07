@@ -13,6 +13,7 @@ from app.config import settings
 from app.services.email_service import (
     send_admin_invite_email,
     send_driver_invite_email,
+    send_otp_email,
     send_password_reset_email,
     send_ride_notification_email,
 )
@@ -29,6 +30,7 @@ from mediride_common.events.schemas import (
     RideCreatedPayload,
     RideRequestPayload,
     RideStatusChangedPayload,
+    UserOTPRequestedPayload,
     UserRegisteredPayload,
 )
 from mediride_common.schemas.enums import NotificationType, RideStatus
@@ -43,9 +45,25 @@ class AuthEventConsumer(BaseEventConsumer):
         if envelope.event_type == RoutingKeys.USER_REGISTERED:
             payload = UserRegisteredPayload(**envelope.payload)
             if payload.email:
+                logger.info(f"User registered event received for {payload.email}")
+
+        elif envelope.event_type == RoutingKeys.USER_OTP_REQUESTED:
+            payload = UserOTPRequestedPayload(**envelope.payload)
+            if payload.email and payload.channel == "email":
+                await send_otp_email(
+                    to=payload.email,
+                    otp_code=payload.otp_code,
+                )
                 logger.info(
-                    f"User registered notification for {payload.email} "
-                    f"(OTP sent by auth-service directly in dev mode)"
+                    "OTP email sent to %s for purpose %s",
+                    payload.email,
+                    payload.purpose,
+                )
+            else:
+                logger.info(
+                    "OTP requested for user %s via unsupported channel %s",
+                    payload.user_id,
+                    payload.channel,
                 )
 
         elif envelope.event_type == RoutingKeys.DRIVER_INVITE_SENT:
@@ -456,7 +474,9 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
         routing_keys=[
             RoutingKeys.USER_REGISTERED,
             RoutingKeys.USER_VERIFIED,
+            RoutingKeys.USER_OTP_REQUESTED,
             RoutingKeys.DRIVER_INVITE_SENT,
+            RoutingKeys.ADMIN_INVITE_SENT,
             RoutingKeys.PASSWORD_RESET_REQUESTED,
         ],
     )
