@@ -67,8 +67,10 @@ class SafetyAlertRepository:
         return result.scalar_one()
 
     async def count_resolved_today(self) -> int:
-        from datetime import date, datetime, timezone
-        today_start = datetime.combine(date.today(), datetime.min.time()).replace(tzinfo=timezone.utc)
+        from app.config import settings
+        from mediride_common.utils import start_of_local_day_utc
+
+        today_start = start_of_local_day_utc(tz_name=settings.DEFAULT_TIMEZONE)
         result = await self.session.execute(
             select(func.count(SafetyAlert.id)).where(
                 SafetyAlert.status == "resolved",

@@ -50,15 +50,22 @@ class AuthEventConsumer(BaseEventConsumer):
         elif envelope.event_type == RoutingKeys.USER_OTP_REQUESTED:
             payload = UserOTPRequestedPayload(**envelope.payload)
             if payload.email and payload.channel == "email":
-                await send_otp_email(
+                sent = await send_otp_email(
                     to=payload.email,
                     otp_code=payload.otp_code,
                 )
-                logger.info(
-                    "OTP email sent to %s for purpose %s",
-                    payload.email,
-                    payload.purpose,
-                )
+                if sent:
+                    logger.info(
+                        "OTP email sent to %s for purpose %s",
+                        payload.email,
+                        payload.purpose,
+                    )
+                else:
+                    logger.error(
+                        "OTP email failed for %s for purpose %s",
+                        payload.email,
+                        payload.purpose,
+                    )
             else:
                 logger.info(
                     "OTP requested for user %s via unsupported channel %s",
@@ -68,32 +75,41 @@ class AuthEventConsumer(BaseEventConsumer):
 
         elif envelope.event_type == RoutingKeys.DRIVER_INVITE_SENT:
             payload = DriverInviteSentPayload(**envelope.payload)
-            await send_driver_invite_email(
+            sent = await send_driver_invite_email(
                 to=payload.email,
                 fleet_name=payload.fleet_name,
                 invite_token=payload.invite_token,
                 temporary_password=payload.temporary_password,
             )
-            logger.info(f"Driver invite email sent to {payload.email}")
+            if sent:
+                logger.info("Driver invite email sent to %s", payload.email)
+            else:
+                logger.error("Driver invite email failed for %s", payload.email)
 
         elif envelope.event_type == RoutingKeys.ADMIN_INVITE_SENT:
             payload = AdminInviteSentPayload(**envelope.payload)
-            await send_admin_invite_email(
+            sent = await send_admin_invite_email(
                 to=payload.email,
                 full_name=payload.full_name,
                 role_display_name=payload.role_display_name,
                 invite_token=payload.invite_token,
                 invited_by_name=payload.invited_by_name,
             )
-            logger.info(f"Admin invite email sent to {payload.email}")
+            if sent:
+                logger.info("Admin invite email sent to %s", payload.email)
+            else:
+                logger.error("Admin invite email failed for %s", payload.email)
 
         elif envelope.event_type == RoutingKeys.PASSWORD_RESET_REQUESTED:
             payload = PasswordResetRequestedPayload(**envelope.payload)
-            await send_password_reset_email(
+            sent = await send_password_reset_email(
                 to=payload.email,
                 reset_token=payload.reset_token,
             )
-            logger.info(f"Password reset email sent to {payload.email}")
+            if sent:
+                logger.info("Password reset email sent to %s", payload.email)
+            else:
+                logger.error("Password reset email failed for %s", payload.email)
 
 
 class RideEventConsumer(BaseEventConsumer):

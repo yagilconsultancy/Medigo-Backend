@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ride import Ride
 from mediride_common.schemas.enums import RideStatus
-from mediride_common.utils import utc_now
+from app.config import settings
+from mediride_common.utils import start_of_local_day_utc, utc_now
 
 
 ACTIVE_RIDE_STATUSES = [
@@ -337,8 +338,8 @@ class RideRepository:
         return result.scalars().first()
 
     async def get_completed_today_count(self) -> int:
-        """Count rides completed today (since midnight UTC)."""
-        today_start = utc_now().replace(hour=0, minute=0, second=0, microsecond=0)
+        """Count rides completed today using the configured local timezone."""
+        today_start = start_of_local_day_utc(tz_name=settings.DEFAULT_TIMEZONE)
         result = await self.session.execute(
             select(func.count()).where(
                 Ride.status == RideStatus.COMPLETED,

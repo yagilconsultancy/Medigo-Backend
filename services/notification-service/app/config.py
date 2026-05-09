@@ -1,3 +1,5 @@
+from pydantic import AliasChoices, Field
+
 from mediride_common.config import BaseServiceSettings
 
 
@@ -18,7 +20,7 @@ class NotificationSettings(BaseServiceSettings):
     # SMTP (Gmail)
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
-    SMTP_USERNAME: str = ""
+    SMTP_USERNAME: str = Field(default="", validation_alias=AliasChoices("SMTP_USERNAME", "SMTP_USER"))
     SMTP_PASSWORD: str = ""  # Gmail App Password
     EMAIL_FROM: str = "noreply@mediride.com"
 

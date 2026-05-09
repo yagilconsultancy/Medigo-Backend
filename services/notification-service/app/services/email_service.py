@@ -1,6 +1,7 @@
 import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
 import aiosmtplib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -8,10 +9,11 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
 # Template engine
 _template_env = Environment(
-    loader=FileSystemLoader("app/templates"),
+    loader=FileSystemLoader(str(_TEMPLATE_DIR)),
     autoescape=select_autoescape(["html"]),
 )
 
@@ -19,9 +21,13 @@ _template_env = Environment(
 async def send_email(to: str, subject: str, html_body: str) -> bool:
     """Send email via SMTP (Gmail with App Password)."""
     if not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
-        logger.warning(f"SMTP not configured. Would send to {to}: {subject}")
-        logger.info(f"Email body preview: {html_body[:200]}...")
-        return True
+        logger.warning(
+            "SMTP not configured. Email delivery skipped for %s: %s",
+            to,
+            subject,
+        )
+        logger.info("Email body preview: %s...", html_body[:200])
+        return False
 
     message = MIMEMultipart("alternative")
     message["From"] = settings.EMAIL_FROM
@@ -38,10 +44,10 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
             password=settings.SMTP_PASSWORD,
             start_tls=True,
         )
-        logger.info(f"Email sent to {to}: {subject}")
+        logger.info("Email sent to %s: %s", to, subject)
         return True
     except Exception as e:
-        logger.error(f"Failed to send email to {to}: {e}")
+        logger.exception("Failed to send email to %s: %s", to, e)
         return False
 
 
@@ -69,7 +75,7 @@ async def send_otp_email(to: str, otp_code: str) -> bool:
 async def send_driver_invite_email(
     to: str, fleet_name: str, invite_token: str, temporary_password: str | None = None
 ) -> bool:
-    """Send driver invitation email with login credentials."""
+    """Send driver invitation email with an OTP-style invite code."""
     try:
         template = _template_env.get_template("driver_invite.html")
         html = template.render(
@@ -78,7 +84,8 @@ async def send_driver_invite_email(
             email=to,
             temporary_password=temporary_password,
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to render driver invite email for %s: %s", to, e)
         # Fallback if template not found
         password_section = ""
         if temporary_password:
@@ -91,16 +98,20 @@ async def send_driver_invite_email(
         html = f"""
         <html>
         <body>
-            <h2>You're Invited to Drive with MediRide!</h2>
+            <h2>MediRide - Driver Invitation Code</h2>
             <p><strong>{fleet_name}</strong> has invited you to join their driver network.</p>
             {password_section}
-            <p>Download the MediRide Driver app and use this invitation code to sign up:</p>
-            <h3 style="color: #3B5998;">{invite_token}</h3>
+            <p>Use the code below in the MediRide Driver app to continue your registration:</p>
+            <h3 style="color: #3B5998; letter-spacing: 2px; word-break: break-all;">{invite_token}</h3>
             <p>This invitation expires in 7 days.</p>
         </body>
         </html>
         """
-    return await send_email(to, f"MediRide - Driver Invitation from {fleet_name}", html)
+    return await send_email(
+        to,
+        f"MediRide - Driver Invitation Code from {fleet_name}",
+        html,
+    )
 
 
 async def send_password_reset_email(to: str, reset_token: str) -> bool:
@@ -108,13 +119,14 @@ async def send_password_reset_email(to: str, reset_token: str) -> bool:
     try:
         template = _template_env.get_template("password_reset.html")
         html = template.render(reset_token=reset_token)
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to render password reset email for %s: %s", to, e)
         html = f"""
         <html>
         <body>
             <h2>MediRide - Reset Your Password</h2>
             <p>Use the following code to reset your password:</p>
-            <h3 style="color: #3B5998;">{reset_token}</h3>
+            <h3 style="color: #3B5998; letter-spacing: 2px; word-break: break-all;">{reset_token}</h3>
             <p>This code expires in 30 minutes.</p>
             <p>If you didn't request this, please ignore this email.</p>
         </body>
@@ -140,7 +152,8 @@ async def send_admin_invite_email(
             invite_token=invite_token,
             invited_by_name=invited_by_name,
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to render admin invite email for %s: %s", to, e)
         # Fallback if template not found
         html = f"""
         <html>

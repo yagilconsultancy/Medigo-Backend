@@ -2,7 +2,9 @@ import logging
 import secrets
 from uuid import UUID
 
+from app.clients.payment_service_client import PaymentServiceClient
 from app.clients.user_service_client import UserServiceClient
+from app.config import settings
 from app.models.ride import Ride
 from app.models.ride_rating import RideRating
 from app.models.ride_status_log import RideStatusLog
@@ -22,9 +24,13 @@ from mediride_common.events.schemas import (
 )
 from mediride_common.exceptions import NotFoundError, ValidationError
 from mediride_common.schemas.enums import RatingType, RideStatus, TripType
-from mediride_common.utils import utc_now
+from mediride_common.utils import normalize_to_utc, utc_now
 
 logger = logging.getLogger(__name__)
+
+
+def _enum_value(value):
+    return value.value if hasattr(value, "value") else value
 
 
 class RideService:
@@ -37,6 +43,7 @@ class RideService:
         recurring_ride_repo: RecurringRideRepository,
         publisher: EventPublisher,
         user_client: UserServiceClient,
+        payment_client: PaymentServiceClient | None = None,
     ):
         self.ride_repo = ride_repo
         self.request_repo = request_repo
@@ -45,10 +52,58 @@ class RideService:
         self.recurring_ride_repo = recurring_ride_repo
         self.publisher = publisher
         self.user_client = user_client
+        self.payment_client = payment_client or PaymentServiceClient(
+            settings.PAYMENT_SERVICE_URL
+        )
+
+    async def _populate_estimates(self, ride_data: dict) -> dict:
+        """Compute ride estimates server-side to avoid trusting caller defaults."""
+        estimate = await self.payment_client.estimate_ride(
+            pickup_address=ride_data["pickup_address"],
+            destination_address=ride_data["destination_address"],
+            pickup_latitude=ride_data.get("pickup_latitude"),
+            pickup_longitude=ride_data.get("pickup_longitude"),
+            destination_latitude=ride_data.get("destination_latitude"),
+            destination_longitude=ride_data.get("destination_longitude"),
+            scheduled_at=ride_data["scheduled_at"].isoformat(),
+            ride_type=_enum_value(ride_data["ride_type"]),
+            trip_type=_enum_value(ride_data.get("trip_type", TripType.TRANSPORT_ONLY)),
+            trip_structure=_enum_value(ride_data.get("trip_structure", "one_way")),
+            use_highway_407=ride_data.get("use_highway_407", False),
+            highway_407_route=ride_data.get("highway_407_route"),
+            is_dialysis_trip=ride_data.get("is_dialysis_trip", False),
+        )
+        if not estimate:
+            logger.warning(
+                "Using caller-provided ride estimates because payment-service estimate failed "
+                "for %s -> %s",
+                ride_data["pickup_address"],
+                ride_data["destination_address"],
+            )
+            return ride_data
+
+        ride_data["estimated_distance_miles"] = estimate.get("distance_miles")
+        duration_minutes = estimate.get("duration_minutes")
+        ride_data["estimated_duration_minutes"] = (
+            int(round(duration_minutes)) if duration_minutes is not None else None
+        )
+        ride_data["estimated_fare"] = estimate.get("total_fare")
+        return ride_data
 
     # ---- Core Ride Operations ----
 
     async def create_ride(self, rider_id: UUID, **ride_data) -> Ride:
+        if ride_data.get("scheduled_at"):
+            ride_data["scheduled_at"] = normalize_to_utc(
+                ride_data["scheduled_at"],
+                settings.DEFAULT_TIMEZONE,
+            )
+        if ride_data.get("appointment_time"):
+            ride_data["appointment_time"] = normalize_to_utc(
+                ride_data["appointment_time"],
+                settings.DEFAULT_TIMEZONE,
+            )
+
         # Validate: TRANSPORT_CARE_ASSISTANT requires a future scheduled ride
         trip_type = ride_data.get("trip_type", TripType.TRANSPORT_ONLY)
         if trip_type == TripType.TRANSPORT_CARE_ASSISTANT:
@@ -63,6 +118,7 @@ class RideService:
             ride_data.setdefault("booking_channel", "website_guest")
             ride_data.setdefault("share_token", secrets.token_urlsafe(32))
 
+        ride_data = await self._populate_estimates(ride_data)
         ride = Ride(rider_id=rider_id, **ride_data)
         ride = await self.ride_repo.create(ride)
 
@@ -457,28 +513,39 @@ class RideService:
         if original.rider_id != rider_id:
             raise ValidationError("Not your ride")
 
+        scheduled_at = normalize_to_utc(scheduled_at, settings.DEFAULT_TIMEZONE)
+
+        new_ride_data = await self._populate_estimates(
+            {
+                "business_id": original.business_id,
+                "ride_type": original.ride_type,
+                "trip_type": original.trip_type,
+                "trip_structure": original.trip_structure,
+                "pickup_address": original.pickup_address,
+                "pickup_latitude": original.pickup_latitude,
+                "pickup_longitude": original.pickup_longitude,
+                "destination_address": original.destination_address,
+                "destination_latitude": original.destination_latitude,
+                "destination_longitude": original.destination_longitude,
+                "scheduled_at": scheduled_at,
+                "visit_type": original.visit_type,
+                "facility_name": original.facility_name,
+                "special_instructions": original.special_instructions,
+                "passenger_id": original.passenger_id,
+                "mobility_level": original.mobility_level,
+                "assistance_level": original.assistance_level,
+                "use_highway_407": original.use_highway_407,
+                "highway_407_route": original.highway_407_route,
+                "is_dialysis_trip": original.is_dialysis_trip,
+                "estimated_distance_miles": original.estimated_distance_miles,
+                "estimated_duration_minutes": original.estimated_duration_minutes,
+                "estimated_fare": original.estimated_fare,
+            }
+        )
+
         new_ride = Ride(
             rider_id=rider_id,
-            business_id=original.business_id,
-            ride_type=original.ride_type,
-            trip_type=original.trip_type,
-            trip_structure=original.trip_structure,
-            pickup_address=original.pickup_address,
-            pickup_latitude=original.pickup_latitude,
-            pickup_longitude=original.pickup_longitude,
-            destination_address=original.destination_address,
-            destination_latitude=original.destination_latitude,
-            destination_longitude=original.destination_longitude,
-            scheduled_at=scheduled_at,
-            visit_type=original.visit_type,
-            facility_name=original.facility_name,
-            special_instructions=original.special_instructions,
-            passenger_id=original.passenger_id,
-            mobility_level=original.mobility_level,
-            assistance_level=original.assistance_level,
-            estimated_distance_miles=original.estimated_distance_miles,
-            estimated_duration_minutes=original.estimated_duration_minutes,
-            estimated_fare=original.estimated_fare,
+            **new_ride_data,
         )
         new_ride = await self.ride_repo.create(new_ride)
 

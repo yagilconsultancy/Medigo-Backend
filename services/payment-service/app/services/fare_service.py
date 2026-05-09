@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
+from app.config import settings
 from app.models.fare_breakdown import FareBreakdown
 from app.repositories.dialysis_rate_plan_repo import DialysisRatePlanRepository
 from app.repositories.fare_repo import FareBreakdownRepository
@@ -13,7 +14,6 @@ from app.repositories.weather_condition_repo import WeatherConditionRepository
 logger = logging.getLogger(__name__)
 
 MILES_TO_KM = 1.60934
-DEFAULT_TIMEZONE = "America/Toronto"
 
 # Map ride_type enum values to service_type_configs.service_type keys
 _RIDE_TYPE_TO_SERVICE_TYPE = {
@@ -107,7 +107,7 @@ class FareService:
             raise ValueError("No active rate card found. Cannot calculate fare.")
         config = rate_card.config
 
-        tz_name = config.get("timezone", DEFAULT_TIMEZONE)
+        tz_name = config.get("timezone", settings.DEFAULT_TIMEZONE)
         tz = ZoneInfo(tz_name)
 
         # 2. Resolve per-ride-type rates from ServiceTypeConfig
@@ -398,7 +398,7 @@ def _get_ride_datetime(ride_data: dict, tz: ZoneInfo) -> datetime:
             dt = _parse_timestamp(val)
             if dt:
                 if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+                    dt = dt.replace(tzinfo=ZoneInfo(settings.DEFAULT_TIMEZONE))
                 return dt.astimezone(tz)
 
     return datetime.now(tz)

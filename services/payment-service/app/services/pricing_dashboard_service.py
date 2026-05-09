@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from app.config import settings
 from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +22,7 @@ class PricingDashboardService:
         self.log_repo = PricingChangeLogRepository(session)
 
     async def get_kpis(self) -> dict:
-        now = datetime.now(ZoneInfo("America/Toronto"))
+        now = datetime.now(ZoneInfo(settings.DEFAULT_TIMEZONE))
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         # Monthly revenue

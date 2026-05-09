@@ -7,6 +7,7 @@ class BaseServiceSettings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
     DEBUG: bool = False
+    DEFAULT_TIMEZONE: str = "America/Toronto"
 
     # RabbitMQ
     RABBITMQ_URL: str = "amqp://mediride:dev_password@rabbitmq:5672/mediride"
