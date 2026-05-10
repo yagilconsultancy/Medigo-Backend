@@ -74,7 +74,7 @@ async def send_otp_email(to: str, otp_code: str) -> bool:
         html = f"""
         <html>
         <body>
-            <h2>MediRide - Verify Your Account</h2>
+            <h2>MediGo - Verify Your Account</h2>
             <p>Your verification code is:</p>
             <h1 style="color: #3B5998; letter-spacing: 5px;">{otp_code}</h1>
             <p>This code expires in 5 minutes.</p>
@@ -82,7 +82,7 @@ async def send_otp_email(to: str, otp_code: str) -> bool:
         </body>
         </html>
         """
-    return await send_email(to, "MediRide - Verification Code", html)
+    return await send_email(to, "MediGo - Verification Code", html)
 
 
 async def send_driver_invite_email(
@@ -111,10 +111,10 @@ async def send_driver_invite_email(
         html = f"""
         <html>
         <body>
-            <h2>MediRide - Driver Invitation Code</h2>
+            <h2>MediGo - Driver Invitation Code</h2>
             <p><strong>{fleet_name}</strong> has invited you to join their driver network.</p>
             {password_section}
-            <p>Use the code below in the MediRide Driver app to continue your registration:</p>
+            <p>Use the code below in the MediGo Driver app to continue your registration:</p>
             <h3 style="color: #3B5998; letter-spacing: 2px; word-break: break-all;">{invite_token}</h3>
             <p>This invitation expires in 7 days.</p>
         </body>
@@ -122,7 +122,7 @@ async def send_driver_invite_email(
         """
     return await send_email(
         to,
-        f"MediRide - Driver Invitation Code from {fleet_name}",
+        f"MediGo - Driver Invitation Code from {fleet_name}",
         html,
     )
 
@@ -137,7 +137,7 @@ async def send_password_reset_email(to: str, reset_token: str) -> bool:
         html = f"""
         <html>
         <body>
-            <h2>MediRide - Reset Your Password</h2>
+            <h2>MediGo - Reset Your Password</h2>
             <p>Use the following code to reset your password:</p>
             <h3 style="color: #3B5998; letter-spacing: 2px; word-break: break-all;">{reset_token}</h3>
             <p>This code expires in 30 minutes.</p>
@@ -145,7 +145,7 @@ async def send_password_reset_email(to: str, reset_token: str) -> bool:
         </body>
         </html>
         """
-    return await send_email(to, "MediRide - Password Reset", html)
+    return await send_email(to, "MediGo - Password Reset", html)
 
 
 async def send_admin_invite_email(
@@ -171,9 +171,9 @@ async def send_admin_invite_email(
         html = f"""
         <html>
         <body>
-            <h2>Welcome to the MediRide Team!</h2>
+            <h2>Welcome to the MediGo Team!</h2>
             <p>Hi <strong>{full_name}</strong>,</p>
-            <p>You've been invited to join the MediRide admin team as a <strong>{role_display_name}</strong>.</p>
+            <p>You've been invited to join the MediGo admin team as a <strong>{role_display_name}</strong>.</p>
             <p><strong>Invited by:</strong> {invited_by_name}</p>
             <p>Use this invitation code to register:</p>
             <h3 style="color: #8B5CF6;">{invite_token}</h3>
@@ -182,7 +182,7 @@ async def send_admin_invite_email(
         </body>
         </html>
         """
-    return await send_email(to, "MediRide - Admin Invitation", html)
+    return await send_email(to, "MediGo - Admin Invitation", html)
 
 
 async def send_ride_notification_email(
@@ -221,18 +221,18 @@ async def send_ride_notification_email(
     <body>
         <div class="container">
             <div class="header">
-                <h1>MediRide</h1>
+                <h1>MediGo</h1>
             </div>
             <div class="content">
                 <p>Hi {name},</p>
                 <h2>{title}</h2>
                 <p>{body}</p>
                 {ride_info}
-                <p>You can view your ride details in the MediRide app.</p>
-                <p>Thank you for choosing MediRide!</p>
+                <p>You can view your ride details in the MediGo app.</p>
+                <p>Thank you for choosing MediGo!</p>
             </div>
             <div class="footer">
-                <p>&copy; 2026 MediRide. All rights reserved.</p>
+                <p>&copy; 2026 MediGo. All rights reserved.</p>
                 <p>This is an automated notification. Please do not reply to this email.</p>
             </div>
         </div>
