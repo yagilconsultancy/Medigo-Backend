@@ -14,8 +14,6 @@ Test Accounts:
     - driver@test.com     (driver)      password: Test1234
     - admin@test.com      (admin)       password: Test1234
     - business@test.com   (business)    password: Test1234
-
-OTP for all accounts: 123456
 """
 
 import asyncio
@@ -110,7 +108,8 @@ async def seed():
     print("  SEED DATA COMPLETE")
     print("=" * 60)
     print(f"  Password for all accounts: {DEFAULT_PASSWORD}")
-    print(f"  OTP for verification:      123456")
+    print("  Seeded users are already verified.")
+    print("  New registration OTPs are generated dynamically.")
     print()
     print("  Test Accounts:")
     for user_data in SEED_USERS:

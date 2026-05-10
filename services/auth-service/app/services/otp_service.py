@@ -1,5 +1,3 @@
-import logging
-
 from datetime import timedelta
 from uuid import UUID
 
@@ -8,11 +6,6 @@ from app.models.otp import OTPRecord
 from app.repositories.otp_repo import OTPRepository
 from mediride_common.exceptions import RateLimitError, ValidationError
 from mediride_common.utils import generate_otp, utc_now
-
-logger = logging.getLogger(__name__)
-
-# Default OTP for development (when email/SMS is not configured)
-DEV_DEFAULT_OTP = "123456"
 
 
 class OTPService:
@@ -27,12 +20,7 @@ class OTPService:
         if recent_count >= settings.OTP_MAX_REQUESTS_PER_HOUR:
             raise RateLimitError("Too many OTP requests. Please try again later.")
 
-        # Use fixed OTP when email/SMS is not configured (dev/staging)
-        if settings.ENVIRONMENT != "production":
-            code = DEV_DEFAULT_OTP
-            logger.info(f"[DEV] Using default OTP: {code} for user {user_id}")
-        else:
-            code = generate_otp()
+        code = generate_otp()
 
         otp = OTPRecord(
             user_id=user_id,

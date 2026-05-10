@@ -61,7 +61,7 @@ async def test_register_publishes_otp_requested_event():
     credential_repo.create = AsyncMock()
     token_repo = MagicMock()
     otp_service = MagicMock()
-    otp_service.generate_otp = AsyncMock(return_value="123456")
+    otp_service.generate_otp = AsyncMock(return_value="482913")
     publisher = MagicMock()
     publisher.publish = AsyncMock()
 
@@ -91,7 +91,7 @@ async def test_register_publishes_otp_requested_event():
     assert otp_publish_call.args[0] == Exchanges.AUTH
     assert otp_publish_call.args[1] == RoutingKeys.USER_OTP_REQUESTED
     assert otp_publish_call.args[2]["email"] == "rider@example.com"
-    assert otp_publish_call.args[2]["otp_code"] == "123456"
+    assert otp_publish_call.args[2]["otp_code"] == "482913"
     assert otp_publish_call.args[2]["purpose"] == "registration"
     assert otp_publish_call.args[2]["channel"] == "email"
 

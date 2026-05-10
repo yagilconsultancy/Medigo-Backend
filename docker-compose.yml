@@ -268,11 +268,14 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       SES_CONFIGURATION_SET: ${SES_CONFIGURATION_SET:-}
-      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_HOST: ${SMTP_HOST:-smtp.zeptomail.ca}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@mediride.com}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-30}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@getmedigo.com}
     depends_on:
       postgres-notifications:
         condition: service_healthy

@@ -17,12 +17,15 @@ class NotificationSettings(BaseServiceSettings):
     AWS_SECRET_ACCESS_KEY: str = ""
     SES_CONFIGURATION_SET: str = ""
 
-    # SMTP (Gmail)
-    SMTP_HOST: str = "smtp.gmail.com"
+    # SMTP (ZeptoMail / Zoho)
+    SMTP_HOST: str = "smtp.zeptomail.ca"
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = Field(default="", validation_alias=AliasChoices("SMTP_USERNAME", "SMTP_USER"))
-    SMTP_PASSWORD: str = ""  # Gmail App Password
-    EMAIL_FROM: str = "noreply@mediride.com"
+    SMTP_PASSWORD: str = Field(default="", validation_alias=AliasChoices("SMTP_PASSWORD", "SMTP_PASS"))
+    SMTP_STARTTLS: bool = True
+    SMTP_USE_TLS: bool = False
+    SMTP_TIMEOUT_SECONDS: int = 30
+    EMAIL_FROM: str = "noreply@getmedigo.com"
 
 
 settings = NotificationSettings()

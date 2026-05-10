@@ -1,0 +1,77 @@
+import os
+import sys
+import types
+
+import pytest
+
+from mediride_common.exceptions import ServiceUnavailableError
+
+os.environ["DEBUG"] = "false"
+os.environ["ENVIRONMENT"] = "development"
+
+
+class _DummyTemplateEnv:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def get_template(self, *args, **kwargs):
+        raise RuntimeError("template loading is not needed in this test")
+
+
+_send_calls = []
+
+
+async def _dummy_send(message, **kwargs):
+    _send_calls.append({"message": message, **kwargs})
+
+
+sys.modules["aiosmtplib"] = types.SimpleNamespace(send=_dummy_send)
+sys.modules["jinja2"] = types.SimpleNamespace(
+    Environment=_DummyTemplateEnv,
+    FileSystemLoader=lambda *args, **kwargs: None,
+    select_autoescape=lambda *args, **kwargs: None,
+)
+
+from app.services import email_service
+
+
+@pytest.fixture(autouse=True)
+def _reset_settings(monkeypatch):
+    _send_calls.clear()
+    monkeypatch.setattr(email_service.aiosmtplib, "send", _dummy_send, raising=False)
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.zeptomail.ca")
+    monkeypatch.setattr(email_service.settings, "SMTP_PORT", 587)
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "emailapikey")
+    monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "secret")
+    monkeypatch.setattr(email_service.settings, "SMTP_STARTTLS", True)
+    monkeypatch.setattr(email_service.settings, "SMTP_USE_TLS", False)
+    monkeypatch.setattr(email_service.settings, "SMTP_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(email_service.settings, "EMAIL_FROM", "noreply@getmedigo.com")
+
+
+@pytest.mark.asyncio
+async def test_send_email_uses_starttls_for_submission_port():
+    sent = await email_service.send_email(
+        to="user@example.com",
+        subject="Test Email",
+        html_body="<p>Hello</p>",
+    )
+
+    assert sent is True
+    assert len(_send_calls) == 1
+    assert _send_calls[0]["hostname"] == "smtp.zeptomail.ca"
+    assert _send_calls[0]["port"] == 587
+    assert _send_calls[0]["start_tls"] is True
+    assert _send_calls[0]["use_tls"] is False
+
+
+@pytest.mark.asyncio
+async def test_send_email_requires_complete_smtp_configuration(monkeypatch):
+    monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "")
+
+    with pytest.raises(ServiceUnavailableError):
+        await email_service.send_email(
+            to="user@example.com",
+            subject="Test Email",
+            html_body="<p>Hello</p>",
+        )

@@ -7,6 +7,7 @@ import aiosmtplib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.config import settings
+from mediride_common.exceptions import RetryableError, ServiceUnavailableError
 
 logger = logging.getLogger(__name__)
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -19,21 +20,31 @@ _template_env = Environment(
 
 
 async def send_email(to: str, subject: str, html_body: str) -> bool:
-    """Send email via SMTP (Gmail with App Password)."""
-    if not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
-        logger.warning(
-            "SMTP not configured. Email delivery skipped for %s: %s",
-            to,
-            subject,
+    """Send email via SMTP."""
+    missing_fields = [
+        name
+        for name, value in (
+            ("SMTP_HOST", settings.SMTP_HOST),
+            ("SMTP_PORT", settings.SMTP_PORT),
+            ("SMTP_USERNAME", settings.SMTP_USERNAME),
+            ("SMTP_PASSWORD", settings.SMTP_PASSWORD),
+            ("EMAIL_FROM", settings.EMAIL_FROM),
         )
-        logger.info("Email body preview: %s...", html_body[:200])
-        return False
+        if not value
+    ]
+    if missing_fields:
+        raise ServiceUnavailableError(
+            f"SMTP is not fully configured: missing {', '.join(missing_fields)}"
+        )
 
     message = MIMEMultipart("alternative")
     message["From"] = settings.EMAIL_FROM
     message["To"] = to
     message["Subject"] = subject
     message.attach(MIMEText(html_body, "html"))
+
+    use_tls = settings.SMTP_USE_TLS or settings.SMTP_PORT == 465
+    start_tls = settings.SMTP_STARTTLS and not use_tls
 
     try:
         await aiosmtplib.send(
@@ -42,13 +53,15 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
             port=settings.SMTP_PORT,
             username=settings.SMTP_USERNAME,
             password=settings.SMTP_PASSWORD,
-            start_tls=True,
+            start_tls=start_tls,
+            use_tls=use_tls,
+            timeout=settings.SMTP_TIMEOUT_SECONDS,
         )
         logger.info("Email sent to %s: %s", to, subject)
         return True
     except Exception as e:
         logger.exception("Failed to send email to %s: %s", to, e)
-        return False
+        raise RetryableError(f"SMTP delivery failed for {to}") from e
 
 
 async def send_otp_email(to: str, otp_code: str) -> bool:
