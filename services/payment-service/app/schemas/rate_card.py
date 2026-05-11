@@ -327,6 +327,12 @@ class BaseFareEstimateRequest(BaseModel):
     destination_latitude: float | None = None
     destination_longitude: float | None = None
 
+    scheduled_at: datetime | None = None
+    use_highway_407: bool = False
+    highway_407_route: str | None = None
+    is_dialysis_trip: bool = False
+    trip_structure: str = "one_way"
+
     @model_validator(mode="after")
     def validate_locations(self):
         has_pickup = bool(self.pickup_address) or (
@@ -349,6 +355,22 @@ class BaseFareEstimateItem(BaseModel):
     base_fare: float
     distance_charge: float
     estimated_total: float
+    wait_time_charge: float = 0
+    surcharges_total: float = 0
+    surcharges_capped: float = 0
+    highway_407_toll: float = 0
+    insurance_gateway_fee: float = 0
+    flat_surcharge: float = 0
+    platform_fee: float = 0
+    driver_earnings: float = 0
+    care_assistant_fee: float = 0
+    accessibility_fee: float = 0
+    attendant_fee: float = 0
+    rate_card_version: int | None = None
+    ride_type: str = "ambulatory"
+    trip_type: str = "transport_only"
+    is_round_trip: bool = False
+    return_distance_charge: float = 0
     description: str
     passengers: str
     best_for: str

@@ -5,6 +5,7 @@ from uuid import UUID
 import httpx
 
 logger = logging.getLogger(__name__)
+_HEADERS = {"X-Internal-Service": "notification-service"}
 
 
 class UserServiceClient:
@@ -17,7 +18,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/users/{user_id}/profile",
-                    headers={"X-Internal-Service": "notification-service"},
+                    headers=_HEADERS,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -35,11 +36,26 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/drivers/{driver_id}/profile",
-                    headers={"X-Internal-Service": "notification-service"},
+                    headers=_HEADERS,
                 )
                 if resp.status_code == 200:
                     return resp.json()
                 return None
         except Exception as e:
             logger.error(f"Error fetching driver profile: {e}")
+            return None
+
+    async def get_user_settings(self, user_id: UUID) -> dict | None:
+        """Get user settings needed for email delivery decisions."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/users/{user_id}/settings",
+                    headers=_HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                return None
+        except Exception as e:
+            logger.error(f"Error fetching user settings: {e}")
             return None

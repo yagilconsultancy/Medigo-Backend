@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.stripe_client import StripeClient
 from app.dependencies import get_db, get_stripe_client
 from app.repositories.payment_method_repo import PaymentMethodRepository
+from app.repositories.transaction_repo import TransactionRepository
 from app.schemas.mobile_payment import (
     CreateMobilePaymentIntentRequest,
     MobilePaymentIntentResponse,
@@ -23,6 +24,7 @@ def _get_mobile_payment_service(
 ) -> MobilePaymentService:
     return MobilePaymentService(
         pm_repo=PaymentMethodRepository(session),
+        tx_repo=TransactionRepository(session),
         stripe_client=stripe,
     )
 

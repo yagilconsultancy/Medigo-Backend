@@ -12,7 +12,7 @@ class CreateMobilePaymentIntentRequest(BaseModel):
     amount: float = Field(..., gt=0)
     currency: str | None = Field(None)
     description: str | None = Field(None, max_length=500)
-    order_id: str | None = Field(None, max_length=255)
+    order_id: str = Field(..., min_length=1, max_length=255)
     metadata: dict[str, str] = Field(default_factory=dict)
     customer_session_api_version: str | None = Field(None, max_length=64)
     setup_future_usage: Literal["on_session", "off_session"] | None = None

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        .logo { text-align: center; color: #3B5998; font-size: 24px; font-weight: bold; margin-bottom: 30px; }
+        .message { color: #555; line-height: 1.6; }
+        .receipt-box { background: #f0f4ff; padding: 20px; border-radius: 8px; margin: 24px 0; }
+        .receipt-row { margin: 10px 0; color: #333; }
+        .total { font-size: 24px; font-weight: bold; color: #3B5998; margin-top: 18px; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% include "_email_logo.html" %}
+        <h2 style="text-align: center; color: #333;">Your Payment Receipt</h2>
+        <p class="message">Hi {{ name }},</p>
+        <p class="message">Your Stripe payment was successful. Here is your ride receipt.</p>
+
+        <div class="receipt-box">
+            <div class="receipt-row"><strong>Trip number:</strong> {{ trip_number }}</div>
+            <div class="receipt-row"><strong>Ride date:</strong> {{ ride_date }}</div>
+            <div class="receipt-row"><strong>Pickup:</strong> {{ pickup_address }}</div>
+            <div class="receipt-row"><strong>Destination:</strong> {{ destination_address }}</div>
+            <div class="receipt-row"><strong>Payment method:</strong> {{ payment_method_type }} ending in {{ payment_method_last_four }}</div>
+            <div class="receipt-row"><strong>Payment status:</strong> Paid</div>
+            <div class="receipt-row"><strong>Processed at:</strong> {{ paid_at }}</div>
+            <div class="total">Total: {{ currency }} {{ total_fare }}</div>
+        </div>
+
+        <p class="message">You can view the full receipt in the MediRide app.</p>
+
+        <div class="footer">
+            <p>&copy; 2026 MediGo. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>

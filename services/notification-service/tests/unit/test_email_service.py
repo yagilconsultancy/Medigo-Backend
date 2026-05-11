@@ -75,3 +75,27 @@ async def test_send_email_requires_complete_smtp_configuration(monkeypatch):
             subject="Test Email",
             html_body="<p>Hello</p>",
         )
+
+
+@pytest.mark.asyncio
+async def test_send_payment_receipt_email_formats_receipt_contents():
+    sent = await email_service.send_payment_receipt_email(
+        to="rider@example.com",
+        name="Rider One",
+        receipt={
+            "trip_number": "TRIP-ABC123",
+            "currency": "CAD",
+            "total_fare": 24.5,
+            "ride_date": "2026-05-11T09:00:00Z",
+            "pickup_address": "1 Main St",
+            "destination_address": "2 Elm St",
+            "payment_method_type": "visa",
+            "payment_method_last_four": "4242",
+            "paid_at": "2026-05-11T09:45:00Z",
+        },
+    )
+
+    assert sent is True
+    assert len(_send_calls) == 1
+    assert _send_calls[0]["message"]["To"] == "rider@example.com"
+    assert "Receipt for TRIP-ABC123" in _send_calls[0]["message"]["Subject"]

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db
 from app.repositories.fleet_repo import FleetRepository
 from app.repositories.invitation_repo import InvitationRepository
+from app.repositories.settings_repo import SettingsRepository
 from app.repositories.user_repo import UserRepository
 from app.services.user_service import UserService
 from mediride_common.schemas.enums import UserRole
@@ -111,6 +112,23 @@ async def get_user_profile_internal(
         "avatar_url": user.avatar_url,
         "is_active": user.is_active,
         "is_guest": user.is_guest,
+    }
+
+
+@router.get("/users/{user_id}/settings")
+async def get_user_settings_internal(
+    user_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get user settings for internal notification decisions."""
+    settings_repo = SettingsRepository(session)
+    user_settings = await settings_repo.get_or_create(user_id)
+    return {
+        "user_id": str(user_id),
+        "email_ride_receipts": user_settings.email_ride_receipts,
+        "push_ride_updates": user_settings.push_ride_updates,
+        "sms_ride_updates": user_settings.sms_ride_updates,
     }
 
 

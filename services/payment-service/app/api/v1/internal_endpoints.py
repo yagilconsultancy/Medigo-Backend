@@ -27,6 +27,7 @@ from app.repositories.weather_condition_repo import WeatherConditionRepository
 from app.services.earnings_service import EarningsService
 from app.services.fare_service import FareService
 from app.services.payment_processing_service import PaymentProcessingService
+from app.services.receipt_service import ReceiptService
 from mediride_common.events.publisher import EventPublisher
 
 router = APIRouter()
@@ -171,6 +172,24 @@ async def refund_ride(
             "amount": float(refund_tx.amount),
         }
     return {"status": "no_payment_to_refund"}
+
+
+@router.get(
+    "/internal/payments/receipts/{ride_id}",
+    dependencies=[Depends(_verify_internal)],
+)
+async def get_receipt_internal(
+    ride_id: UUID,
+    user_id: UUID = Query(...),
+    session: AsyncSession = Depends(get_db),
+):
+    """Return receipt data for internal services that need email delivery."""
+    service = ReceiptService(
+        fare_repo=FareBreakdownRepository(session),
+        pm_repo=PaymentMethodRepository(session),
+        ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
+    )
+    return await service.generate_receipt(ride_id, user_id)
 
 
 @router.get(

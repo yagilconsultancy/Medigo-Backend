@@ -7,6 +7,7 @@ from app.repositories.conversation_repo import ConversationRepository
 from app.repositories.message_repo import MessageRepository
 from app.repositories.notification_repo import NotificationRepository
 from app.repositories.reaction_repo import ReactionRepository
+from app.clients.payment_service_client import PaymentServiceClient
 from app.services.chat_service import ChatService
 from app.clients.user_service_client import UserServiceClient
 from app.config import settings
@@ -15,6 +16,7 @@ from app.services.email_service import (
     send_driver_invite_email,
     send_otp_email,
     send_password_reset_email,
+    send_payment_receipt_email,
     send_ride_notification_email,
 )
 from app.services.notification_service import NotificationService
@@ -400,6 +402,8 @@ class PaymentEventConsumer(BaseEventConsumer):
     def __init__(self, broker: RabbitMQBroker, session_factory: async_sessionmaker[AsyncSession]):
         super().__init__(broker)
         self.session_factory = session_factory
+        self.user_client = UserServiceClient(settings.USER_SERVICE_URL)
+        self.payment_client = PaymentServiceClient(settings.PAYMENT_SERVICE_URL)
 
     async def handle(self, envelope: EventEnvelope) -> None:
         async with self.session_factory() as session:
@@ -419,6 +423,35 @@ class PaymentEventConsumer(BaseEventConsumer):
                             "screen": "payment_receipt",
                         },
                     )
+                    user_settings = await self.user_client.get_user_settings(payload.user_id)
+                    if user_settings and user_settings.get("email_ride_receipts") is False:
+                        logger.info(
+                            "Skipping receipt email for user %s because email_ride_receipts is disabled",
+                            payload.user_id,
+                        )
+                    else:
+                        user_info = await self.user_client.get_user_email(payload.user_id)
+                        if user_info and user_info.get("email"):
+                            receipt = await self.payment_client.get_receipt(
+                                payload.ride_id,
+                                payload.user_id,
+                            )
+                            receipt_data = receipt or {
+                                "trip_number": f"TRIP-{str(payload.ride_id)[:6].upper()}",
+                                "currency": "CAD",
+                                "total_fare": payload.amount,
+                                "ride_date": None,
+                                "pickup_address": "",
+                                "destination_address": "",
+                                "payment_method_type": "Card",
+                                "payment_method_last_four": "",
+                                "paid_at": None,
+                            }
+                            await send_payment_receipt_email(
+                                to=user_info["email"],
+                                name=user_info["name"],
+                                receipt=receipt_data,
+                            )
 
                 elif envelope.event_type == RoutingKeys.PAYMENT_FAILED:
                     payload = PaymentCompletedPayload(**envelope.payload)

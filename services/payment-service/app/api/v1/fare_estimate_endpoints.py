@@ -29,9 +29,61 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_BASE_SERVICE_TYPE_PROFILE = {
+    "standard": {"ride_type": "ambulatory", "trip_type": "transport_only"},
+    "wheelchair_wav": {"ride_type": "wheelchair", "trip_type": "transport_only"},
+    "stretcher": {"ride_type": "stretcher", "trip_type": "transport_only"},
+    "psw_caregiver": {
+        "ride_type": "ambulatory",
+        "trip_type": "transport_care_assistant",
+    },
+}
+
 
 def _location_client() -> LocationServiceClient:
     return LocationServiceClient(settings.LOCATION_SERVICE_URL)
+
+
+def _base_estimate_profile_for_service_type(service_type: str) -> dict | None:
+    return _BASE_SERVICE_TYPE_PROFILE.get(service_type)
+
+
+def _base_estimate_copy_for_service_type(service_type: str) -> dict:
+    passengers = "Up to 3 passengers"
+    description = "Comfortable assisted transport for mobile patients."
+    best_for = "Routine appointments and light mobility support"
+    features = ["Door-to-door assistance", "Boarding support"]
+
+    if service_type == "wheelchair_wav":
+        passengers = "1 wheelchair + 2"
+        description = "Safe and secure transport for wheelchair users"
+        best_for = "Patients requiring ramp or lift access"
+        features = ["ADA-compliant lift or ramp", "Secure wheelchair locking"]
+    elif service_type == "stretcher":
+        passengers = "1 stretcher"
+        description = "Full medical transport for patients unable to sit upright"
+        best_for = "Post-surgery, injury recovery, and non-emergency medical needs"
+        features = [
+            "Stretcher-compatible vehicle",
+            "Emergency-trained staff",
+            "Two-person medical support",
+        ]
+    elif service_type == "psw_caregiver":
+        passengers = "Up to 3 passengers"
+        description = "Transport with professional caregiver assistance"
+        best_for = "Patients needing personal support worker care"
+        features = [
+            "Certified PSW caregiver",
+            "Medication assistance",
+            "Personal care support",
+        ]
+
+    return {
+        "passengers": passengers,
+        "description": description,
+        "best_for": best_for,
+        "features": features,
+    }
 
 
 @router.post("/fare-estimate")
@@ -232,25 +284,11 @@ async def calculate_base_fare(
     session: AsyncSession = Depends(get_db),
 ):
     """
-    Calculate simple base fare estimates for all ride types based on distance only.
+    Calculate comparison fare estimates for supported ride types using the main fare engine.
 
     **PUBLIC ENDPOINT** - No authentication required.
 
-    This is a simplified estimate that only considers:
-    - Base fare + distance charge
-    - NO booking fees, accessibility fees, or other surcharges
-
     Automatically calculates distance from pickup to destination using Google Maps.
-
-    Does NOT include:
-    - Booking fees
-    - Accessibility fees
-    - Time-based surcharges
-    - Weather conditions
-    - Holiday surcharges
-    - Highway tolls
-
-    Returns estimates for standard, wheelchair, stretcher, and PSW ride types.
     """
     location_client = _location_client()
 
@@ -302,73 +340,74 @@ async def calculate_base_fare(
         )
 
     distance_km = distance_result["distance_km"]
+    distance_miles = distance_result["distance_miles"]
+    scheduled_at = body.scheduled_at or datetime.now(timezone.utc)
 
-    # --- Get service types (exclude hospital_discharge) ---
+    fare_service = FareService(
+        fare_repo=FareBreakdownRepository(session),
+        rate_card_repo=RateCardRepository(session),
+        holiday_repo=HolidayRepository(session),
+        weather_repo=WeatherConditionRepository(session),
+        dialysis_repo=DialysisRatePlanRepository(session),
+        service_type_repo=ServiceTypeConfigRepository(session),
+    )
+
+    # --- Get supported service types (exclude hospital_discharge until it has fare-engine support) ---
     service_type_repo = ServiceTypeConfigRepository(session)
     all_service_types = await service_type_repo.get_all(active_only=True)
-
-    # Filter out hospital_discharge
     service_types = [
-        st for st in all_service_types if st.service_type != "hospital_discharge"
+        st for st in all_service_types
+        if _base_estimate_profile_for_service_type(st.service_type)
     ]
 
     estimates_list = []
 
     for service_type in service_types:
-        config = service_type.config
-        rate_components = config.get("rate_components", {})
-
-        # Extract pricing components - ONLY base fare and per km rate
-        base_fare = rate_components.get("base_fare", 0)
-        per_km_rate = rate_components.get("per_km_rate", 0)
-
-        # Calculate distance charge
-        distance_charge = distance_km * per_km_rate
-
-        # Calculate estimated total - ONLY base + distance
-        estimated_total = base_fare + distance_charge
-
-        # Build description, best_for, and features based on service type
-        passengers = "Up to 3 passengers"
-        description = "Comfortable assisted transport for mobile patients."
-        best_for = "Routine appointments and light mobility support"
-        features = ["Door-to-door assistance", "Boarding support"]
-
-        if service_type.service_type == "wheelchair_wav":
-            passengers = "1 wheelchair + 2"
-            description = "Safe and secure transport for wheelchair users"
-            best_for = "Patients requiring ramp or lift access"
-            features = ["ADA-compliant lift or ramp", "Secure wheelchair locking"]
-        elif service_type.service_type == "stretcher":
-            passengers = "1 stretcher"
-            description = "Full medical transport for patients unable to sit upright"
-            best_for = "Post-surgery, injury recovery, and non-emergency medical needs"
-            features = [
-                "Stretcher-compatible vehicle",
-                "Emergency-trained staff",
-                "Two-person medical support"
-            ]
-        elif service_type.service_type == "psw_caregiver":
-            passengers = "Up to 3 passengers"
-            description = "Transport with professional caregiver assistance"
-            best_for = "Patients needing personal support worker care"
-            features = [
-                "Certified PSW caregiver",
-                "Medication assistance",
-                "Personal care support"
-            ]
+        profile = _base_estimate_profile_for_service_type(service_type.service_type)
+        copy = _base_estimate_copy_for_service_type(service_type.service_type)
+        estimate = await fare_service.estimate_fare(
+            {
+                "distance_miles": distance_miles,
+                "scheduled_at": scheduled_at.isoformat(),
+                "pickup_address": pickup_address or "",
+                "destination_address": dest_address or "",
+                "use_highway_407": body.use_highway_407,
+                "highway_407_route": body.highway_407_route,
+                "is_dialysis_trip": body.is_dialysis_trip,
+                "ride_type": profile["ride_type"],
+                "trip_type": profile["trip_type"],
+                "trip_structure": body.trip_structure,
+                "timeline": [],
+            }
+        )
 
         estimates_list.append(
             BaseFareEstimateItem(
                 service_type=service_type.service_type,
                 display_name=service_type.display_name,
-                base_fare=base_fare,
-                distance_charge=round(distance_charge, 2),
-                estimated_total=round(estimated_total, 2),
-                description=description,
-                passengers=passengers,
-                best_for=best_for,
-                features=features,
+                base_fare=estimate["base_fare"],
+                distance_charge=estimate["distance_charge"],
+                estimated_total=estimate["total_fare"],
+                wait_time_charge=estimate["wait_time_charge"],
+                surcharges_total=estimate["surcharges_total"],
+                surcharges_capped=estimate["surcharges_capped"],
+                highway_407_toll=estimate["highway_407_toll"],
+                insurance_gateway_fee=estimate["insurance_gateway_fee"],
+                flat_surcharge=estimate["flat_surcharge"],
+                platform_fee=estimate["platform_fee"],
+                driver_earnings=estimate["driver_earnings"],
+                care_assistant_fee=estimate["care_assistant_fee"],
+                accessibility_fee=estimate["accessibility_fee"],
+                attendant_fee=estimate["attendant_fee"],
+                rate_card_version=estimate["rate_card_version"],
+                ride_type=estimate["ride_type"],
+                trip_type=estimate["trip_type"],
+                is_round_trip=estimate["is_round_trip"],
+                return_distance_charge=estimate["return_distance_charge"],
+                description=copy["description"],
+                passengers=copy["passengers"],
+                best_for=copy["best_for"],
+                features=copy["features"],
             )
         )
 

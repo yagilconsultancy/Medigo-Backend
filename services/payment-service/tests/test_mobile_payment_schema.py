@@ -37,6 +37,17 @@ def test_mobile_payment_request_rejects_invalid_currency():
         CreateMobilePaymentIntentRequest.model_validate(
             {
                 "amount": 10,
+                "orderId": "ride_123",
                 "currency": "cad$",
+            }
+        )
+
+
+def test_mobile_payment_request_requires_order_id():
+    with pytest.raises(ValidationError, match="order_id"):
+        CreateMobilePaymentIntentRequest.model_validate(
+            {
+                "amount": 42.75,
+                "currencyCode": "cad",
             }
         )

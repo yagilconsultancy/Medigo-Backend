@@ -240,3 +240,45 @@ async def send_ride_notification_email(
     </html>
     """
     return await send_email(to, subject, html)
+
+
+async def send_payment_receipt_email(
+    to: str,
+    name: str,
+    receipt: dict,
+) -> bool:
+    """Send a payment receipt email after a successful ride charge."""
+    trip_number = receipt.get("trip_number", "Trip Receipt")
+    subject = f"MediRide - Receipt for {trip_number}"
+
+    template_context = {
+        "name": name,
+        "trip_number": trip_number,
+        "currency": receipt.get("currency", "CAD"),
+        "total_fare": f"{float(receipt.get('total_fare') or 0):.2f}",
+        "ride_date": receipt.get("ride_date") or "N/A",
+        "pickup_address": receipt.get("pickup_address") or "N/A",
+        "destination_address": receipt.get("destination_address") or "N/A",
+        "payment_method_type": receipt.get("payment_method_type") or "Card",
+        "payment_method_last_four": receipt.get("payment_method_last_four") or "N/A",
+        "paid_at": receipt.get("paid_at") or "Processed successfully",
+    }
+
+    try:
+        template = _template_env.get_template("payment_receipt.html")
+        html = template.render(**template_context)
+    except Exception as e:
+        logger.exception("Failed to render payment receipt email for %s: %s", to, e)
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - Payment Receipt</h2>
+            <p>Hi {name},</p>
+            <p>Your Stripe payment was successful.</p>
+            <p><strong>Trip number:</strong> {template_context['trip_number']}</p>
+            <p><strong>Total:</strong> {template_context['currency']} {template_context['total_fare']}</p>
+            <p><strong>Payment method:</strong> {template_context['payment_method_type']} ending in {template_context['payment_method_last_four']}</p>
+        </body>
+        </html>
+        """
+    return await send_email(to, subject, html)

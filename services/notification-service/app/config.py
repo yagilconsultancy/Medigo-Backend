@@ -10,6 +10,7 @@ class NotificationSettings(BaseServiceSettings):
 
     # Internal service URLs
     USER_SERVICE_URL: str = "http://user-service:8002"
+    PAYMENT_SERVICE_URL: str = "http://payment-service:8005"
 
     # AWS SES (legacy)
     AWS_REGION: str = "us-east-1"
