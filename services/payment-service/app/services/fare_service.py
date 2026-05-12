@@ -15,12 +15,14 @@ logger = logging.getLogger(__name__)
 
 MILES_TO_KM = 1.60934
 
-# Map ride_type enum values to service_type_configs.service_type keys
+# Map ride_type and service_type aliases to service_type_configs.service_type keys.
 _RIDE_TYPE_TO_SERVICE_TYPE = {
     "ambulatory": "standard",
     "standard": "standard",
     "wheelchair": "wheelchair_wav",
+    "wheelchair_wav": "wheelchair_wav",
     "stretcher": "stretcher",
+    "psw_caregiver": "psw_caregiver",
 }
 
 DEFAULT_CARE_ASSISTANT_FEE = 35.00
