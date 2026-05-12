@@ -13,10 +13,13 @@ COPY services/api-gateway/pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
 COPY services/api-gateway/app ./app
+COPY services/api-gateway/entrypoint.sh .
+
+RUN chmod +x entrypoint.sh
 
 RUN useradd --create-home appuser
 USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["./entrypoint.sh"]
