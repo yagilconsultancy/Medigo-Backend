@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from mediride_common.schemas.enums import (
     RideType,
+    RecurringFrequency,
     TripStructure,
     TripType,
 )
@@ -24,6 +25,9 @@ class CreateRideRequest(BaseModel):
     destination_longitude: float | None = None
     scheduled_at: datetime
     passenger_id: UUID | None = None
+    passenger_first_name: str | None = Field(None, min_length=1, max_length=100)
+    passenger_last_name: str | None = Field(None, min_length=1, max_length=100)
+    passenger_phone: str | None = Field(None, min_length=7, max_length=20)
     visit_type: str | None = None
     appointment_time: datetime | None = None
     facility_name: str | None = None
@@ -38,6 +42,9 @@ class CreateRideRequest(BaseModel):
     highway_407_route: str | None = None
     is_dialysis_trip: bool = False
     booking_channel: str = "mobile_app"
+    recurring_frequency: RecurringFrequency | None = None
+    recurring_days_of_week: list[int] | None = None
+    recurring_end_date: date | None = None
 
 
 class StatusTransitionRequest(BaseModel):
@@ -85,6 +92,10 @@ class RideResponse(BaseModel):
     destination_address: str
     scheduled_at: datetime
     status: str
+    passenger_id: UUID | None = None
+    passenger_first_name: str | None = None
+    passenger_last_name: str | None = None
+    passenger_phone: str | None = None
     estimated_distance_miles: float | None = None
     estimated_duration_minutes: int | None = None
     estimated_fare: float | None = None
@@ -95,6 +106,7 @@ class RideResponse(BaseModel):
     booking_channel: str = "mobile_app"
     facility_id: UUID | None = None
     guest_session_id: UUID | None = None
+    recurring_ride_id: UUID | None = None
     use_highway_407: bool = False
     highway_407_route: str | None = None
     is_dialysis_trip: bool = False
@@ -134,6 +146,10 @@ class RideDetailResponse(BaseModel):
     pickup_at: datetime | None = None
     dropoff_at: datetime | None = None
     status: str
+    passenger_id: UUID | None = None
+    passenger_first_name: str | None = None
+    passenger_last_name: str | None = None
+    passenger_phone: str | None = None
     estimated_distance_miles: float | None = None
     actual_distance_miles: float | None = None
     estimated_duration_minutes: int | None = None
@@ -146,6 +162,7 @@ class RideDetailResponse(BaseModel):
     booking_channel: str = "mobile_app"
     facility_id: UUID | None = None
     guest_session_id: UUID | None = None
+    recurring_ride_id: UUID | None = None
     special_instructions: str | None = None
     mobility_level: str | None = None
     assistance_level: str | None = None

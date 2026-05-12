@@ -1,6 +1,9 @@
 import logging
 import secrets
+from calendar import monthrange
+from datetime import date, datetime, time, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from app.clients.payment_service_client import PaymentServiceClient
 from app.clients.user_service_client import UserServiceClient
@@ -23,7 +26,12 @@ from mediride_common.events.schemas import (
     RideStatusChangedPayload,
 )
 from mediride_common.exceptions import NotFoundError, ValidationError
-from mediride_common.schemas.enums import RatingType, RideStatus, TripType
+from mediride_common.schemas.enums import (
+    RatingType,
+    RecurringFrequency,
+    RideStatus,
+    TripType,
+)
 from mediride_common.utils import normalize_to_utc, utc_now
 
 logger = logging.getLogger(__name__)
@@ -90,9 +98,7 @@ class RideService:
         ride_data["estimated_fare"] = estimate.get("total_fare")
         return ride_data
 
-    # ---- Core Ride Operations ----
-
-    async def create_ride(self, rider_id: UUID, **ride_data) -> Ride:
+    def _normalize_ride_datetimes(self, ride_data: dict) -> dict:
         if ride_data.get("scheduled_at"):
             ride_data["scheduled_at"] = normalize_to_utc(
                 ride_data["scheduled_at"],
@@ -103,17 +109,16 @@ class RideService:
                 ride_data["appointment_time"],
                 settings.DEFAULT_TIMEZONE,
             )
+        return ride_data
 
-        # Validate: TRANSPORT_CARE_ASSISTANT requires a future scheduled ride
-        trip_type = ride_data.get("trip_type", TripType.TRANSPORT_ONLY)
-        if trip_type == TripType.TRANSPORT_CARE_ASSISTANT:
-            scheduled_at = ride_data.get("scheduled_at")
-            if not scheduled_at or scheduled_at <= utc_now():
-                raise ValidationError(
-                    "Transport + Care Assistant rides must be scheduled in the future "
-                    "(care assistant needs advance notice)"
-                )
-
+    async def _create_ride_record(
+        self,
+        *,
+        rider_id: UUID,
+        ride_data: dict,
+        created_by: UUID,
+        notes: str | None = None,
+    ) -> Ride:
         if ride_data.get("guest_session_id"):
             ride_data.setdefault("booking_channel", "website_guest")
             ride_data.setdefault("share_token", secrets.token_urlsafe(32))
@@ -122,12 +127,12 @@ class RideService:
         ride = Ride(rider_id=rider_id, **ride_data)
         ride = await self.ride_repo.create(ride)
 
-        # Log initial status
         log = RideStatusLog(
             ride_id=ride.id,
             from_status=None,
             to_status=RideStatus.REQUESTED,
-            changed_by=rider_id,
+            changed_by=created_by,
+            notes=notes,
         )
         await self.status_log_repo.create(log)
 
@@ -144,6 +149,134 @@ class RideService:
                 estimated_cost=float(ride.estimated_fare) if ride.estimated_fare else None,
             ).model_dump(mode="json"),
         )
+
+        return ride
+
+    def _build_recurring_template_data(self, ride_data: dict) -> dict | None:
+        frequency = ride_data.get("recurring_frequency")
+        if not frequency:
+            return None
+
+        scheduled_at = ride_data.get("scheduled_at")
+        if not scheduled_at:
+            raise ValidationError("scheduled_at is required for recurring rides")
+
+        recurring_end_date = ride_data.get("recurring_end_date")
+        if not recurring_end_date:
+            raise ValidationError(
+                "recurring_end_date is required when recurring_frequency is provided"
+            )
+
+        local_dt = scheduled_at.astimezone(ZoneInfo(settings.DEFAULT_TIMEZONE))
+        if recurring_end_date < local_dt.date():
+            raise ValidationError("recurring_end_date must be on or after the first ride date")
+
+        days_of_week = ride_data.get("recurring_days_of_week")
+        if days_of_week:
+            invalid_days = [day for day in days_of_week if day < 0 or day > 6]
+            if invalid_days:
+                raise ValidationError("recurring_days_of_week values must be between 0 and 6")
+        elif frequency in (RecurringFrequency.WEEKLY, RecurringFrequency.BIWEEKLY):
+            days_of_week = [local_dt.weekday()]
+
+        return {
+            "frequency": _enum_value(frequency),
+            "pickup_address": ride_data["pickup_address"],
+            "destination_address": ride_data["destination_address"],
+            "ride_type": _enum_value(ride_data["ride_type"]),
+            "scheduled_time": local_dt.timetz().replace(tzinfo=None),
+            "days_of_week": days_of_week,
+            "start_date": local_dt.date(),
+            "end_date": recurring_end_date,
+        }
+
+    def _build_recurring_ride_payload(self, ride_data: dict, recurring_ride_id) -> dict:
+        payload = {
+            key: value
+            for key, value in ride_data.items()
+            if key not in {"recurring_frequency", "recurring_days_of_week", "recurring_end_date"}
+        }
+        payload["recurring_ride_id"] = recurring_ride_id
+        return payload
+
+    def _generate_recurring_scheduled_at(self, recurring: RecurringRide) -> list[datetime]:
+        tz = ZoneInfo(settings.DEFAULT_TIMEZONE)
+        start_date = recurring.start_date
+        end_date = recurring.end_date
+        if not end_date or end_date <= start_date:
+            return []
+
+        scheduled_times: list[datetime] = []
+        frequency = recurring.frequency
+
+        if frequency == RecurringFrequency.DAILY:
+            current_date = start_date + timedelta(days=1)
+            while current_date <= end_date:
+                scheduled_times.append(_local_date_and_time_to_utc(current_date, recurring.scheduled_time, tz))
+                current_date += timedelta(days=1)
+            return scheduled_times
+
+        if frequency in (RecurringFrequency.WEEKLY, RecurringFrequency.BIWEEKLY):
+            interval_weeks = 1 if frequency == RecurringFrequency.WEEKLY else 2
+            allowed_days = set(recurring.days_of_week or [start_date.weekday()])
+            current_date = start_date + timedelta(days=1)
+            while current_date <= end_date:
+                weeks_since_start = (current_date - start_date).days // 7
+                if current_date.weekday() in allowed_days and weeks_since_start % interval_weeks == 0:
+                    scheduled_times.append(_local_date_and_time_to_utc(current_date, recurring.scheduled_time, tz))
+                current_date += timedelta(days=1)
+            return scheduled_times
+
+        if frequency == RecurringFrequency.MONTHLY:
+            current_date = start_date
+            while True:
+                current_date = _add_month(current_date)
+                if current_date > end_date:
+                    break
+                scheduled_times.append(_local_date_and_time_to_utc(current_date, recurring.scheduled_time, tz))
+
+        return scheduled_times
+
+    # ---- Core Ride Operations ----
+
+    async def create_ride(self, rider_id: UUID, **ride_data) -> Ride:
+        ride_data = self._normalize_ride_datetimes(ride_data)
+
+        # Validate: TRANSPORT_CARE_ASSISTANT requires a future scheduled ride
+        trip_type = ride_data.get("trip_type", TripType.TRANSPORT_ONLY)
+        if trip_type == TripType.TRANSPORT_CARE_ASSISTANT:
+            scheduled_at = ride_data.get("scheduled_at")
+            if not scheduled_at or scheduled_at <= utc_now():
+                raise ValidationError(
+                    "Transport + Care Assistant rides must be scheduled in the future "
+                    "(care assistant needs advance notice)"
+                )
+
+        recurring_template_data = self._build_recurring_template_data(ride_data)
+        recurring_ride = None
+        if recurring_template_data:
+            recurring_ride = await self.recurring_ride_repo.create(
+                RecurringRide(rider_id=rider_id, **recurring_template_data)
+            )
+            ride_data = self._build_recurring_ride_payload(ride_data, recurring_ride.id)
+
+        ride = await self._create_ride_record(
+            rider_id=rider_id,
+            ride_data=ride_data,
+            created_by=rider_id,
+        )
+
+        if recurring_ride:
+            recurring_payload = self._build_recurring_ride_payload(ride_data, recurring_ride.id)
+            for scheduled_at in self._generate_recurring_scheduled_at(recurring_ride):
+                future_payload = dict(recurring_payload)
+                future_payload["scheduled_at"] = scheduled_at
+                await self._create_ride_record(
+                    rider_id=rider_id,
+                    ride_data=future_payload,
+                    created_by=rider_id,
+                    notes=f"Generated from recurring series {recurring_ride.id}",
+                )
 
         return ride
 
@@ -514,65 +647,40 @@ class RideService:
             raise ValidationError("Not your ride")
 
         scheduled_at = normalize_to_utc(scheduled_at, settings.DEFAULT_TIMEZONE)
-
-        new_ride_data = await self._populate_estimates(
-            {
-                "business_id": original.business_id,
-                "ride_type": original.ride_type,
-                "trip_type": original.trip_type,
-                "trip_structure": original.trip_structure,
-                "pickup_address": original.pickup_address,
-                "pickup_latitude": original.pickup_latitude,
-                "pickup_longitude": original.pickup_longitude,
-                "destination_address": original.destination_address,
-                "destination_latitude": original.destination_latitude,
-                "destination_longitude": original.destination_longitude,
-                "scheduled_at": scheduled_at,
-                "visit_type": original.visit_type,
-                "facility_name": original.facility_name,
-                "special_instructions": original.special_instructions,
-                "passenger_id": original.passenger_id,
-                "mobility_level": original.mobility_level,
-                "assistance_level": original.assistance_level,
-                "use_highway_407": original.use_highway_407,
-                "highway_407_route": original.highway_407_route,
-                "is_dialysis_trip": original.is_dialysis_trip,
-                "estimated_distance_miles": original.estimated_distance_miles,
-                "estimated_duration_minutes": original.estimated_duration_minutes,
-                "estimated_fare": original.estimated_fare,
-            }
-        )
-
-        new_ride = Ride(
+        new_ride_data = {
+            "business_id": original.business_id,
+            "ride_type": original.ride_type,
+            "trip_type": original.trip_type,
+            "trip_structure": original.trip_structure,
+            "pickup_address": original.pickup_address,
+            "pickup_latitude": original.pickup_latitude,
+            "pickup_longitude": original.pickup_longitude,
+            "destination_address": original.destination_address,
+            "destination_latitude": original.destination_latitude,
+            "destination_longitude": original.destination_longitude,
+            "scheduled_at": scheduled_at,
+            "visit_type": original.visit_type,
+            "facility_name": original.facility_name,
+            "special_instructions": original.special_instructions,
+            "passenger_id": original.passenger_id,
+            "passenger_first_name": original.passenger_first_name,
+            "passenger_last_name": original.passenger_last_name,
+            "passenger_phone": original.passenger_phone,
+            "mobility_level": original.mobility_level,
+            "assistance_level": original.assistance_level,
+            "use_highway_407": original.use_highway_407,
+            "highway_407_route": original.highway_407_route,
+            "is_dialysis_trip": original.is_dialysis_trip,
+            "estimated_distance_miles": original.estimated_distance_miles,
+            "estimated_duration_minutes": original.estimated_duration_minutes,
+            "estimated_fare": original.estimated_fare,
+        }
+        return await self._create_ride_record(
             rider_id=rider_id,
-            **new_ride_data,
-        )
-        new_ride = await self.ride_repo.create(new_ride)
-
-        log = RideStatusLog(
-            ride_id=new_ride.id,
-            from_status=None,
-            to_status=RideStatus.REQUESTED,
-            changed_by=rider_id,
+            ride_data=new_ride_data,
+            created_by=rider_id,
             notes="Rebooked from ride " + str(ride_id),
         )
-        await self.status_log_repo.create(log)
-
-        await self.publisher.publish(
-            Exchanges.RIDES,
-            RoutingKeys.RIDE_CREATED,
-            RideCreatedPayload(
-                ride_id=new_ride.id,
-                rider_id=rider_id,
-                ride_type=new_ride.ride_type,
-                pickup_address=new_ride.pickup_address,
-                destination_address=new_ride.destination_address,
-                scheduled_at=new_ride.scheduled_at,
-                estimated_cost=float(new_ride.estimated_fare) if new_ride.estimated_fare else None,
-            ).model_dump(mode="json"),
-        )
-
-        return new_ride
 
     # ---- Share ----
 
@@ -631,3 +739,23 @@ def _extract_name(profile: dict | None) -> str:
         f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip()
         or "Unknown"
     )
+
+
+def _local_date_and_time_to_utc(
+    scheduled_date: date,
+    scheduled_time: time,
+    tz: ZoneInfo,
+) -> datetime:
+    local_dt = datetime.combine(scheduled_date, scheduled_time, tzinfo=tz)
+    return local_dt.astimezone(ZoneInfo("UTC"))
+
+
+def _add_month(value: date) -> date:
+    next_month = value.month + 1
+    next_year = value.year
+    if next_month > 12:
+        next_month = 1
+        next_year += 1
+
+    day = min(value.day, monthrange(next_year, next_month)[1])
+    return date(next_year, next_month, day)

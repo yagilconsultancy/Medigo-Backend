@@ -87,6 +87,9 @@ class Ride(Base):
 
     # Passenger info
     passenger_id: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)
+    passenger_first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    passenger_last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    passenger_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
     mobility_level: Mapped[str | None] = mapped_column(String(30), nullable=True)
     assistance_level: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
