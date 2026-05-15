@@ -206,3 +206,67 @@ async def test_login_unverified_user_returns_otp_flag():
         "user_id": str(user_id),
         "next_step": "verify_otp",
     }
+
+
+@pytest.mark.asyncio
+async def test_register_normalizes_email_before_lookup_and_storage():
+    user_id = uuid4()
+    credential_repo = MagicMock()
+    credential_repo.get_by_email_or_phone = AsyncMock(return_value=None)
+    credential_repo.create = AsyncMock()
+    token_repo = MagicMock()
+    otp_service = MagicMock()
+    otp_service.generate_otp = AsyncMock(return_value="482913")
+    publisher = MagicMock()
+    publisher.publish = AsyncMock()
+
+    service = AuthService(
+        credential_repo=credential_repo,
+        token_repo=token_repo,
+        otp_service=otp_service,
+        jwt_handler=MagicMock(),
+        publisher=publisher,
+    )
+
+    async def create_side_effect(credential):
+        credential.id = user_id
+
+    credential_repo.create.side_effect = create_side_effect
+
+    await service.register(
+        email="  Moses.OladunjoyeJobs@Gmail.com  ",
+        phone=None,
+        password="StrongPass123!",
+        role=UserRole.RIDER,
+    )
+
+    credential_repo.get_by_email_or_phone.assert_awaited_once_with(
+        "moses.oladunjoyejobs@gmail.com", None
+    )
+    created_credential = credential_repo.create.await_args.args[0]
+    assert created_credential.email == "moses.oladunjoyejobs@gmail.com"
+
+
+@pytest.mark.asyncio
+async def test_login_normalizes_email_before_lookup():
+    credential_repo = MagicMock()
+    credential_repo.get_by_email_or_phone = AsyncMock(return_value=None)
+
+    service = AuthService(
+        credential_repo=credential_repo,
+        token_repo=MagicMock(),
+        otp_service=MagicMock(),
+        jwt_handler=MagicMock(),
+        publisher=MagicMock(),
+    )
+
+    with pytest.raises(AuthenticationError):
+        await service.login(
+            email="  Moses.OladunjoyeJobs@Gmail.com  ",
+            phone=None,
+            password="StrongPass123!",
+        )
+
+    credential_repo.get_by_email_or_phone.assert_awaited_once_with(
+        "moses.oladunjoyejobs@gmail.com", None
+    )

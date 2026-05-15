@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user_credential import UserCredential
+from app.normalization import normalize_email, normalize_phone
 
 
 class CredentialRepository:
@@ -22,14 +23,24 @@ class CredentialRepository:
         return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> UserCredential | None:
+        normalized_email = normalize_email(email)
+        if not normalized_email:
+            return None
+
         result = await self.session.execute(
-            select(UserCredential).where(UserCredential.email == email)
+            select(UserCredential).where(
+                func.lower(UserCredential.email) == normalized_email
+            )
         )
         return result.scalar_one_or_none()
 
     async def get_by_phone(self, phone: str) -> UserCredential | None:
+        normalized_phone = normalize_phone(phone)
+        if not normalized_phone:
+            return None
+
         result = await self.session.execute(
-            select(UserCredential).where(UserCredential.phone == phone)
+            select(UserCredential).where(UserCredential.phone == normalized_phone)
         )
         return result.scalar_one_or_none()
 

@@ -9,6 +9,7 @@ from app.config import settings
 from app.models.password_reset import PasswordResetToken
 from app.models.refresh_token import RefreshToken
 from app.models.user_credential import UserCredential
+from app.normalization import normalize_email, normalize_phone
 from app.repositories.credential_repo import CredentialRepository
 from app.repositories.password_reset_repo import PasswordResetRepository
 from app.repositories.token_repo import TokenRepository
@@ -106,6 +107,8 @@ class AuthService:
         last_name: str | None = None,
     ) -> tuple[UUID, str]:
         """Register a new user. Returns (user_id, otp_code)."""
+        email = normalize_email(email)
+        phone = normalize_phone(phone)
         validate_password_strength(password)
 
         # Check if user already exists
@@ -190,6 +193,8 @@ class AuthService:
         self, email: str | None, phone: str | None, password: str
     ) -> TokenPair:
         """Authenticate user and return token pair."""
+        email = normalize_email(email)
+        phone = normalize_phone(phone)
         credential = await self.credential_repo.get_by_email_or_phone(email, phone)
         if not credential:
             raise AuthenticationError("Invalid credentials")
@@ -256,6 +261,8 @@ class AuthService:
         user_agent: str = "",
     ) -> TokenPair:
         """Authenticate admin user. Rejects non-admin roles."""
+        email = normalize_email(email)
+        phone = normalize_phone(phone)
         device_info = self._parse_device_info(user_agent)
 
         credential = await self.credential_repo.get_by_email_or_phone(email, phone)
@@ -532,6 +539,8 @@ class AuthService:
         self, email: str | None, phone: str | None
     ) -> str | None:
         """Request a password reset. Returns token in dev mode."""
+        email = normalize_email(email)
+        phone = normalize_phone(phone)
         credential = await self.credential_repo.get_by_email_or_phone(email, phone)
         if not credential:
             # Return silently to prevent user enumeration
@@ -614,7 +623,7 @@ class AuthService:
 
         # Verify and get invite details
         invite_data = await self.user_service_client.verify_invite_token(invite_token)
-        email = invite_data["email"]
+        email = normalize_email(invite_data["email"])
         business_id = UUID(invite_data["business_id"])
 
         # Check if user already exists (admin-created driver)
@@ -736,7 +745,7 @@ class AuthService:
 
         # Verify and get invite details
         invite_data = await self.verify_admin_invite(invite_token)
-        email = invite_data["email"]
+        email = normalize_email(invite_data["email"])
         full_name = invite_data["full_name"]
 
         # Check if user already exists

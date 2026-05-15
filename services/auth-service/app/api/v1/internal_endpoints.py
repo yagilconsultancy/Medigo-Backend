@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
 from app.models.user_credential import UserCredential
+from app.normalization import normalize_email, normalize_phone
 from app.repositories.credential_repo import CredentialRepository
 from app.schemas.activity_log import CreateActivityLogRequest
 from app.services.activity_log_service import ActivityLogService
@@ -47,18 +48,20 @@ async def create_driver_credential(
 ):
     """Create a driver credential. Called by user-service admin driver creation."""
     repo = CredentialRepository(session)
+    normalized_email = normalize_email(str(request.email))
+    normalized_phone = normalize_phone(request.phone)
 
-    existing = await repo.get_by_email_or_phone(request.email, request.phone)
+    existing = await repo.get_by_email_or_phone(normalized_email, normalized_phone)
     if existing:
-        if existing.email == request.email:
+        if existing.email and normalized_email and existing.email.lower() == normalized_email:
             raise HTTPException(status_code=409, detail="Account with this email already exists")
         raise HTTPException(status_code=409, detail="Account with this phone number already exists")
 
     validate_password_strength(request.password)
 
     credential = UserCredential(
-        email=request.email,
-        phone=request.phone,
+        email=normalized_email,
+        phone=normalized_phone,
         password_hash=hash_password(request.password),
         role=UserRole.DRIVER,
         business_id=request.business_id,
