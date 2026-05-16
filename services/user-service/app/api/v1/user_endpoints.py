@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Depends
+from datetime import date
+from uuid import UUID as PyUUID
+import uuid
+
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_db
+from app.config import settings
+from app.dependencies import get_db, get_s3_client
 from app.repositories.user_repo import UserRepository
 from app.repositories.emergency_contact_repo import EmergencyContactRepository
 from app.models.emergency_contact import EmergencyContact
@@ -17,8 +22,9 @@ from app.schemas.user import (
 from app.services.user_service import UserService
 from mediride_common.auth.dependencies import get_current_user
 from mediride_common.auth.models import UserClaims
-from mediride_common.exceptions import AuthorizationError
+from mediride_common.exceptions import AuthorizationError, ValidationError
 from mediride_common.schemas.responses import StandardResponse
+from mediride_common.storage.s3_client import S3StorageClient
 
 router = APIRouter()
 
@@ -38,10 +44,93 @@ async def get_my_profile(
 
 @router.put("/me", response_model=StandardResponse[UserProfileResponse])
 async def update_my_profile(
+    first_name: str | None = Form(None),
+    last_name: str | None = Form(None),
+    date_of_birth: str | None = Form(None),
+    gender: str | None = Form(None),
+    home_address: str | None = Form(None),
+    medical_notes: str | None = Form(None),
+    avatar: UploadFile | None = File(None),
+    user: UserClaims = Depends(get_current_user),
+    service: UserService = Depends(_get_user_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
+):
+    """
+    Update user profile with form data (supports avatar upload).
+
+    Send as multipart/form-data. All fields optional.
+    Avatar: JPEG, PNG, WebP, or GIF (max 5MB).
+
+    For JSON-only updates (no file), use PATCH /me instead.
+    """
+    update_data = {}
+
+    # Collect form data fields
+    if first_name is not None:
+        update_data["first_name"] = first_name
+    if last_name is not None:
+        update_data["last_name"] = last_name
+    if date_of_birth is not None:
+        try:
+            update_data["date_of_birth"] = date.fromisoformat(date_of_birth)
+        except ValueError:
+            raise ValidationError("date_of_birth must be in YYYY-MM-DD format")
+    if gender is not None:
+        update_data["gender"] = gender
+    if home_address is not None:
+        update_data["home_address"] = home_address
+    if medical_notes is not None:
+        update_data["medical_notes"] = medical_notes
+
+    # Handle avatar upload
+    if avatar and avatar.filename:
+        allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
+        if avatar.content_type not in allowed_types:
+            raise ValidationError(
+                f"Invalid file type. Allowed: JPEG, PNG, WebP, GIF"
+            )
+
+        file_data = await avatar.read()
+        if len(file_data) > 5 * 1024 * 1024:
+            raise ValidationError("File size must be less than 5MB")
+
+        # Generate unique file key
+        file_extension = avatar.filename.split(".")[-1] if "." in avatar.filename else "jpg"
+        file_key = f"avatars/{user.id}/{uuid.uuid4()}.{file_extension}"
+
+        # Upload to S3
+        await s3_client.ensure_bucket_exists(settings.S3_BUCKET_DOCUMENTS)
+        await s3_client.upload_file(
+            bucket=settings.S3_BUCKET_DOCUMENTS,
+            key=file_key,
+            file_data=file_data,
+            content_type=avatar.content_type,
+        )
+
+        update_data["avatar_url"] = f"s3://{settings.S3_BUCKET_DOCUMENTS}/{file_key}"
+
+    if not update_data:
+        raise ValidationError("No fields provided for update")
+
+    profile = await service.update_profile(user.id, **update_data)
+    return StandardResponse(
+        data=UserProfileResponse.model_validate(profile),
+        message="Profile updated",
+    )
+
+
+@router.patch("/me", response_model=StandardResponse[UserProfileResponse])
+async def update_my_profile_json(
     request: UpdateProfileRequest,
     user: UserClaims = Depends(get_current_user),
     service: UserService = Depends(_get_user_service),
 ):
+    """
+    Update user profile with JSON (no file upload).
+
+    Send as application/json with only the fields you want to update.
+    For avatar upload, use PUT /me with multipart/form-data instead.
+    """
     update_data = request.model_dump(exclude_unset=True)
     profile = await service.update_profile(user.id, **update_data)
     return StandardResponse(
