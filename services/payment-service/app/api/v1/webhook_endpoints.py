@@ -39,13 +39,13 @@ async def stripe_webhook(
             detail="Invalid webhook signature",
         )
 
-    event_type = event.get("type", "")
+    event_type = event.type
     logger.info(f"Stripe webhook received: {event_type}")
     tx_repo = TransactionRepository(session)
-    stripe_object = (event.get("data") or {}).get("object") or {}
-    metadata = stripe_object.get("metadata") or {}
-    order_id = metadata.get("order_id")
-    payment_intent_id = stripe_object.get("id")
+    stripe_object = event.data.object if event.data else None
+    metadata = stripe_object.metadata if stripe_object and hasattr(stripe_object, "metadata") else {}
+    order_id = metadata.get("order_id") if metadata else None
+    payment_intent_id = stripe_object.id if stripe_object else None
 
     if event_type == "payment_intent.succeeded":
         if not order_id:
@@ -58,8 +58,8 @@ async def stripe_webhook(
             if not tx:
                 logger.warning("No transaction found for Stripe order_id=%s", order_id)
             elif tx.status != PaymentStatus.COMPLETED:
-                amount_received = stripe_object.get("amount_received")
-                currency = stripe_object.get("currency")
+                amount_received = getattr(stripe_object, "amount_received", None)
+                currency = getattr(stripe_object, "currency", None)
                 update_kwargs = {
                     "status": PaymentStatus.COMPLETED,
                     "reference_id": payment_intent_id or tx.reference_id,
