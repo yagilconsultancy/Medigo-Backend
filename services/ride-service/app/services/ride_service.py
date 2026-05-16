@@ -190,13 +190,14 @@ class RideService:
             "end_date": recurring_end_date,
         }
 
-    def _build_recurring_ride_payload(self, ride_data: dict, recurring_ride_id) -> dict:
+    def _build_recurring_ride_payload(self, ride_data: dict, recurring_ride_id=None) -> dict:
         payload = {
             key: value
             for key, value in ride_data.items()
             if key not in {"recurring_frequency", "recurring_days_of_week", "recurring_end_date"}
         }
-        payload["recurring_ride_id"] = recurring_ride_id
+        if recurring_ride_id is not None:
+            payload["recurring_ride_id"] = recurring_ride_id
         return payload
 
     def _generate_recurring_scheduled_at(self, recurring: RecurringRide) -> list[datetime]:
@@ -258,18 +259,23 @@ class RideService:
             recurring_ride = await self.recurring_ride_repo.create(
                 RecurringRide(rider_id=rider_id, **recurring_template_data)
             )
-            ride_data = self._build_recurring_ride_payload(ride_data, recurring_ride.id)
+
+        # Always filter out recurring-specific fields before creating Ride record
+        # (whether or not a recurring ride was created)
+        ride_payload = self._build_recurring_ride_payload(
+            ride_data,
+            recurring_ride.id if recurring_ride else None
+        )
 
         ride = await self._create_ride_record(
             rider_id=rider_id,
-            ride_data=ride_data,
+            ride_data=ride_payload,
             created_by=rider_id,
         )
 
         if recurring_ride:
-            recurring_payload = self._build_recurring_ride_payload(ride_data, recurring_ride.id)
             for scheduled_at in self._generate_recurring_scheduled_at(recurring_ride):
-                future_payload = dict(recurring_payload)
+                future_payload = dict(ride_payload)
                 future_payload["scheduled_at"] = scheduled_at
                 await self._create_ride_record(
                     rider_id=rider_id,
