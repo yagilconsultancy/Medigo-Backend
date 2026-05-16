@@ -150,6 +150,42 @@ class RideRepository:
         )
         return list(result.scalars().all()), total
 
+    async def get_rider_history_summary(self, rider_id: UUID) -> dict:
+        miles_expr = func.coalesce(Ride.actual_distance_miles, Ride.estimated_distance_miles, 0)
+        result = await self.session.execute(
+            select(
+                func.count(Ride.id),
+                func.sum(
+                    case(
+                        (Ride.status == RideStatus.COMPLETED, 1),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (Ride.status.in_([RideStatus.CANCELLED, RideStatus.NO_SHOW]), 1),
+                        else_=0,
+                    )
+                ),
+                func.sum(
+                    case(
+                        (Ride.status == RideStatus.COMPLETED, miles_expr),
+                        else_=0,
+                    )
+                ),
+            ).where(
+                Ride.rider_id == rider_id,
+                Ride.deleted_at.is_(None),
+            )
+        )
+        total_rides, completed_rides, cancelled_rides, miles_traveled = result.one()
+        return {
+            "total_rides": int(total_rides or 0),
+            "completed_rides": int(completed_rides or 0),
+            "cancelled_rides": int(cancelled_rides or 0),
+            "miles_traveled": round(float(miles_traveled or 0), 1),
+        }
+
     async def get_by_share_token(self, share_token: str) -> Ride | None:
         result = await self.session.execute(
             select(Ride).where(Ride.share_token == share_token, Ride.deleted_at.is_(None))

@@ -52,3 +52,15 @@ class UpdateAppSettings(BaseModel):
     auto_accept_rides: bool | None = None
     navigation_app: str | None = Field(None, max_length=20)
     sound_enabled: bool | None = None
+
+
+class CommunicationSettingsResponse(BaseModel):
+    sms_alerts: bool
+    push_notifications: bool
+    promotional_emails: bool
+
+
+class UpdateCommunicationSettings(BaseModel):
+    sms_alerts: bool | None = None
+    push_notifications: bool | None = None
+    promotional_emails: bool | None = None

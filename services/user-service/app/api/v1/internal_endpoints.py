@@ -112,6 +112,7 @@ async def get_user_profile_internal(
         "avatar_url": user.avatar_url,
         "is_active": user.is_active,
         "is_guest": user.is_guest,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
 

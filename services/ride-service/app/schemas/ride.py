@@ -201,6 +201,31 @@ class DriverStatsResponse(BaseModel):
     earnings_today: float
 
 
+class RiderHistorySummaryResponse(BaseModel):
+    total_rides: int
+    completed_rides: int
+    cancelled_rides: int
+    miles_traveled: float
+
+
+class RiderStatsResponse(BaseModel):
+    total_rides: int
+    miles_traveled: float
+    average_rating_given: float
+    member_since: str | None = None
+
+
+class RiderHistoryOverviewResponse(BaseModel):
+    summary: RiderHistorySummaryResponse
+    stats: RiderStatsResponse
+    rides: list[RideResponse]
+    filtered_total: int
+    page: int
+    limit: int
+    total_pages: int
+    status_filter: str = "all"
+
+
 class ShareRideResponse(BaseModel):
     ride_id: UUID
     share_token: str

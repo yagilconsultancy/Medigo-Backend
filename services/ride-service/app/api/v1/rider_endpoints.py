@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.payment_service_client import PaymentServiceClient
@@ -15,6 +15,7 @@ from app.repositories.status_log_repo import StatusLogRepository
 from app.schemas.ride import (
     DriverContactResponse,
     RebookRideRequest,
+    RiderHistoryOverviewResponse,
     RideResponse,
     ShareRideResponse,
     SharedRideResponse,
@@ -41,6 +42,34 @@ def _get_ride_service(
         recurring_ride_repo=RecurringRideRepository(session),
         publisher=publisher,
         user_client=UserServiceClient(settings.USER_SERVICE_URL),
+    )
+
+
+@router.get(
+    "/rider/me/overview",
+    response_model=StandardResponse[RiderHistoryOverviewResponse],
+)
+async def get_rider_history_overview(
+    status: str | None = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    user: UserClaims = Depends(require_role([UserRole.RIDER])),
+    service: RideService = Depends(_get_ride_service),
+):
+    """Get rider history summary, profile stats, and a filtered ride list."""
+    offset = (page - 1) * limit
+    data = await service.get_rider_history_overview(user.id, status, offset, limit)
+    return StandardResponse(
+        data=RiderHistoryOverviewResponse(
+            summary=data["summary"],
+            stats=data["stats"],
+            rides=[RideResponse.model_validate(ride) for ride in data["rides"]],
+            filtered_total=data["filtered_total"],
+            page=data["page"],
+            limit=data["limit"],
+            total_pages=data["total_pages"],
+            status_filter=data["status_filter"],
+        )
     )
 
 

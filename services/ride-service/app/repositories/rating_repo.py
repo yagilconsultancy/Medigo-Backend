@@ -49,6 +49,17 @@ class RatingRepository:
         )
         return float(result.scalar_one() or 5.0)
 
+    async def get_average_rating_given(
+        self, user_id: UUID, rating_type: str
+    ) -> float:
+        result = await self.session.execute(
+            select(func.avg(RideRating.rating)).where(
+                RideRating.rated_by_user_id == user_id,
+                RideRating.rating_type == rating_type,
+            )
+        )
+        return float(result.scalar_one() or 0.0)
+
     async def get_ratings_for_ride(self, ride_id: UUID) -> list[RideRating]:
         result = await self.session.execute(
             select(RideRating).where(RideRating.ride_id == ride_id)

@@ -558,6 +558,42 @@ class RideService:
     ) -> tuple[list[Ride], int]:
         return await self.ride_repo.get_by_rider(rider_id, status_filter, offset, limit)
 
+    async def get_rider_history_overview(
+        self,
+        rider_id: UUID,
+        status_filter: str | None = None,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> dict:
+        rides, filtered_total = await self.ride_repo.get_by_rider(
+            rider_id, status_filter, offset, limit
+        )
+        summary = await self.ride_repo.get_rider_history_summary(rider_id)
+        average_rating_given = await self.rating_repo.get_average_rating_given(
+            rider_id, RatingType.RIDER_TO_DRIVER
+        )
+        user_profile = await self.user_client.get_user_profile(rider_id)
+
+        member_since = None
+        if user_profile and user_profile.get("created_at"):
+            member_since = datetime.fromisoformat(user_profile["created_at"]).strftime("%b %Y")
+
+        return {
+            "summary": summary,
+            "stats": {
+                "total_rides": summary["total_rides"],
+                "miles_traveled": summary["miles_traveled"],
+                "average_rating_given": round(average_rating_given, 1),
+                "member_since": member_since,
+            },
+            "rides": rides,
+            "filtered_total": filtered_total,
+            "page": (offset // limit) + 1,
+            "limit": limit,
+            "total_pages": (filtered_total + limit - 1) // limit if filtered_total > 0 else 0,
+            "status_filter": status_filter or "all",
+        }
+
     async def get_active_ride_for_rider(self, rider_id: UUID) -> Ride | None:
         """Get rider's current active ride (confirmed, assigned, en route, arrived, or in progress)."""
         return await self.ride_repo.get_active_ride_for_rider(rider_id)
