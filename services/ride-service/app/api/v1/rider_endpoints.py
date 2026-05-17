@@ -53,7 +53,7 @@ async def get_rider_history_overview(
     status: str | None = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    user: UserClaims = Depends(require_role([UserRole.RIDER])),
+    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
     """Get rider history summary, profile stats, and a filtered ride list."""
@@ -132,7 +132,7 @@ async def get_driver_contact(
 )
 async def get_ride_fare(
     ride_id: UUID,
-    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.DRIVER, UserRole.ADMIN])),
+    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.DRIVER, UserRole.ADMIN, UserRole.FACILITY])),
 ):
     """Get fare breakdown for a ride from payment-service."""
     payment_client = PaymentServiceClient(settings.PAYMENT_SERVICE_URL)

@@ -43,7 +43,8 @@ async def stripe_webhook(
     logger.info(f"Stripe webhook received: {event_type}")
     tx_repo = TransactionRepository(session)
     stripe_object = event.data.object if event.data else None
-    metadata = stripe_object.metadata if stripe_object and hasattr(stripe_object, "metadata") else {}
+    raw_metadata = stripe_object.metadata if stripe_object and hasattr(stripe_object, "metadata") else None
+    metadata = dict(raw_metadata) if raw_metadata else {}
     order_id = metadata.get("order_id") if metadata else None
     payment_intent_id = stripe_object.id if stripe_object else None
 

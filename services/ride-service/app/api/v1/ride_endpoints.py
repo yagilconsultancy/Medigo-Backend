@@ -74,7 +74,7 @@ async def get_my_rides(
     status: str | None = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
-    user: UserClaims = Depends(require_role([UserRole.RIDER])),
+    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
     offset = (page - 1) * limit
@@ -161,7 +161,7 @@ async def get_driver_active_ride(
 @router.get("/{ride_id}", response_model=StandardResponse[RideDetailResponse])
 async def get_ride_detail(
     ride_id: UUID,
-    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
     detail = await service.get_ride_detail(ride_id)
@@ -195,7 +195,7 @@ async def get_ride_detail(
 @router.get("/{ride_id}/timeline", response_model=StandardResponse[list[StatusLogResponse]])
 async def get_ride_timeline(
     ride_id: UUID,
-    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
     timeline = await service.get_ride_timeline(ride_id)
@@ -224,7 +224,7 @@ async def transition_ride_status(
 async def cancel_ride(
     ride_id: UUID,
     request: CancelRideRequest,
-    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
     ride = await service.cancel_ride(ride_id, user.id, request.reason)
