@@ -7,7 +7,7 @@ import aiosmtplib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.config import settings
-from mediride_common.exceptions import RetryableError, ServiceUnavailableError
+from medigo_common.exceptions import RetryableError, ServiceUnavailableError
 
 logger = logging.getLogger(__name__)
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -194,51 +194,43 @@ async def send_ride_notification_email(
     ride_details: dict | None = None,
 ) -> bool:
     """Send ride notification email (generic template for all ride events)."""
-    ride_info = ""
-    if ride_details:
-        ride_info = f"""
-        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-            <h3 style="margin-top: 0;">Ride Details</h3>
-            <p><strong>Ride ID:</strong> #{ride_details.get('ride_id', 'N/A')[:8]}</p>
-            <p><strong>Pickup:</strong> {ride_details.get('pickup_address', 'N/A')}</p>
-            <p><strong>Destination:</strong> {ride_details.get('destination_address', 'N/A')}</p>
-            <p><strong>Scheduled:</strong> {ride_details.get('scheduled_at', 'N/A')}</p>
-        </div>
-        """
+    ride_id_short = ride_details.get('ride_id', 'N/A')[:8] if ride_details else ''
 
-    html = f"""
-    <html>
-    <head>
-        <style>
-            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-            .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-            .header {{ background-color: #3B5998; color: white; padding: 20px; text-align: center; }}
-            .content {{ padding: 20px; background-color: #ffffff; }}
-            .button {{ background-color: #3B5998; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0; }}
-            .footer {{ text-align: center; padding: 20px; color: #888; font-size: 12px; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>MediGo</h1>
+    try:
+        template = _template_env.get_template("ride_notification.html")
+        html = template.render(
+            name=name,
+            title=title,
+            body=body,
+            ride_details=ride_details,
+            ride_id_short=ride_id_short,
+        )
+    except Exception as e:
+        logger.exception("Failed to render ride notification email for %s: %s", to, e)
+        # Fallback if template not found
+        ride_info = ""
+        if ride_details:
+            ride_info = f"""
+            <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <h3 style="margin-top: 0;">Ride Details</h3>
+                <p><strong>Ride ID:</strong> #{ride_id_short}</p>
+                <p><strong>Pickup:</strong> {ride_details.get('pickup_address', 'N/A')}</p>
+                <p><strong>Destination:</strong> {ride_details.get('destination_address', 'N/A')}</p>
+                <p><strong>Scheduled:</strong> {ride_details.get('scheduled_at', 'N/A')}</p>
             </div>
-            <div class="content">
-                <p>Hi {name},</p>
-                <h2>{title}</h2>
-                <p>{body}</p>
-                {ride_info}
-                <p>You can view your ride details in the MediGo app.</p>
-                <p>Thank you for choosing MediGo!</p>
-            </div>
-            <div class="footer">
-                <p>&copy; 2026 MediGo. All rights reserved.</p>
-                <p>This is an automated notification. Please do not reply to this email.</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
+            """
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - {title}</h2>
+            <p>Hi {name},</p>
+            <p>{body}</p>
+            {ride_info}
+            <p>You can view your ride details in the MediGo app.</p>
+            <p>Thank you for choosing MediGo!</p>
+        </body>
+        </html>
+        """
     return await send_email(to, subject, html)
 
 
@@ -249,7 +241,7 @@ async def send_payment_receipt_email(
 ) -> bool:
     """Send a payment receipt email after a successful ride charge."""
     trip_number = receipt.get("trip_number", "Trip Receipt")
-    subject = f"MediRide - Receipt for {trip_number}"
+    subject = f"medigo - Receipt for {trip_number}"
 
     template_context = {
         "name": name,
