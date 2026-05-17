@@ -275,7 +275,7 @@ class StripeClient:
         user_id: str,
         amount: float,
         *,
-        currency: str = "usd",
+        currency: str = "cad",
         email: str | None = None,
         description: str | None = None,
         metadata: dict[str, str] | None = None,
@@ -372,7 +372,7 @@ class StripeClient:
         try:
             intent = await stripe.PaymentIntent.create_async(
                 amount=amount_cents,
-                currency="usd",
+                currency="cad",
                 customer=customer_id,
                 payment_method=data_key,
                 off_session=True,
@@ -420,7 +420,7 @@ class StripeClient:
         try:
             intent = await stripe.PaymentIntent.create_async(
                 amount=amount_cents,
-                currency="usd",
+                currency="cad",
                 customer=customer_id,
                 payment_method=data_key,
                 capture_method="manual",
@@ -563,7 +563,7 @@ class StripeClient:
         try:
             transfer = await stripe.Transfer.create_async(
                 amount=amount_cents,
-                currency="usd",
+                currency="cad",
                 destination=connected_account_id,
                 metadata={"order_id": order_id},
             )

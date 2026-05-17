@@ -344,7 +344,7 @@ class AnalyticsService:
         for i, row in enumerate(rows):
             fid = str(row["facility_id"])
             info = facility_data.get(fid, {})
-            f_type = info.get("facility_type", "Unknown")
+            f_type = info.get("facility_type") or "Unknown"
             type_counts[f_type] = type_counts.get(f_type, 0) + 1
             facilities.append(
                 TopFacilityEntry(

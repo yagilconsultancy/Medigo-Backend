@@ -13,7 +13,7 @@ class Transaction(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), nullable=False, index=True)
     transaction_type: Mapped[str] = mapped_column(String(30), nullable=False)
     amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), default="USD")
+    currency: Mapped[str] = mapped_column(String(3), default="CAD")
     status: Mapped[str] = mapped_column(String(20), default=PaymentStatus.PENDING)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     reference_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
