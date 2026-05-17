@@ -5,8 +5,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.stripe_client import StripeClient
-from app.dependencies import get_db, get_stripe_client
+from app.dependencies import get_db, get_publisher, get_stripe_client
 from app.repositories.transaction_repo import TransactionRepository
+from mediride_common.events.constants import Exchanges, RoutingKeys
+from mediride_common.events.publisher import EventPublisher
+from mediride_common.events.schemas import PaymentCompletedPayload
 from mediride_common.schemas.enums import PaymentStatus
 
 logger = logging.getLogger(__name__)
@@ -19,6 +22,7 @@ async def stripe_webhook(
     request: Request,
     session: AsyncSession = Depends(get_db),
     stripe_client: StripeClient = Depends(get_stripe_client),
+    publisher: EventPublisher = Depends(get_publisher),
     stripe_signature: str = Header(None, alias="Stripe-Signature"),
 ):
     """Handle incoming Stripe webhook events."""
@@ -39,52 +43,65 @@ async def stripe_webhook(
             detail="Invalid webhook signature",
         )
 
-    event_type = event.type
+    event_type = event["type"]
     logger.info(f"Stripe webhook received: {event_type}")
     tx_repo = TransactionRepository(session)
-    stripe_object = event.data.object if event.data else None
-    raw_metadata = stripe_object.metadata if stripe_object and hasattr(stripe_object, "metadata") else None
-    metadata = dict(raw_metadata) if raw_metadata else {}
-    order_id = metadata.get("order_id") if metadata else None
-    payment_intent_id = stripe_object.id if stripe_object else None
+    stripe_object = event["data"]["object"]
+    payment_intent_id = stripe_object["id"]
+
+    # Look up transaction by payment_intent_id (stored as reference_id at creation)
+    # This is the most reliable identifier — no metadata dependency
+    tx = await tx_repo.get_by_reference_id(payment_intent_id)
 
     if event_type == "payment_intent.succeeded":
-        if not order_id:
-            logger.warning("Stripe payment_intent.succeeded missing order_id metadata")
-        else:
-            tx = await tx_repo.get_by_order_id(order_id)
-            if not tx and payment_intent_id:
-                tx = await tx_repo.get_by_reference_id(payment_intent_id)
-
-            if not tx:
-                logger.warning("No transaction found for Stripe order_id=%s", order_id)
-            elif tx.status != PaymentStatus.COMPLETED:
-                amount_received = getattr(stripe_object, "amount_received", None)
-                currency = getattr(stripe_object, "currency", None)
-                update_kwargs = {
-                    "status": PaymentStatus.COMPLETED,
-                    "reference_id": payment_intent_id or tx.reference_id,
-                    "description": f"Mobile PaymentIntent order_id={order_id}",
-                }
+        if not tx:
+            logger.warning(
+                "No transaction found for PaymentIntent %s", payment_intent_id
+            )
+        elif tx.status != PaymentStatus.COMPLETED:
+            update_kwargs: dict = {
+                "status": PaymentStatus.COMPLETED,
+                "reference_id": payment_intent_id,
+            }
+            try:
+                amount_received = stripe_object["amount_received"]
                 if amount_received is not None:
                     update_kwargs["amount"] = Decimal(str(amount_received)) / Decimal("100")
+            except (KeyError, TypeError):
+                pass
+            try:
+                currency = stripe_object["currency"]
                 if currency:
                     update_kwargs["currency"] = str(currency).upper()
-                await tx_repo.update(tx, **update_kwargs)
-    elif event_type == "payment_intent.payment_failed":
-        if not order_id:
-            logger.warning("Stripe payment_intent.payment_failed missing order_id metadata")
-        else:
-            tx = await tx_repo.get_by_order_id(order_id)
-            if not tx and payment_intent_id:
-                tx = await tx_repo.get_by_reference_id(payment_intent_id)
-            if tx and tx.status != PaymentStatus.FAILED:
-                await tx_repo.update(
-                    tx,
-                    status=PaymentStatus.FAILED,
-                    reference_id=payment_intent_id or tx.reference_id,
-                    description=f"Mobile PaymentIntent order_id={order_id}",
+            except (KeyError, TypeError):
+                pass
+            await tx_repo.update(tx, **update_kwargs)
+            logger.info("Transaction %s marked COMPLETED", tx.id)
+
+            # Publish event so ride-service transitions ride from PENDING → REQUESTED
+            if tx.ride_id:
+                await publisher.publish(
+                    Exchanges.PAYMENTS,
+                    RoutingKeys.PAYMENT_COMPLETED,
+                    PaymentCompletedPayload(
+                        transaction_id=tx.id,
+                        ride_id=tx.ride_id,
+                        user_id=tx.user_id,
+                        amount=float(tx.amount),
+                        status=PaymentStatus.COMPLETED,
+                    ).model_dump(mode="json"),
                 )
+                logger.info("Published PAYMENT_COMPLETED for ride %s", tx.ride_id)
+
+    elif event_type == "payment_intent.payment_failed":
+        if tx and tx.status != PaymentStatus.FAILED:
+            await tx_repo.update(
+                tx,
+                status=PaymentStatus.FAILED,
+                reference_id=payment_intent_id,
+            )
+            logger.info("Transaction %s marked FAILED", tx.id)
+
     elif event_type == "charge.refunded":
         pass
     elif event_type == "transfer.paid":

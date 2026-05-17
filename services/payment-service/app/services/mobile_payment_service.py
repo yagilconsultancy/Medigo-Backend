@@ -65,6 +65,7 @@ class MobilePaymentService:
         if existing_tx:
             await self.tx_repo.update(
                 existing_tx,
+                ride_id=order_id,
                 amount=amount,
                 currency=(result.currency or (currency or settings.DEFAULT_CURRENCY).upper()),
                 status=PaymentStatus.PENDING,
@@ -74,6 +75,7 @@ class MobilePaymentService:
         else:
             await self.tx_repo.create(
                 Transaction(
+                    ride_id=order_id,
                     user_id=user_id,
                     transaction_type=TransactionType.RIDE_PAYMENT,
                     amount=amount,

@@ -579,6 +579,18 @@ class StripeClient:
             return StripePaymentResult(success=False, message=str(e))
 
     # ------------------------------------------------------------------ #
+    # Retrieve PaymentIntent
+    # ------------------------------------------------------------------ #
+
+    async def retrieve_payment_intent(self, payment_intent_id: str) -> dict | None:
+        """Retrieve a PaymentIntent from Stripe by ID."""
+        try:
+            intent = await stripe.PaymentIntent.retrieve_async(payment_intent_id)
+            return intent
+        except Exception:
+            return None
+
+    # ------------------------------------------------------------------ #
     # Webhook Verification
     # ------------------------------------------------------------------ #
 
