@@ -242,7 +242,11 @@ class AnalyticsRepository:
                 RideStatusLog.to_status,
                 RideStatusLog.timestamp,
                 RideStatusLog.notes,
+                Ride.rider_id,
+                Ride.passenger_first_name,
+                Ride.passenger_last_name,
             )
+            .join(Ride, Ride.id == RideStatusLog.ride_id)
             .where(RideStatusLog.ride_id.in_(select(ride_ids_sub)))
             .order_by(desc(RideStatusLog.timestamp))
             .limit(limit)
@@ -255,6 +259,9 @@ class AnalyticsRepository:
                 "to_status": row.to_status,
                 "timestamp": row.timestamp,
                 "notes": row.notes,
+                "rider_id": row.rider_id,
+                "passenger_first_name": row.passenger_first_name,
+                "passenger_last_name": row.passenger_last_name,
             }
             for row in result.all()
         ]

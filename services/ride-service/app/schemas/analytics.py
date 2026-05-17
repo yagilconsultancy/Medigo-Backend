@@ -69,6 +69,8 @@ class ActivityEntry(BaseModel):
     title: str
     description: str
     ride_id: UUID | None = None
+    rider_name: str | None = None
+    passenger_name: str | None = None
     timestamp: datetime
 
 

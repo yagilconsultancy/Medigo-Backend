@@ -175,6 +175,35 @@ class AnalyticsService:
     ) -> RecentActivityResponse:
         rows = await self.repo.get_recent_activity(limit=limit, business_id=business_id)
         name_by_id = await self._get_activity_name_map(rows)
+
+        # Resolve rider names via user-service
+        rider_ids: set[UUID] = set()
+        for row in rows:
+            rider_id = row.get("rider_id")
+            if rider_id:
+                rider_ids.add(rider_id)
+
+        rider_name_map: dict[str, str] = {}
+        if rider_ids:
+            # Include rider IDs in the batch lookup (reuse existing name_by_id where possible)
+            missing_ids = [rid for rid in rider_ids if str(rid) not in name_by_id]
+            if missing_ids:
+                try:
+                    users = await self.user_client.batch_get_users(missing_ids)
+                    for user in users:
+                        uid = user.get("id")
+                        if uid:
+                            name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+                            if name:
+                                rider_name_map[uid] = name
+                except Exception as exc:
+                    logger.error(f"Failed to resolve rider names: {exc}")
+            # Merge with existing name map
+            for rid in rider_ids:
+                rid_str = str(rid)
+                if rid_str in name_by_id:
+                    rider_name_map[rid_str] = name_by_id[rid_str]
+
         activities = []
         for row in rows:
             to_status = row["to_status"]
@@ -187,12 +216,23 @@ class AnalyticsService:
             if notes:
                 description = f"{title} - {notes}"
 
+            # Build passenger name from ride fields
+            passenger_first = row.get("passenger_first_name") or ""
+            passenger_last = row.get("passenger_last_name") or ""
+            passenger_name = f"{passenger_first} {passenger_last}".strip() or None
+
+            # Resolve rider name
+            rider_id = row.get("rider_id")
+            rider_name = rider_name_map.get(str(rider_id)) if rider_id else None
+
             activities.append(ActivityEntry(
                 id=row["id"],
                 event_type=event_type,
                 title=title,
                 description=description,
                 ride_id=row["ride_id"],
+                rider_name=rider_name,
+                passenger_name=passenger_name,
                 timestamp=row["timestamp"],
             ))
         return RecentActivityResponse(activities=activities)

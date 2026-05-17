@@ -255,7 +255,7 @@ async def send_payment_receipt_email(
         "name": name,
         "trip_number": trip_number,
         "currency": receipt.get("currency", "CAD"),
-        "total_fare": f"{float(receipt.get('total_fare') or 0):.2f}",
+        "total_fare": f"{float(receipt.get('total_fare') or 0) / 100:.2f}",
         "ride_date": receipt.get("ride_date") or "N/A",
         "pickup_address": receipt.get("pickup_address") or "N/A",
         "destination_address": receipt.get("destination_address") or "N/A",
