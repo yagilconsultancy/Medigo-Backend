@@ -76,7 +76,7 @@ class Ride(Base):
 
     # Status
     status: Mapped[str] = mapped_column(
-        String(40), default=RideStatus.REQUESTED, index=True
+        String(40), default=RideStatus.PENDING, index=True
     )
 
     # Medical info

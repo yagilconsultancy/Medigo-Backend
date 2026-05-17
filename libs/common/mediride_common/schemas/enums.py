@@ -10,6 +10,7 @@ class UserRole(StrEnum):
 
 
 class RideStatus(StrEnum):
+    PENDING = "pending"
     REQUESTED = "requested"
     PENDING_BUSINESS_ASSIGNMENT = "pending_business_assignment"
     CONFIRMED = "confirmed"

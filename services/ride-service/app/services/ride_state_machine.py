@@ -3,6 +3,10 @@ from mediride_common.exceptions import ValidationError
 from mediride_common.schemas.enums import RideStatus
 
 VALID_TRANSITIONS: dict[str, list[str]] = {
+    RideStatus.PENDING: [
+        RideStatus.REQUESTED,
+        RideStatus.CANCELLED,
+    ],
     RideStatus.REQUESTED: [
         RideStatus.CONFIRMED,
         RideStatus.CANCELLED,

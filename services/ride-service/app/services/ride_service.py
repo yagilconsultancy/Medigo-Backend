@@ -130,7 +130,7 @@ class RideService:
         log = RideStatusLog(
             ride_id=ride.id,
             from_status=None,
-            to_status=RideStatus.REQUESTED,
+            to_status=RideStatus.PENDING,
             changed_by=created_by,
             notes=notes,
         )

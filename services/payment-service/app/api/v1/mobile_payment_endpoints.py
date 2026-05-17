@@ -32,7 +32,7 @@ def _get_mobile_payment_service(
 @router.post("/payment-intent", response_model=StandardResponse[MobilePaymentIntentResponse])
 async def create_mobile_payment_intent(
     body: CreateMobilePaymentIntentRequest,
-    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.FACILITY])),
     service: MobilePaymentService = Depends(_get_mobile_payment_service),
 ):
     payment_intent = await service.create_payment_intent(

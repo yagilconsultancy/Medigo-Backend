@@ -1,10 +1,13 @@
 import logging
 
 from app.dependencies import get_broker, get_db, get_publisher
+from app.models.ride_status_log import RideStatusLog
 from app.repositories.ride_repo import RideRepository
+from app.repositories.status_log_repo import StatusLogRepository
 from mediride_common.events.constants import Exchanges, Queues, RoutingKeys
 from mediride_common.events.consumer import BaseEventConsumer
 from mediride_common.events.schemas import DriverStatusPayload, EventEnvelope, PaymentCompletedPayload
+from mediride_common.schemas.enums import RideStatus
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +27,7 @@ class DriverStatusConsumer(BaseEventConsumer):
 
 
 class PaymentEventConsumer(BaseEventConsumer):
-    """Consumes payment events to update ride fare."""
+    """Consumes payment events to update ride fare and transition status."""
 
     async def handle(self, envelope: EventEnvelope) -> None:
         if envelope.event_type != RoutingKeys.PAYMENT_COMPLETED:
@@ -35,10 +38,26 @@ class PaymentEventConsumer(BaseEventConsumer):
 
         async for session in get_db():
             repo = RideRepository(session)
+            status_log_repo = StatusLogRepository(session)
             ride = await repo.get_by_id(payload.ride_id)
             if ride:
                 await repo.update(payload.ride_id, final_fare=payload.amount)
                 logger.info(f"Updated ride {payload.ride_id} fare to ${payload.amount}")
+
+                # Transition ride from PENDING to REQUESTED after payment confirmation
+                if ride.status == RideStatus.PENDING:
+                    await repo.update(payload.ride_id, status=RideStatus.REQUESTED)
+                    log = RideStatusLog(
+                        ride_id=payload.ride_id,
+                        from_status=RideStatus.PENDING,
+                        to_status=RideStatus.REQUESTED,
+                        changed_by=payload.user_id,
+                        notes="Payment confirmed via Stripe webhook",
+                    )
+                    await status_log_repo.create(log)
+                    logger.info(
+                        f"Ride {payload.ride_id} transitioned from PENDING to REQUESTED"
+                    )
 
 
 async def setup_consumers() -> None:
