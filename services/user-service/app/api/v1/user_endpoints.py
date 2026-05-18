@@ -37,9 +37,15 @@ def _get_user_service(session: AsyncSession = Depends(get_db)) -> UserService:
 async def get_my_profile(
     user: UserClaims = Depends(get_current_user),
     service: UserService = Depends(_get_user_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     profile = await service.get_profile(user.id)
-    return StandardResponse(data=UserProfileResponse.model_validate(profile))
+    data = UserProfileResponse.model_validate(profile)
+    if data.avatar_url and data.avatar_url.startswith("s3://"):
+        path = data.avatar_url[len("s3://"):]
+        bucket, _, key = path.partition("/")
+        data.avatar_url = await s3_client.generate_presigned_url(bucket, key)
+    return StandardResponse(data=data)
 
 
 @router.put("/me", response_model=StandardResponse[UserProfileResponse])
@@ -113,8 +119,13 @@ async def update_my_profile(
         raise ValidationError("No fields provided for update")
 
     profile = await service.update_profile(user.id, **update_data)
+    data = UserProfileResponse.model_validate(profile)
+    if data.avatar_url and data.avatar_url.startswith("s3://"):
+        path = data.avatar_url[len("s3://"):]
+        bucket, _, key = path.partition("/")
+        data.avatar_url = await s3_client.generate_presigned_url(bucket, key)
     return StandardResponse(
-        data=UserProfileResponse.model_validate(profile),
+        data=data,
         message="Profile updated",
     )
 
@@ -124,6 +135,7 @@ async def update_my_profile_json(
     request: UpdateProfileRequest,
     user: UserClaims = Depends(get_current_user),
     service: UserService = Depends(_get_user_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     """
     Update user profile with JSON (no file upload).
@@ -133,8 +145,13 @@ async def update_my_profile_json(
     """
     update_data = request.model_dump(exclude_unset=True)
     profile = await service.update_profile(user.id, **update_data)
+    data = UserProfileResponse.model_validate(profile)
+    if data.avatar_url and data.avatar_url.startswith("s3://"):
+        path = data.avatar_url[len("s3://"):]
+        bucket, _, key = path.partition("/")
+        data.avatar_url = await s3_client.generate_presigned_url(bucket, key)
     return StandardResponse(
-        data=UserProfileResponse.model_validate(profile),
+        data=data,
         message="Profile updated",
     )
 

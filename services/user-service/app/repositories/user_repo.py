@@ -51,3 +51,5 @@ class UserRepository:
         await self.session.execute(
             update(User).where(User.id == user_id).values(**kwargs)
         )
+        await self.session.flush()
+        self.session.expire_all()

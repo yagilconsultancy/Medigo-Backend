@@ -65,6 +65,32 @@ class RabbitMQBroker:
         )
         self._exchanges[Exchanges.DLX] = dlx
 
+    async def ensure_queue(
+        self,
+        queue_name: str,
+        exchange_name: str,
+        routing_keys: list[str],
+    ) -> None:
+        """Declare a durable queue and bind it to an exchange.
+
+        Call this from producer services so that messages are persisted
+        even when the consumer service has not started yet.
+        """
+        if not self._channel:
+            raise RuntimeError("Channel not initialized")
+        queue = await self._channel.declare_queue(
+            queue_name,
+            durable=True,
+            arguments={"x-dead-letter-exchange": Exchanges.DLX},
+        )
+        exchange = self.get_exchange(exchange_name)
+        for key in routing_keys:
+            await queue.bind(exchange, routing_key=key)
+        logger.info(
+            "Ensured queue %s bound to %s with keys %s",
+            queue_name, exchange_name, routing_keys,
+        )
+
     def get_exchange(self, name: str) -> AbstractExchange:
         if name not in self._exchanges:
             raise RuntimeError(f"Exchange '{name}' not declared")
