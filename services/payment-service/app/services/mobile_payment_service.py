@@ -6,8 +6,15 @@ from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.repositories.transaction_repo import TransactionRepository
 from app.schemas.mobile_payment import MobilePaymentIntentResponse
 from app.models.transaction import Transaction
-from mediride_common.exceptions import ServiceUnavailableError
+from mediride_common.exceptions import ServiceUnavailableError, ValidationError
 from mediride_common.schemas.enums import PaymentStatus, TransactionType
+
+
+def _require_uuid(value: str, field: str) -> UUID:
+    try:
+        return UUID(value)
+    except (ValueError, AttributeError):
+        raise ValidationError(f"Invalid {field}: '{value}' is not a valid UUID")
 
 
 class MobilePaymentService:
@@ -61,11 +68,13 @@ class MobilePaymentService:
                 f"Unable to create mobile PaymentIntent: {result.message or 'Unknown Stripe error'}"
             )
 
+        ride_uuid = _require_uuid(order_id, "order_id")
+
         existing_tx = await self.tx_repo.get_by_order_id(order_id)
         if existing_tx:
             await self.tx_repo.update(
                 existing_tx,
-                ride_id=order_id,
+                ride_id=ride_uuid,
                 amount=amount,
                 currency=(result.currency or (currency or settings.DEFAULT_CURRENCY).upper()),
                 status=PaymentStatus.PENDING,
@@ -75,7 +84,7 @@ class MobilePaymentService:
         else:
             await self.tx_repo.create(
                 Transaction(
-                    ride_id=order_id,
+                    ride_id=ride_uuid,
                     user_id=user_id,
                     transaction_type=TransactionType.RIDE_PAYMENT,
                     amount=amount,
