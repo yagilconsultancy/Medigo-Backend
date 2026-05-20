@@ -7,7 +7,7 @@ import aiosmtplib
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.config import settings
-from medigo_common.exceptions import RetryableError, ServiceUnavailableError
+from mediride_common.exceptions import RetryableError, ServiceUnavailableError
 
 logger = logging.getLogger(__name__)
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
