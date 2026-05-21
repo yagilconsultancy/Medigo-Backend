@@ -100,6 +100,7 @@ class RideResponse(BaseModel):
     estimated_duration_minutes: int | None = None
     estimated_fare: float | None = None
     final_fare: float | None = None
+    fare_estimate_details: dict | None = None
     special_instructions: str | None = None
     visit_type: str | None = None
     facility_name: str | None = None
@@ -156,6 +157,7 @@ class RideDetailResponse(BaseModel):
     actual_duration_minutes: int | None = None
     estimated_fare: float | None = None
     final_fare: float | None = None
+    fare_estimate_details: dict | None = None
     visit_type: str | None = None
     appointment_time: datetime | None = None
     facility_name: str | None = None

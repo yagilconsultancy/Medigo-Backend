@@ -96,6 +96,35 @@ class RideService:
             int(round(duration_minutes)) if duration_minutes is not None else None
         )
         ride_data["estimated_fare"] = estimate.get("total_fare")
+
+        # Store the full fare estimate breakdown so riders can see pricing details
+        ride_data["fare_estimate_details"] = {
+            "base_fare": estimate.get("base_fare"),
+            "distance_km": estimate.get("distance_km"),
+            "distance_charge": estimate.get("distance_charge"),
+            "wait_time_charge": estimate.get("wait_time_charge", 0),
+            "surcharges_total": estimate.get("surcharges_total"),
+            "surcharges_capped": estimate.get("surcharges_capped"),
+            "surcharge_details": estimate.get("surcharge_details", []),
+            "highway_407_toll": estimate.get("highway_407_toll"),
+            "insurance_gateway_fee": estimate.get("insurance_gateway_fee"),
+            "flat_surcharge": estimate.get("flat_surcharge"),
+            "platform_fee": estimate.get("platform_fee"),
+            "total_fare": estimate.get("total_fare"),
+            "driver_earnings": estimate.get("driver_earnings"),
+            "is_dialysis_rate": estimate.get("is_dialysis_rate"),
+            "rate_card_version": estimate.get("rate_card_version"),
+            "care_assistant_fee": estimate.get("care_assistant_fee", 0),
+            "accessibility_fee": estimate.get("accessibility_fee", 0),
+            "attendant_fee": estimate.get("attendant_fee", 0),
+            "is_round_trip": estimate.get("is_round_trip", False),
+            "return_distance_charge": estimate.get("return_distance_charge", 0),
+            "ride_type": estimate.get("ride_type"),
+            "trip_type": estimate.get("trip_type"),
+            "cancellation_fees": estimate.get("cancellation_fees", []),
+            "currency": estimate.get("currency", "CAD"),
+        }
+
         return ride_data
 
     def _normalize_ride_datetimes(self, ride_data: dict) -> dict:

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.location_service_client import LocationServiceClient
 from app.config import settings
 from app.dependencies import get_db
+from app.repositories.cancellation_policy_repo import CancellationPolicyRepository
 from app.repositories.dialysis_rate_plan_repo import DialysisRatePlanRepository
 from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.holiday_repo import HolidayRepository
@@ -17,6 +18,7 @@ from app.schemas.rate_card import (
     BaseFareEstimateRequest,
     BaseFareEstimateResponse,
     BaseFareEstimateItem,
+    CancellationFeeInfo,
     RiderFareEstimateArrayResponse,
     RiderFareEstimateItem,
     RiderFareEstimateRequest,
@@ -84,6 +86,21 @@ def _base_estimate_copy_for_service_type(service_type: str) -> dict:
         "best_for": best_for,
         "features": features,
     }
+
+
+async def _get_cancellation_fees(
+    session: AsyncSession, service_type: str
+) -> list[CancellationFeeInfo]:
+    """Fetch active cancellation fee tiers for a service type."""
+    repo = CancellationPolicyRepository(session)
+    policies = await repo.get_by_service_type(service_type)
+    return [
+        CancellationFeeInfo(
+            cancellation_window=p.cancellation_window,
+            fee=p.fee,
+        )
+        for p in policies
+    ]
 
 
 @router.post("/fare-estimate")
@@ -190,6 +207,10 @@ async def rider_fare_estimate(
                 }
             )
 
+            cancellation_fees = await _get_cancellation_fees(
+                session, service_type.service_type
+            )
+
             estimates_list.append(
                 RiderFareEstimateItem(
                     service_type=service_type.service_type,
@@ -215,6 +236,7 @@ async def rider_fare_estimate(
                     return_distance_charge=estimate["return_distance_charge"],
                     ride_type=estimate["ride_type"],
                     trip_type=estimate["trip_type"],
+                    cancellation_fees=cancellation_fees,
                 )
             )
 
@@ -246,6 +268,8 @@ async def rider_fare_estimate(
         }
     )
 
+    cancellation_fees = await _get_cancellation_fees(session, body.ride_type)
+
     return StandardResponse(
         data=RiderFareEstimateResponse(
             distance_km=distance_km,
@@ -272,6 +296,7 @@ async def rider_fare_estimate(
             return_distance_charge=estimate["return_distance_charge"],
             ride_type=estimate["ride_type"],
             trip_type=estimate["trip_type"],
+            cancellation_fees=cancellation_fees,
             currency=settings.DEFAULT_CURRENCY,
             estimated_at=datetime.now(timezone.utc),
         )
@@ -381,6 +406,10 @@ async def calculate_base_fare(
             }
         )
 
+        cancellation_fees = await _get_cancellation_fees(
+            session, service_type.service_type
+        )
+
         estimates_list.append(
             BaseFareEstimateItem(
                 service_type=service_type.service_type,
@@ -404,6 +433,7 @@ async def calculate_base_fare(
                 trip_type=estimate["trip_type"],
                 is_round_trip=estimate["is_round_trip"],
                 return_distance_charge=estimate["return_distance_charge"],
+                cancellation_fees=cancellation_fees,
                 description=copy["description"],
                 passengers=copy["passengers"],
                 best_for=copy["best_for"],

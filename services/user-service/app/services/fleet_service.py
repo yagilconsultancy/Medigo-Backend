@@ -79,7 +79,7 @@ class FleetService:
         if existing:
             raise ConflictError("An invitation for this email already exists")
 
-        token = secrets.token_urlsafe(32)
+        token = secrets.token_urlsafe(5)
         invitation = DriverInvitation(
             business_id=fleet_id,
             email=email,

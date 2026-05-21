@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mediride_common.database.base import Base
@@ -102,6 +102,7 @@ class Ride(Base):
     # Fare
     estimated_fare: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     final_fare: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    fare_estimate_details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Cancellation
     cancelled_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), nullable=True)

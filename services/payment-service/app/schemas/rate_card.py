@@ -1,7 +1,14 @@
 from datetime import date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
+
+
+class CancellationFeeInfo(BaseModel):
+    """Cancellation fee tier shown on fare estimates."""
+    cancellation_window: str
+    fee: Decimal
 
 
 # ---- Rate Card Config Sub-Schemas ----
@@ -242,6 +249,7 @@ class FareEstimateResponse(BaseModel):
     return_distance_charge: float = 0
     ride_type: str = "ambulatory"
     trip_type: str = "transport_only"
+    cancellation_fees: list[CancellationFeeInfo] = []
 
 
 class RiderFareEstimateResponse(BaseModel):
@@ -274,6 +282,7 @@ class RiderFareEstimateResponse(BaseModel):
     return_distance_charge: float = 0
     ride_type: str = "ambulatory"
     trip_type: str = "transport_only"
+    cancellation_fees: list[CancellationFeeInfo] = []
 
     currency: str = "CAD"
     estimated_at: datetime
@@ -304,6 +313,7 @@ class RiderFareEstimateItem(BaseModel):
     return_distance_charge: float = 0
     ride_type: str = "ambulatory"
     trip_type: str = "transport_only"
+    cancellation_fees: list[CancellationFeeInfo] = []
 
 
 class RiderFareEstimateArrayResponse(BaseModel):
@@ -371,6 +381,7 @@ class BaseFareEstimateItem(BaseModel):
     trip_type: str = "transport_only"
     is_round_trip: bool = False
     return_distance_charge: float = 0
+    cancellation_fees: list[CancellationFeeInfo] = []
     description: str
     passengers: str
     best_for: str

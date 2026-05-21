@@ -292,7 +292,7 @@ class AdminDriverService:
                 fleet = await self.fleet_repo.get_by_id(request.fleet_id)
                 fleet_name = fleet.name if fleet else "MediRide"
 
-                token = secrets.token_urlsafe(32)
+                token = secrets.token_urlsafe(5)
                 invitation = DriverInvitation(
                     business_id=request.fleet_id,
                     email=request.email,
@@ -344,7 +344,7 @@ class AdminDriverService:
             await self.invitation_repo.revoke(existing.id)
 
         # Create new invitation
-        token = secrets.token_urlsafe(32)
+        token = secrets.token_urlsafe(5)
         invitation = DriverInvitation(
             business_id=fleet_id,
             email=email,
