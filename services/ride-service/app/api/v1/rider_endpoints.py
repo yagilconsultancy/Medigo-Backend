@@ -16,6 +16,7 @@ from app.schemas.ride import (
     DriverContactResponse,
     RebookRideRequest,
     RiderHistoryOverviewResponse,
+    RiderStatsResponse,
     RideResponse,
     ShareRideResponse,
     SharedRideResponse,
@@ -46,6 +47,19 @@ def _get_ride_service(
 
 
 @router.get(
+    "/rider/me/stats",
+    response_model=StandardResponse[RiderStatsResponse],
+)
+async def get_rider_stats(
+    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.FACILITY])),
+    service: RideService = Depends(_get_ride_service),
+):
+    """Get rider profile stats (total rides, miles, rating, member since)."""
+    stats = await service.get_rider_stats(user.id)
+    return StandardResponse(data=RiderStatsResponse(**stats))
+
+
+@router.get(
     "/rider/me/overview",
     response_model=StandardResponse[RiderHistoryOverviewResponse],
 )
@@ -56,7 +70,7 @@ async def get_rider_history_overview(
     user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
-    """Get rider history summary, profile stats, and a filtered ride list."""
+    """Get rider history summary and a filtered ride list."""
     offset = (page - 1) * limit
     data = await service.get_rider_history_overview(user.id, status, offset, limit)
 
@@ -111,7 +125,6 @@ async def get_rider_history_overview(
     return StandardResponse(
         data=RiderHistoryOverviewResponse(
             summary=data["summary"],
-            stats=data["stats"],
             rides=ride_responses,
             filtered_total=data["filtered_total"],
             page=data["page"],

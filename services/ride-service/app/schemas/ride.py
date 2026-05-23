@@ -219,7 +219,6 @@ class RiderStatsResponse(BaseModel):
 
 class RiderHistoryOverviewResponse(BaseModel):
     summary: RiderHistorySummaryResponse
-    stats: RiderStatsResponse
     rides: list[RideResponse]
     filtered_total: int
     page: int

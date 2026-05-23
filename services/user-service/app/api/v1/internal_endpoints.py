@@ -189,6 +189,7 @@ async def batch_get_users_internal(
                 "email": u.email,
                 "phone": u.phone,
                 "avatar_url": u.avatar_url,
+                "role": u.role,
                 "is_guest": u.is_guest,
             }
             for u in users

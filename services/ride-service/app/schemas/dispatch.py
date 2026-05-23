@@ -26,6 +26,8 @@ class UnassignedRideItem(BaseModel):
     scheduled_at: datetime
     distance_km: float | None = None
     estimated_fare: float | None = None
+    patient_name: str | None = None
+    rider_role: str | None = None
     special_requirements: list[str] = []
     assigned_status: str | None = None  # For "Assigned" tag in UI
 

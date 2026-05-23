@@ -598,6 +598,19 @@ class RideService:
             rider_id, status_filter, offset, limit
         )
         summary = await self.ride_repo.get_rider_history_summary(rider_id)
+
+        return {
+            "summary": summary,
+            "rides": rides,
+            "filtered_total": filtered_total,
+            "page": (offset // limit) + 1,
+            "limit": limit,
+            "total_pages": (filtered_total + limit - 1) // limit if filtered_total > 0 else 0,
+            "status_filter": status_filter or "all",
+        }
+
+    async def get_rider_stats(self, rider_id: UUID) -> dict:
+        summary = await self.ride_repo.get_rider_history_summary(rider_id)
         average_rating_given = await self.rating_repo.get_average_rating_given(
             rider_id, RatingType.RIDER_TO_DRIVER
         )
@@ -608,19 +621,10 @@ class RideService:
             member_since = datetime.fromisoformat(user_profile["created_at"]).strftime("%b %Y")
 
         return {
-            "summary": summary,
-            "stats": {
-                "total_rides": summary["total_rides"],
-                "miles_traveled": summary["miles_traveled"],
-                "average_rating_given": round(average_rating_given, 1),
-                "member_since": member_since,
-            },
-            "rides": rides,
-            "filtered_total": filtered_total,
-            "page": (offset // limit) + 1,
-            "limit": limit,
-            "total_pages": (filtered_total + limit - 1) // limit if filtered_total > 0 else 0,
-            "status_filter": status_filter or "all",
+            "total_rides": summary["total_rides"],
+            "miles_traveled": summary["miles_traveled"],
+            "average_rating_given": round(average_rating_given, 1),
+            "member_since": member_since,
         }
 
     async def get_active_ride_for_rider(self, rider_id: UUID) -> Ride | None:

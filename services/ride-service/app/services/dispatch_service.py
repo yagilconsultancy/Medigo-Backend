@@ -45,37 +45,48 @@ class DispatchService:
         # Get unassigned rides
         rides, _ = await self.repo.get_unassigned_rides(limit=50)
 
-        # Fetch rider names in batch
+        # Fetch rider names and roles in batch
         rider_ids = [r.rider_id for r in rides]
         rider_details = {}
         if rider_ids:
             try:
                 riders_data = await self.user_client.batch_get_users(rider_ids)
                 rider_details = {
-                    UUID(u["id"]): f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+                    UUID(u["id"]): {
+                        "name": f"{u.get('first_name', '')} {u.get('last_name', '')}".strip(),
+                        "role": u.get("role"),
+                    }
                     for u in riders_data if u.get("id")
                 }
             except Exception as e:
                 logger.error(f"Failed to fetch rider names: {e}")
 
-        unassigned_rides = [
-            UnassignedRideItem(
-                ride_id=r.id,
-                booking_number=f"BK-{str(r.id)[:8].upper()}",
-                rider_name=rider_details.get(r.rider_id, f"Rider {str(r.rider_id)[:8]}"),
-                ride_type=r.ride_type,
-                pickup_address=r.pickup_address,
-                destination_address=r.destination_address,
-                scheduled_at=r.scheduled_at,
-                distance_km=float(r.estimated_distance_miles) * 1.60934
-                if r.estimated_distance_miles
-                else None,
-                estimated_fare=float(r.estimated_fare) if r.estimated_fare else None,
-                special_requirements=self._extract_special_requirements(r),
-                assigned_status=None,
+        unassigned_rides = []
+        for r in rides:
+            rider_info = rider_details.get(r.rider_id, {})
+            patient_name = None
+            if r.passenger_first_name or r.passenger_last_name:
+                patient_name = f"{r.passenger_first_name or ''} {r.passenger_last_name or ''}".strip()
+
+            unassigned_rides.append(
+                UnassignedRideItem(
+                    ride_id=r.id,
+                    booking_number=f"BK-{str(r.id)[:8].upper()}",
+                    rider_name=rider_info.get("name", f"Rider {str(r.rider_id)[:8]}"),
+                    ride_type=r.ride_type,
+                    pickup_address=r.pickup_address,
+                    destination_address=r.destination_address,
+                    scheduled_at=r.scheduled_at,
+                    distance_km=float(r.estimated_distance_miles) * 1.60934
+                    if r.estimated_distance_miles
+                    else None,
+                    estimated_fare=float(r.estimated_fare) if r.estimated_fare else None,
+                    patient_name=patient_name,
+                    rider_role=rider_info.get("role"),
+                    special_requirements=self._extract_special_requirements(r),
+                    assigned_status=None,
+                )
             )
-            for r in rides
-        ]
 
         # Get available drivers from user-service
         available_drivers_data = await self.user_client.get_available_drivers()
@@ -132,29 +143,40 @@ class DispatchService:
             try:
                 riders_data = await self.user_client.batch_get_users(rider_ids)
                 rider_details = {
-                    UUID(u["id"]): f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+                    UUID(u["id"]): {
+                        "name": f"{u.get('first_name', '')} {u.get('last_name', '')}".strip(),
+                        "role": u.get("role"),
+                    }
                     for u in riders_data if u.get("id")
                 }
             except Exception as e:
                 logger.error(f"Failed to fetch rider names: {e}")
 
-        items = [
-            UnassignedRideItem(
-                ride_id=r.id,
-                booking_number=f"BK-{str(r.id)[:8].upper()}",
-                rider_name=rider_details.get(r.rider_id, f"Rider {str(r.rider_id)[:8]}"),
-                ride_type=r.ride_type,
-                pickup_address=r.pickup_address,
-                destination_address=r.destination_address,
-                scheduled_at=r.scheduled_at,
-                distance_km=float(r.estimated_distance_miles) * 1.60934
-                if r.estimated_distance_miles
-                else None,
-                estimated_fare=float(r.estimated_fare) if r.estimated_fare else None,
-                special_requirements=self._extract_special_requirements(r),
+        items = []
+        for r in rides:
+            rider_info = rider_details.get(r.rider_id, {})
+            patient_name = None
+            if r.passenger_first_name or r.passenger_last_name:
+                patient_name = f"{r.passenger_first_name or ''} {r.passenger_last_name or ''}".strip()
+
+            items.append(
+                UnassignedRideItem(
+                    ride_id=r.id,
+                    booking_number=f"BK-{str(r.id)[:8].upper()}",
+                    rider_name=rider_info.get("name", f"Rider {str(r.rider_id)[:8]}"),
+                    ride_type=r.ride_type,
+                    pickup_address=r.pickup_address,
+                    destination_address=r.destination_address,
+                    scheduled_at=r.scheduled_at,
+                    distance_km=float(r.estimated_distance_miles) * 1.60934
+                    if r.estimated_distance_miles
+                    else None,
+                    estimated_fare=float(r.estimated_fare) if r.estimated_fare else None,
+                    patient_name=patient_name,
+                    rider_role=rider_info.get("role"),
+                    special_requirements=self._extract_special_requirements(r),
+                )
             )
-            for r in rides
-        ]
 
         return {
             "rides": items,
@@ -212,6 +234,7 @@ class DispatchService:
         except Exception as e:
             logger.error(f"Failed to fetch rider details: {e}")
 
+
         try:
             if driver_ids:
                 drivers_data = await self.user_client.get_drivers_with_details(
@@ -232,11 +255,17 @@ class DispatchService:
             rider_name = f"{rider.get('first_name', '')} {rider.get('last_name', '')}".strip() or "Unknown"
             driver_name = f"{driver.get('first_name', '')} {driver.get('last_name', '')}".strip() or "Unassigned"
 
+            patient_name = None
+            if ride.passenger_first_name or ride.passenger_last_name:
+                patient_name = f"{ride.passenger_first_name or ''} {ride.passenger_last_name or ''}".strip()
+
             active_trips.append({
                 "trip_id": str(ride.id),
                 "booking_number": f"TR-{str(ride.id)[:8].upper()}",
                 "rider_id": str(ride.rider_id),
                 "rider_name": rider_name,
+                "rider_role": rider.get("role"),
+                "patient_name": patient_name,
                 "driver_id": str(ride.driver_id) if ride.driver_id else None,
                 "driver_name": driver_name,
                 "driver_avatar": driver.get("avatar_url"),
