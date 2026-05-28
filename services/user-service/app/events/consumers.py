@@ -112,7 +112,8 @@ class RideLifecycleConsumer(BaseEventConsumer):
     """
     Consumes ride lifecycle events to manage driver trip status.
 
-    When a driver is assigned to a ride (RIDE_DRIVER_ASSIGNED), sets is_on_trip = True.
+    When a driver goes en-route (RIDE_DRIVER_EN_ROUTE), sets is_on_trip = True.
+    This keeps drivers assigned to future scheduled rides available until the ride starts.
     When a ride ends (RIDE_COMPLETED, RIDE_CANCELLED, RIDE_NO_SHOW), sets is_on_trip = False.
     """
 
@@ -140,7 +141,17 @@ class RideLifecycleConsumer(BaseEventConsumer):
             driver_repo = DriverRepository(session)
 
             if envelope.event_type == RoutingKeys.RIDE_DRIVER_ASSIGNED:
-                # Driver assigned - mark as on trip
+                # Driver assigned to a ride — do NOT mark as on-trip yet.
+                # The driver stays available until they actually start heading
+                # to pickup (DRIVER_EN_ROUTE).  This keeps drivers assigned to
+                # future scheduled rides visible in the available-drivers list.
+                logger.info(
+                    f"Driver {driver_id} assigned to ride {ride_id} "
+                    f"(remains available until en-route)"
+                )
+
+            elif envelope.event_type == RoutingKeys.RIDE_DRIVER_EN_ROUTE:
+                # Driver is heading to pickup — now mark as on trip
                 await driver_repo.set_trip_status(driver_id, is_on_trip=True)
                 logger.info(f"Driver {driver_id} marked as on trip for ride {ride_id}")
 
@@ -194,6 +205,7 @@ async def setup_consumers() -> None:
         exchange_name=Exchanges.RIDES,
         routing_keys=[
             RoutingKeys.RIDE_DRIVER_ASSIGNED,
+            RoutingKeys.RIDE_DRIVER_EN_ROUTE,
             RoutingKeys.RIDE_DRIVER_UNASSIGNED,
             RoutingKeys.RIDE_COMPLETED,
             RoutingKeys.RIDE_CANCELLED,
