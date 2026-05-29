@@ -145,6 +145,11 @@ async def on_update_location(sid, data):
         if result:
             # Broadcast to specific ride room
             ride_room = f"ride_{result['ride_id']}"
+            room_sids = sio.manager.get_participants(ride_room, namespace="/tracking")
+            logger.info(
+                "Broadcasting location_update to room=%s skip_sid=%s room_members=%s",
+                ride_room, sid, [s for s, _ in room_sids],
+            )
             await sio.emit(
                 "location_update",
                 result,
@@ -152,6 +157,7 @@ async def on_update_location(sid, data):
                 namespace="/tracking",
                 skip_sid=sid,
             )
+            logger.info("location_update emitted to room=%s", ride_room)
 
             # Also broadcast to dispatch center room for live map
             await sio.emit(
