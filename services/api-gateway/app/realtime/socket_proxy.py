@@ -32,12 +32,17 @@ class BackendSocketBridge:
 
         @backend_client.on("*", namespace=namespace)
         async def forward_event(event: str, *args):
+            logger.info("forward_event: event=%s sid=%s namespace=%s args_len=%d", event, sid, namespace, len(args))
             payload = None
             if len(args) == 1:
                 payload = args[0]
             elif len(args) > 1:
                 payload = list(args)
-            await self.server.emit(event, payload, to=sid, namespace=namespace)
+            try:
+                await self.server.emit(event, payload, to=sid, namespace=namespace)
+                logger.info("forward_event: emitted %s to frontend sid=%s", event, sid)
+            except Exception as exc:
+                logger.error("forward_event: failed to emit %s to sid=%s: %s", event, sid, exc)
 
         @backend_client.on("disconnect", namespace=namespace)
         async def on_backend_disconnect():
