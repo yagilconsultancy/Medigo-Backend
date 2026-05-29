@@ -82,11 +82,16 @@ class BackendSocketBridge:
                 exc,
             )
 
-    async def emit_to_backend(self, sid: str, namespace: str, event: str, payload) -> None:
+    async def emit_to_backend(self, sid: str, namespace: str, event: str, payload):
         backend_client = self.backend_clients.get((sid, namespace))
         if not backend_client or not backend_client.connected:
             raise RuntimeError(f"Backend Socket.IO client not connected for namespace {namespace}")
-        await backend_client.emit(event, payload, namespace=namespace)
+        try:
+            result = await backend_client.call(event, payload, namespace=namespace, timeout=10)
+            return result
+        except socketio.exceptions.TimeoutError:
+            logger.warning("Backend ack timeout for event=%s sid=%s", event, sid)
+            return None
 
 
 sio = socketio.AsyncServer(
@@ -113,7 +118,7 @@ class ProxyNamespace(socketio.AsyncNamespace):
         elif len(args) > 1:
             payload = list(args)
 
-        await bridge.emit_to_backend(sid, self.namespace, event, payload)
+        return await bridge.emit_to_backend(sid, self.namespace, event, payload)
 
 
 for namespace in SOCKETIO_SERVICE_MAP:
