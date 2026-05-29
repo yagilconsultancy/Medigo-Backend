@@ -62,7 +62,7 @@ async def on_join_conversation(sid, data):
         return {"error": "conversation_id is required"}
 
     room = f"chat_{conversation_id}"
-    sio.enter_room(sid, room, namespace="/chat")
+    await sio.enter_room(sid, room, namespace="/chat")
     logger.info(f"User {session['user_id']} joined chat room {room}")
     return {"status": "joined", "room": room}
 
@@ -73,7 +73,7 @@ async def on_leave_conversation(sid, data):
     conversation_id = data.get("conversation_id")
     if conversation_id:
         room = f"chat_{conversation_id}"
-        sio.leave_room(sid, room, namespace="/chat")
+        await sio.leave_room(sid, room, namespace="/chat")
 
 
 @sio.on("send_message", namespace="/chat")

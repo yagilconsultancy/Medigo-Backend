@@ -66,7 +66,7 @@ async def on_join_ride(sid, data):
         return {"error": "ride_id is required"}
 
     room = f"ride_{ride_id}"
-    sio.enter_room(sid, room, namespace="/tracking")
+    await sio.enter_room(sid, room, namespace="/tracking")
     logger.info(f"User {session['user_id']} joined tracking room {room}")
     return {"status": "joined", "room": room}
 
@@ -77,7 +77,7 @@ async def on_leave_ride(sid, data):
     ride_id = data.get("ride_id")
     if ride_id:
         room = f"ride_{ride_id}"
-        sio.leave_room(sid, room, namespace="/tracking")
+        await sio.leave_room(sid, room, namespace="/tracking")
         logger.info(f"SID {sid} left tracking room {room}")
 
 
@@ -89,7 +89,7 @@ async def on_join_dispatch_center(sid):
         return {"error": "Only admins can join dispatch center"}
 
     room = "dispatch_center"
-    sio.enter_room(sid, room, namespace="/tracking")
+    await sio.enter_room(sid, room, namespace="/tracking")
     logger.info(f"Admin {session['user_id']} joined dispatch center room")
     return {"status": "joined", "room": room}
 
@@ -98,7 +98,7 @@ async def on_join_dispatch_center(sid):
 async def on_leave_dispatch_center(sid):
     """Leave dispatch center room."""
     room = "dispatch_center"
-    sio.leave_room(sid, room, namespace="/tracking")
+    await sio.leave_room(sid, room, namespace="/tracking")
     logger.info(f"SID {sid} left dispatch center room")
 
 
