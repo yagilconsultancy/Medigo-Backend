@@ -1,8 +1,9 @@
 import logging
+import uuid as uuid_mod
 from uuid import UUID
 
-from app.clients.auth_service_client import AuthServiceClient
 from app.clients.ride_service_client import RideServiceClient
+from app.models.user import User
 from app.repositories.caregiver_repo import CaregiverRepository
 from app.repositories.fleet_repo import FleetRepository
 from app.repositories.user_repo import UserRepository
@@ -29,14 +30,12 @@ class CaregiverService:
         caregiver_repo: CaregiverRepository,
         user_repo: UserRepository,
         fleet_repo: FleetRepository,
-        auth_client: AuthServiceClient,
         ride_client: RideServiceClient,
         publisher: EventPublisher,
     ):
         self.caregiver_repo = caregiver_repo
         self.user_repo = user_repo
         self.fleet_repo = fleet_repo
-        self.auth_client = auth_client
         self.ride_client = ride_client
         self.publisher = publisher
 
@@ -215,28 +214,23 @@ class CaregiverService:
         fleet_id: UUID | None,
         admin_id: UUID,
     ) -> dict:
-        """Create a new caregiver (driver with specialty)."""
+        """Create a new caregiver — data-only record, no login credentials."""
         # Validate specialty
         if specialty not in [s.value for s in CaregiverSpecialty]:
             raise ValueError(f"Invalid specialty: {specialty}")
 
-        # Create auth credential via auth-service
-        credential_data = await self.auth_client.create_driver_credential(
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
-        )
-        user_id = UUID(credential_data["user_id"])
-
-        # Create user record
-        user = await self.user_repo.create(
+        # Create user record (no auth credential — caregivers don't log in)
+        user_id = uuid_mod.uuid4()
+        user = User(
             id=user_id,
             email=email,
             first_name=first_name,
             last_name=last_name,
             phone=phone,
-            role="DRIVER",
+            role="caregiver",
+            business_id=fleet_id,
         )
+        await self.user_repo.create(user)
 
         # Create caregiver profile
         from app.models.caregiver_profile import CaregiverProfile

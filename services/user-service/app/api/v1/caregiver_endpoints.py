@@ -3,7 +3,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.clients.auth_service_client import AuthServiceClient
 from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_publisher
@@ -36,7 +35,6 @@ def _get_service(
         caregiver_repo=CaregiverRepository(session),
         user_repo=UserRepository(session),
         fleet_repo=FleetRepository(session),
-        auth_client=AuthServiceClient(settings.AUTH_SERVICE_URL),
         ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
         publisher=publisher,
     )
