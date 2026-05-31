@@ -47,6 +47,25 @@ class FleetApplicationService:
         logger.info(f"Fleet application created: {application.id}")
         return application
 
+    async def create_public_application(self, **kwargs) -> FleetApplication:
+        """Create a fleet application from a public (unauthenticated) submission."""
+        application = FleetApplication(**kwargs)
+        application = await self.app_repo.create(application)
+
+        await self.publisher.publish(
+            exchange_name=Exchanges.USERS,
+            routing_key=RoutingKeys.FLEET_APPLICATION_CREATED,
+            payload={
+                "application_id": str(application.id),
+                "company_name": application.company_name,
+                "email": application.email,
+                "created_by": "public",
+            },
+        )
+
+        logger.info(f"Public fleet application created: {application.id}")
+        return application
+
     async def list_applications(
         self,
         status_filter: str | None = None,

@@ -39,6 +39,7 @@ PUBLIC_PATHS = {
     "/payments/fare-estimate",  # Public fare estimates for riders
     "/tracking/test/simulate-location",  # Public test endpoint for simulating driver GPS
     "/locations/public/check-address",  # Public address validation
+    "/users/public/fleet/apply",  # Public fleet partner application
 }
 
 
