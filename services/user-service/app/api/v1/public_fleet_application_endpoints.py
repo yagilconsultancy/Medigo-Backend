@@ -136,7 +136,7 @@ async def submit_fleet_application(
         await s3_client.upload_file(
             bucket=settings.S3_BUCKET_DOCUMENTS,
             key=file_key,
-            data=file_data,
+            file_data=file_data,
             content_type=file.content_type or "application/octet-stream",
         )
 
