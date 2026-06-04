@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fare_breakdown import FareBreakdown
@@ -25,7 +25,7 @@ class AdminTransactionRepository:
                 func.count().label("total"),
                 func.coalesce(
                     func.sum(
-                        func.case(
+                        case(
                             (Transaction.status == "completed", Transaction.amount),
                             else_=0,
                         )

@@ -48,6 +48,39 @@ class AuthServiceClient:
             logger.error(f"Auth service create-credential error: {e}")
             raise RuntimeError(f"Auth service unavailable: {e}")
 
+    async def create_admin_credential(
+        self, email: str, password: str
+    ) -> dict:
+        """Create admin credential. Returns result dict or raises with actual error."""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/internal/admins/create-credential",
+                    json={
+                        "email": email,
+                        "password": password,
+                    },
+                    headers=HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json()
+                error_msg = "Failed to create admin credential"
+                try:
+                    body = resp.json()
+                    if body.get("message"):
+                        error_msg = body["message"]
+                    elif body.get("detail"):
+                        error_msg = body["detail"]
+                except Exception:
+                    pass
+                logger.warning(
+                    f"Auth service create-admin-credential returned {resp.status_code}: {resp.text}"
+                )
+                raise RuntimeError(error_msg)
+        except httpx.RequestError as e:
+            logger.error(f"Auth service create-admin-credential error: {e}")
+            raise RuntimeError(f"Auth service unavailable: {e}")
+
     async def deactivate_account(self, user_id: UUID) -> bool:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:

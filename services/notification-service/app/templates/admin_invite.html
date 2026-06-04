@@ -7,12 +7,14 @@
         .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .logo { text-align: center; color: #8B5CF6; font-size: 28px; font-weight: bold; margin-bottom: 30px; }
         .badge { display: inline-block; background: #8B5CF6; color: white; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-bottom: 20px; }
-        .highlight { background: #f5f3ff; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; border: 2px solid #8B5CF6; }
-        .invite-code { font-size: 18px; font-weight: bold; color: #8B5CF6; word-break: break-all; letter-spacing: 1px; }
+        .credentials-box { background: #f5f3ff; padding: 20px; border-radius: 8px; margin: 20px 0; border: 2px solid #8B5CF6; }
+        .credential-row { margin: 10px 0; font-size: 15px; }
+        .credential-label { color: #666; font-weight: 600; }
+        .credential-value { color: #8B5CF6; font-weight: bold; font-size: 16px; letter-spacing: 0.5px; }
         .message { color: #555; line-height: 1.6; margin: 15px 0; }
-        .cta-button { display: inline-block; background: #8B5CF6; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
         .footer { text-align: center; color: #999; font-size: 12px; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; }
         .invited-by { background: #f8f9fa; padding: 12px; border-radius: 6px; font-size: 14px; color: #666; margin: 15px 0; }
+        .warning { background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 12px; color: #dc2626; font-weight: 600; font-size: 14px; margin: 20px 0; }
     </style>
 </head>
 <body>
@@ -28,30 +30,28 @@
 
         <p class="message">Hi <strong>{{ full_name }}</strong>,</p>
 
-        <p class="message">You've been invited to join the MediGo admin team as a <strong>{{ role_display_name }}</strong>.</p>
+        <p class="message">You've been invited to join the MediGo admin team as a <strong>{{ role_display_name }}</strong>. Your account has been created and is ready to use.</p>
 
         <div class="invited-by">
             <strong>Invited by:</strong> {{ invited_by_name }}
         </div>
 
-        <p class="message">To complete your registration and set up your account, use this secure invitation code:</p>
+        <p class="message">Here are your login credentials:</p>
 
-        <div class="highlight">
-            <div class="invite-code">{{ invite_token }}</div>
+        <div class="credentials-box">
+            <div class="credential-row">
+                <span class="credential-label">Email:</span><br>
+                <span class="credential-value">{{ email }}</span>
+            </div>
+            <div class="credential-row" style="margin-top: 15px;">
+                <span class="credential-label">Password:</span><br>
+                <span class="credential-value">{{ temporary_password }}</span>
+            </div>
         </div>
 
-        <p class="message" style="text-align: center;">
-            <a href="#" class="cta-button">Complete Registration</a>
-        </p>
-
-        <p class="message" style="font-size: 14px; color: #888;">
-            <strong>Email:</strong> {{ email }}<br>
-            You'll be prompted to create a secure password during registration.
-        </p>
-
-        <p class="message" style="color: #dc2626; font-weight: 600;">
-            ⚠️ This invitation expires in 7 days. Please complete your registration soon.
-        </p>
+        <div class="warning">
+            Please log in and change your password immediately for security purposes.
+        </div>
 
         <div class="footer">
             <p style="margin: 5px 0;">If you have any questions, contact your system administrator.</p>

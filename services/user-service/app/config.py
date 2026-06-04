@@ -13,5 +13,8 @@ class UserSettings(BaseServiceSettings):
     # Default password for newly created drivers
     DEFAULT_DRIVER_PASSWORD: str = "MediRide2026!"
 
+    # Default password for newly created admins
+    DEFAULT_ADMIN_PASSWORD: str = "MediAdmin2026!"
+
 
 settings = UserSettings()

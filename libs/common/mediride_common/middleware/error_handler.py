@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from mediride_common.exceptions import MediRideError
@@ -10,6 +11,25 @@ logger = logging.getLogger(__name__)
 
 
 def register_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(request: Request, exc: RequestValidationError):
+        body = await request.body()
+        logger.warning(
+            "Validation error on %s %s | body=%s | errors=%s",
+            request.method,
+            request.url.path,
+            body.decode(errors="replace"),
+            exc.errors(),
+        )
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                message="Validation error",
+                error_code="VALIDATION_ERROR",
+                details=exc.errors(),
+            ).model_dump(),
+        )
+
     @app.exception_handler(MediRideError)
     async def mediride_error_handler(request: Request, exc: MediRideError):
         logger.warning(

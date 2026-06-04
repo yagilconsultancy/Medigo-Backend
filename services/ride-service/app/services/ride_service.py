@@ -6,6 +6,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from app.clients.payment_service_client import PaymentServiceClient
+from app.clients.tracking_service_client import TrackingServiceClient
 from app.clients.user_service_client import UserServiceClient
 from app.config import settings
 from app.models.ride import Ride
@@ -30,9 +31,10 @@ from mediride_common.schemas.enums import (
     RatingType,
     RecurringFrequency,
     RideStatus,
+    TripStructure,
     TripType,
 )
-from mediride_common.utils import normalize_to_utc, utc_now
+from mediride_common.utils import haversine_distance_meters, normalize_to_utc, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,7 @@ class RideService:
         publisher: EventPublisher,
         user_client: UserServiceClient,
         payment_client: PaymentServiceClient | None = None,
+        tracking_client: TrackingServiceClient | None = None,
     ):
         self.ride_repo = ride_repo
         self.request_repo = request_repo
@@ -62,6 +65,9 @@ class RideService:
         self.user_client = user_client
         self.payment_client = payment_client or PaymentServiceClient(
             settings.PAYMENT_SERVICE_URL
+        )
+        self.tracking_client = tracking_client or TrackingServiceClient(
+            settings.TRACKING_SERVICE_URL
         )
 
     async def _populate_estimates(self, ride_data: dict) -> dict:
@@ -359,12 +365,85 @@ class RideService:
 
     # ---- Status Transitions ----
 
+    async def _verify_completion_location(
+        self,
+        ride: Ride,
+        radius_meters: int,
+    ) -> None:
+        """Verify driver location before completing a ride.
+
+        Fetches the driver's last tracked GPS position from the tracking-service.
+        Round-trip: driver must be within radius of the pickup (return) location.
+        One-way: driver must be within radius of the destination location.
+        """
+        is_round_trip = ride.trip_structure == TripStructure.ROUND_TRIP
+
+        if is_round_trip:
+            target_lat = ride.pickup_latitude
+            target_lng = ride.pickup_longitude
+            target_label = "pickup"
+        else:
+            target_lat = ride.destination_latitude
+            target_lng = ride.destination_longitude
+            target_label = "destination"
+
+        if target_lat is None or target_lng is None:
+            raise ValidationError(
+                f"Cannot verify driver location: ride has no {target_label} coordinates. "
+                "Please contact support to complete this ride."
+            )
+
+        # Fetch driver's last known position from tracking-service
+        location = await self.tracking_client.get_driver_location(ride.id)
+        if not location:
+            raise ValidationError(
+                "Cannot verify driver location: no active tracking session found. "
+                "Please ensure the driver's location is being tracked before completing the ride."
+            )
+
+        current_latitude = location.get("latitude")
+        current_longitude = location.get("longitude")
+        if current_latitude is None or current_longitude is None:
+            raise ValidationError(
+                "Cannot verify driver location: the driver's GPS position is unavailable. "
+                "Please ensure location services are enabled."
+            )
+
+        distance_m = haversine_distance_meters(
+            current_latitude, current_longitude,
+            float(target_lat), float(target_lng),
+        )
+
+        if distance_m > radius_meters:
+            if is_round_trip:
+                raise ValidationError(
+                    f"Cannot complete this round-trip ride. The driver must return to the "
+                    f"pickup location before marking the ride as completed. "
+                    f"Current distance from pickup: {int(distance_m)} meters "
+                    f"(must be within {radius_meters} meters)."
+                )
+            else:
+                raise ValidationError(
+                    f"Cannot complete this ride. The driver must be near the "
+                    f"destination location. "
+                    f"Current distance from destination: {int(distance_m)} meters "
+                    f"(must be within {radius_meters} meters)."
+                )
+
     async def transition_status(
         self, ride_id: UUID, to_status: str, changed_by: UUID | None,
-        notes: str | None = None
+        notes: str | None = None,
     ) -> Ride:
         ride = await self.get_ride(ride_id)
         validate_transition(ride.status, to_status)
+
+        COMPLETION_RADIUS_METERS = 500
+
+        # Location verification when completing a ride
+        if to_status == RideStatus.COMPLETED:
+            await self._verify_completion_location(
+                ride, COMPLETION_RADIUS_METERS,
+            )
 
         update_data: dict = {"status": to_status}
 

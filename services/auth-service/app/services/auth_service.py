@@ -1,17 +1,14 @@
 import logging
-import secrets
 from datetime import timedelta
 from uuid import UUID
 
 import httpx
 
 from app.config import settings
-from app.models.password_reset import PasswordResetToken
 from app.models.refresh_token import RefreshToken
 from app.models.user_credential import UserCredential
 from app.normalization import normalize_email, normalize_phone
 from app.repositories.credential_repo import CredentialRepository
-from app.repositories.password_reset_repo import PasswordResetRepository
 from app.repositories.token_repo import TokenRepository
 from app.services.otp_service import OTPService
 from app.services.password_service import (
@@ -25,7 +22,6 @@ from mediride_common.auth.models import TokenPair
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.events.schemas import (
-    PasswordResetRequestedPayload,
     UserOTPRequestedPayload,
     UserRegisteredPayload,
     UserVerifiedPayload,
@@ -42,8 +38,6 @@ from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
 
-PASSWORD_RESET_EXPIRE_MINUTES = 30
-
 
 class AuthService:
     def __init__(
@@ -53,7 +47,6 @@ class AuthService:
         otp_service: OTPService,
         jwt_handler: JWTHandler,
         publisher: EventPublisher,
-        password_reset_repo: PasswordResetRepository | None = None,
         user_service_client=None,
         login_history_service=None,
     ):
@@ -62,7 +55,6 @@ class AuthService:
         self.otp_service = otp_service
         self.jwt_handler = jwt_handler
         self.publisher = publisher
-        self.password_reset_repo = password_reset_repo
         self.user_service_client = user_service_client
         self.login_history_service = login_history_service
 
@@ -537,70 +529,59 @@ class AuthService:
 
     async def forgot_password(
         self, email: str | None, phone: str | None
-    ) -> str | None:
-        """Request a password reset. Returns token in dev mode."""
+    ) -> tuple[UUID, str] | None:
+        """Request a password reset via OTP. Returns (user_id, otp_code) or None."""
         email = normalize_email(email)
         phone = normalize_phone(phone)
         credential = await self.credential_repo.get_by_email_or_phone(email, phone)
         if not credential:
-            # Return silently to prevent user enumeration
             logger.info("Password reset requested for non-existent account")
             return None
 
         if not credential.is_active:
             return None
 
-        # Invalidate any existing reset tokens
-        await self.password_reset_repo.invalidate_all_for_user(credential.id)
-
-        # Generate reset token
-        raw_token = secrets.token_urlsafe(32)
-        reset_record = PasswordResetToken(
-            user_id=credential.id,
-            token_hash=hash_token(raw_token),
-            expires_at=utc_now() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES),
+        # Generate OTP with password_reset purpose
+        channel = "email" if credential.email else "sms"
+        otp_code = await self.otp_service.generate_otp(
+            credential.id, "password_reset", channel
         )
-        await self.password_reset_repo.create(reset_record)
 
-        # Publish event for notification
-        if credential.email:
-            await self.publisher.publish(
-                Exchanges.AUTH,
-                RoutingKeys.PASSWORD_RESET_REQUESTED,
-                PasswordResetRequestedPayload(
-                    user_id=credential.id,
-                    email=credential.email,
-                    reset_token=raw_token,
-                ).model_dump(mode="json"),
-            )
+        # Publish OTP event for notification delivery
+        await self._publish_otp_requested(
+            user_id=credential.id,
+            purpose="password_reset",
+            channel=channel,
+            otp_code=otp_code,
+            email=credential.email,
+            phone=credential.phone,
+        )
 
-        logger.info(f"Password reset requested for user {credential.id}")
-        return raw_token if settings.ENVIRONMENT != "production" else None
+        logger.info(f"Password reset OTP requested for user {credential.id}")
+        return credential.id, otp_code
 
-    async def reset_password(self, token: str, new_password: str) -> None:
-        """Reset password using a valid reset token."""
+    async def reset_password(
+        self, user_id: UUID, code: str, new_password: str
+    ) -> None:
+        """Reset password using a valid OTP code."""
         validate_password_strength(new_password)
 
-        token_hash = hash_token(token)
-        reset_record = await self.password_reset_repo.get_by_hash(token_hash)
-        if not reset_record:
-            raise AuthenticationError("Invalid or expired reset token")
+        credential = await self.credential_repo.get_by_id(user_id)
+        if not credential:
+            raise NotFoundError("User not found")
 
-        if reset_record.expires_at < utc_now():
-            raise AuthenticationError("Reset token has expired")
+        # Verify OTP
+        await self.otp_service.verify_otp(user_id, code, "password_reset")
 
         # Update password
         await self.credential_repo.update_password(
-            reset_record.user_id, hash_password(new_password)
+            user_id, hash_password(new_password)
         )
 
-        # Invalidate all reset tokens for this user
-        await self.password_reset_repo.invalidate_all_for_user(reset_record.user_id)
-
         # Revoke all refresh tokens (force re-login)
-        await self.token_repo.revoke_all_for_user(reset_record.user_id)
+        await self.token_repo.revoke_all_for_user(user_id)
 
-        logger.info(f"Password reset completed for user {reset_record.user_id}")
+        logger.info(f"Password reset completed for user {user_id}")
 
     async def verify_driver_invite(self, invite_token: str) -> dict:
         """Verify a driver invitation token via user-service."""

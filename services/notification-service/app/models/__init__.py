@@ -5,6 +5,7 @@ from app.models.help_article import HelpArticle
 from app.models.message import Message
 from app.models.message_reaction import MessageReaction
 from app.models.notification import Notification
+from app.models.push_token import PushToken
 from app.models.support_ticket import SupportTicket
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "Message",
     "MessageReaction",
     "Notification",
+    "PushToken",
     "SupportTicket",
 ]

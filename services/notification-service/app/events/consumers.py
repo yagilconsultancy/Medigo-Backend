@@ -94,13 +94,13 @@ class AuthEventConsumer(BaseEventConsumer):
                 to=payload.email,
                 full_name=payload.full_name,
                 role_display_name=payload.role_display_name,
-                invite_token=payload.invite_token,
+                temporary_password=payload.temporary_password,
                 invited_by_name=payload.invited_by_name,
             )
             if sent:
-                logger.info("Admin invite email sent to %s", payload.email)
+                logger.info("Admin credentials email sent to %s", payload.email)
             else:
-                logger.error("Admin invite email failed for %s", payload.email)
+                logger.error("Admin credentials email failed for %s", payload.email)
 
         elif envelope.event_type == RoutingKeys.PASSWORD_RESET_REQUESTED:
             payload = PasswordResetRequestedPayload(**envelope.payload)
@@ -175,7 +175,7 @@ class RideEventConsumer(BaseEventConsumer):
             await send_ride_notification_email(
                 to=user_info["email"],
                 name=user_info["name"],
-                subject=f"MediRide - {title}",
+                subject=f"MediGo - {title}",
                 title=title,
                 body=body,
                 ride_details=ride_details,

@@ -3,9 +3,10 @@ import secrets
 from datetime import timedelta
 from uuid import UUID
 
+from app.clients.auth_service_client import AuthServiceClient
 from app.config import settings
 from app.models.admin_invitation import AdminInvitation
-from app.models.admin_role import AdminRole
+from app.models.admin_role import AdminRole, AdminRoleAssignment
 from app.models.user import User
 from app.repositories.admin_invitation_repo import AdminInvitationRepository
 from app.repositories.admin_role_repo import AdminRoleRepository
@@ -26,16 +27,18 @@ class AdminInvitationService:
         user_repo: UserRepository,
         admin_role_repo: AdminRoleRepository,
         publisher: EventPublisher,
+        auth_client: AuthServiceClient,
     ):
         self.invitation_repo = invitation_repo
         self.user_repo = user_repo
         self.admin_role_repo = admin_role_repo
         self.publisher = publisher
+        self.auth_client = auth_client
 
     async def send_invitation(
         self, email: str, full_name: str, role_name: str, invited_by: UUID
     ) -> AdminInvitation:
-        """Send an admin invitation email."""
+        """Create admin account and send credentials email."""
         # Validate role exists
         role = await self.admin_role_repo.get_by_name(role_name)
         if not role:
@@ -57,7 +60,37 @@ class AdminInvitationService:
             raise NotFoundError("Inviter not found")
         inviter_name = f"{inviter.first_name} {inviter.last_name}"
 
-        # Create invitation
+        # Use default admin password
+        default_password = settings.DEFAULT_ADMIN_PASSWORD
+
+        # Create credential in auth-service
+        try:
+            cred_result = await self.auth_client.create_admin_credential(
+                email=email,
+                password=default_password,
+            )
+        except RuntimeError as e:
+            raise ValidationError(str(e))
+
+        user_id = UUID(cred_result["user_id"])
+
+        # Split full_name into first/last
+        name_parts = full_name.strip().split(" ", 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+
+        # Create user record
+        user = User(
+            id=user_id,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            role="admin",
+            is_active=True,
+        )
+        await self.user_repo.create(user)
+
+        # Create invitation record (mark as accepted immediately)
         token = secrets.token_urlsafe(32)
         invitation = AdminInvitation(
             email=email,
@@ -69,7 +102,18 @@ class AdminInvitationService:
         )
         await self.invitation_repo.create(invitation)
 
-        # Publish event for notification service
+        # Create admin role assignment
+        assignment = AdminRoleAssignment(
+            user_id=user_id,
+            role_id=role.id,
+            assigned_by=invited_by,
+        )
+        await self.admin_role_repo.assign_role(assignment)
+
+        # Mark invitation as accepted
+        await self.invitation_repo.mark_accepted(invitation.id)
+
+        # Publish event for notification service to send credentials email
         await self.publisher.publish(
             Exchanges.AUTH,
             RoutingKeys.ADMIN_INVITE_SENT,
@@ -78,12 +122,12 @@ class AdminInvitationService:
                 email=email,
                 full_name=full_name,
                 role_display_name=role.display_name,
-                invite_token=token,
+                temporary_password=default_password,
                 invited_by_name=inviter_name,
             ).model_dump(mode="json"),
         )
 
-        logger.info(f"Admin invited: {email} with role {role_name}")
+        logger.info(f"Admin account created and credentials sent: {email} with role {role_name}")
         return invitation
 
     async def list_pending_invitations(

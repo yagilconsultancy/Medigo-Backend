@@ -64,7 +64,8 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
+    user_id: UUID
+    code: str = Field(..., min_length=6, max_length=6)
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
@@ -103,6 +104,11 @@ class TokenResponse(BaseModel):
 class OTPVerifyResponse(BaseModel):
     verified: bool = True
     message: str = "Account verified successfully"
+
+
+class ForgotPasswordResponse(BaseModel):
+    user_id: UUID
+    message: str = "OTP sent for password reset."
 
 
 class InviteVerifyResponse(BaseModel):

@@ -8,7 +8,6 @@ from app.config import settings
 from app.dependencies import get_db, get_publisher
 from app.repositories.credential_repo import CredentialRepository
 from app.repositories.otp_repo import OTPRepository
-from app.repositories.password_reset_repo import PasswordResetRepository
 from app.repositories.token_repo import TokenRepository
 from app.schemas.auth import (
     AdminRegisterRequest,
@@ -17,6 +16,7 @@ from app.schemas.auth import (
     DriverRegisterRequest,
     DriverVerifyInviteRequest,
     ForgotPasswordRequest,
+    ForgotPasswordResponse,
     InviteVerifyResponse,
     LoginRequest,
     OTPVerifyResponse,
@@ -47,7 +47,6 @@ def _get_auth_service(
     credential_repo = CredentialRepository(session)
     token_repo = TokenRepository(session)
     otp_repo = OTPRepository(session)
-    password_reset_repo = PasswordResetRepository(session)
     otp_service = OTPService(otp_repo)
     jwt_handler = JWTHandler(
         secret_key=settings.JWT_SECRET_KEY,
@@ -63,7 +62,6 @@ def _get_auth_service(
         otp_service=otp_service,
         jwt_handler=jwt_handler,
         publisher=publisher,
-        password_reset_repo=password_reset_repo,
         user_service_client=user_service_client,
         login_history_service=login_history_service,
     )
@@ -211,17 +209,23 @@ async def resend_otp(
     return StandardResponse(message=message)
 
 
-@router.post("/forgot-password", response_model=StandardResponse)
+@router.post("/forgot-password", response_model=StandardResponse[ForgotPasswordResponse])
 async def forgot_password(
     request: ForgotPasswordRequest,
     auth_service: AuthService = Depends(_get_auth_service),
 ):
-    token = await auth_service.forgot_password(
+    result = await auth_service.forgot_password(
         email=request.email, phone=request.phone
     )
-    message = "If an account exists, a password reset link has been sent."
-    if settings.ENVIRONMENT == "development" and token:
-        message += f" [DEV] Token: {token}"
+    message = "If an account exists, a password reset OTP has been sent."
+    if result:
+        user_id, otp_code = result
+        if settings.ENVIRONMENT != "production":
+            message += f" [DEV] OTP: {otp_code}"
+        return StandardResponse(
+            data=ForgotPasswordResponse(user_id=user_id, message=message),
+            message=message,
+        )
     return StandardResponse(message=message)
 
 
@@ -231,7 +235,9 @@ async def reset_password(
     auth_service: AuthService = Depends(_get_auth_service),
 ):
     await auth_service.reset_password(
-        token=request.token, new_password=request.new_password
+        user_id=request.user_id,
+        code=request.code,
+        new_password=request.new_password,
     )
     return StandardResponse(message="Password reset successfully. Please log in.")
 

@@ -62,7 +62,7 @@ class AdminInviteSentPayload(BaseModel):
     email: str
     full_name: str
     role_display_name: str
-    invite_token: str
+    temporary_password: str
     invited_by_name: str
 
 

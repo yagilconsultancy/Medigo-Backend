@@ -40,6 +40,11 @@ class CreateDriverCredentialRequest(BaseModel):
     business_id: UUID
 
 
+class CreateAdminCredentialRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
 @router.post("/drivers/create-credential")
 async def create_driver_credential(
     request: CreateDriverCredentialRequest,
@@ -78,6 +83,41 @@ async def create_driver_credential(
         raise HTTPException(status_code=409, detail="Account with this email or phone already exists")
 
     logger.info(f"Driver credential created internally: {credential.id}")
+    return {
+        "user_id": str(credential.id),
+        "email": credential.email,
+    }
+
+
+@router.post("/admins/create-credential")
+async def create_admin_credential(
+    request: CreateAdminCredentialRequest,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Create an admin credential. Called by user-service admin invitation flow."""
+    repo = CredentialRepository(session)
+    normalized_email = normalize_email(str(request.email))
+
+    existing = await repo.get_by_email_or_phone(normalized_email, None)
+    if existing:
+        raise HTTPException(status_code=409, detail="Account with this email already exists")
+
+    validate_password_strength(request.password)
+
+    credential = UserCredential(
+        email=normalized_email,
+        password_hash=hash_password(request.password),
+        role=UserRole.ADMIN,
+        business_id=None,
+        is_verified=True,
+    )
+    try:
+        await repo.create(credential)
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="Account with this email already exists")
+
+    logger.info(f"Admin credential created internally: {credential.id}")
     return {
         "user_id": str(credential.id),
         "email": credential.email,

@@ -40,6 +40,7 @@ PUBLIC_PATHS = {
     "/tracking/test/simulate-location",  # Public test endpoint for simulating driver GPS
     "/locations/public/check-address",  # Public address validation
     "/users/public/fleet/apply",  # Public fleet partner application
+    "/notifications/public/contact",  # Public contact form submission
 }
 
 

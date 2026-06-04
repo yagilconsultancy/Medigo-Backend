@@ -158,6 +158,7 @@ class NotificationType(StrEnum):
     CHAT = "chat"
     SYSTEM = "system"
     PROMOTION = "promotion"
+    ADMIN_MESSAGE = "admin_message"
 
 
 class TrackingSessionStatus(StrEnum):

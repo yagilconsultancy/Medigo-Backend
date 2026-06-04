@@ -152,17 +152,17 @@ async def send_admin_invite_email(
     to: str,
     full_name: str,
     role_display_name: str,
-    invite_token: str,
+    temporary_password: str,
     invited_by_name: str,
 ) -> bool:
-    """Send admin invitation email."""
+    """Send admin credentials email."""
     try:
         template = _template_env.get_template("admin_invite.html")
         html = template.render(
             email=to,
             full_name=full_name,
             role_display_name=role_display_name,
-            invite_token=invite_token,
+            temporary_password=temporary_password,
             invited_by_name=invited_by_name,
         )
     except Exception as e:
@@ -175,14 +175,14 @@ async def send_admin_invite_email(
             <p>Hi <strong>{full_name}</strong>,</p>
             <p>You've been invited to join the MediGo admin team as a <strong>{role_display_name}</strong>.</p>
             <p><strong>Invited by:</strong> {invited_by_name}</p>
-            <p>Use this invitation code to register:</p>
-            <h3 style="color: #8B5CF6;">{invite_token}</h3>
+            <h3>Your Login Credentials</h3>
             <p><strong>Email:</strong> {to}</p>
-            <p style="color: #dc2626;">This invitation expires in 7 days.</p>
+            <p><strong>Password:</strong> {temporary_password}</p>
+            <p style="color: #dc2626; font-weight: bold;">Please log in and change your password immediately.</p>
         </body>
         </html>
         """
-    return await send_email(to, "MediGo - Admin Invitation", html)
+    return await send_email(to, "MediGo - Your Admin Account Credentials", html)
 
 
 async def send_ride_notification_email(
@@ -228,6 +228,43 @@ async def send_ride_notification_email(
             {ride_info}
             <p>You can view your ride details in the MediGo app.</p>
             <p>Thank you for choosing MediGo!</p>
+        </body>
+        </html>
+        """
+    return await send_email(to, subject, html)
+
+
+async def send_admin_message_email(
+    to: str,
+    recipient_name: str,
+    title: str,
+    message: str,
+    sent_by_name: str | None = None,
+) -> bool:
+    """Send an admin message notification email to a user."""
+    subject = f"MediGo - {title}"
+    try:
+        template = _template_env.get_template("admin_message.html")
+        html = template.render(
+            recipient_name=recipient_name,
+            title=title,
+            message=message,
+            sent_by_name=sent_by_name,
+        )
+    except Exception as e:
+        logger.exception("Failed to render admin message email for %s: %s", to, e)
+        sent_by_section = f'<p style="color: #888; font-size: 13px;">Sent by: {sent_by_name}</p>' if sent_by_name else ''
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - {title}</h2>
+            <p>Hi {recipient_name},</p>
+            <p>You have a new message from the MediGo admin team:</p>
+            <div style="background-color: #f0f4ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #3B5998;">
+                <p>{message}</p>
+            </div>
+            {sent_by_section}
+            <p>If you have any questions, please reply through the MediGo app.</p>
         </body>
         </html>
         """
