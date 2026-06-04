@@ -87,14 +87,15 @@ async def upload_vehicle_photo(
     await s3_client.upload_file(
         bucket=settings.S3_BUCKET_DOCUMENTS,
         key=file_key,
-        data=file_data,
+        file_data=file_data,
         content_type=file.content_type or "image/jpeg",
     )
-    url = await s3_client.get_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=settings.S3_BUCKET_DOCUMENTS,
         key=file_key,
     )
-    driver = await service.update_driver_profile(user.id, vehicle_photo_url=file_key)
+    photo_url = f"s3://{settings.S3_BUCKET_DOCUMENTS}/{file_key}"
+    driver = await service.update_driver_profile(user.id, vehicle_photo_url=photo_url)
     return StandardResponse(
         data=VehicleDetailsResponse(
             vehicle_type=driver.vehicle_type,
@@ -123,15 +124,16 @@ async def upload_avatar(
     await s3_client.upload_file(
         bucket=settings.S3_BUCKET_DOCUMENTS,
         key=file_key,
-        data=file_data,
+        file_data=file_data,
         content_type=file.content_type or "image/jpeg",
     )
-    url = await s3_client.get_presigned_url(
+    url = await s3_client.generate_presigned_url(
         bucket=settings.S3_BUCKET_DOCUMENTS,
         key=file_key,
     )
+    avatar_url = f"s3://{settings.S3_BUCKET_DOCUMENTS}/{file_key}"
     user_service = UserService(UserRepository(session))
-    updated_user = await user_service.update_profile(user.id, avatar_url=file_key)
+    updated_user = await user_service.update_profile(user.id, avatar_url=avatar_url)
     return StandardResponse(
         data=UserProfileResponse.model_validate(updated_user),
         message="Avatar uploaded",
