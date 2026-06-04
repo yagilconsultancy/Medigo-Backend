@@ -183,7 +183,10 @@ class FleetApplicationService:
     ) -> FleetApplication:
         application = await self.get_application(app_id)
 
-        if application.status != FleetApplicationStatus.PENDING:
+        if application.status not in (
+            FleetApplicationStatus.PENDING,
+            FleetApplicationStatus.MORE_INFO_REQUESTED,
+        ):
             raise ValueError(
                 f"Cannot request info for application with status '{application.status}'"
             )

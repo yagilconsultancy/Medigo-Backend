@@ -142,7 +142,7 @@ async def get_rider_history_overview(
 async def rebook_ride(
     ride_id: UUID,
     body: RebookRideRequest,
-    user: UserClaims = Depends(require_role([UserRole.RIDER])),
+    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
     """Create a new ride with the same details as a previous ride."""
@@ -180,7 +180,7 @@ async def share_ride(
 )
 async def get_driver_contact(
     ride_id: UUID,
-    user: UserClaims = Depends(require_role([UserRole.RIDER])),
+    user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
     """Get the assigned driver's contact information."""

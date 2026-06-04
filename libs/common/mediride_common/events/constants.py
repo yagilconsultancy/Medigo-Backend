@@ -116,6 +116,7 @@ class Queues:
     NOTIFICATION_AUTH_EVENTS = "notification-service.auth-events"
     NOTIFICATION_RIDE_EVENTS = "notification-service.ride-events"
     NOTIFICATION_PAYMENT_EVENTS = "notification-service.payment-events"
+    NOTIFICATION_FLEET_EVENTS = "notification-service.fleet-events"
 
     # payment-service queues
     PAYMENT_RIDE_COMPLETED = "payment-service.ride-completed"

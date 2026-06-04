@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        .message { color: #555; line-height: 1.6; }
+        .admin-message { background: #f0f4ff; padding: 20px; border-radius: 8px; margin: 24px 0; border-left: 4px solid #3B5998; }
+        .admin-message p { margin: 0; color: #333; line-height: 1.6; white-space: pre-wrap; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% include "_email_logo.html" %}
+        <h2 style="text-align: center; color: #333;">Additional Information Required</h2>
+        <p class="message">Hi {{ company_name }},</p>
+        <p class="message">We've reviewed your fleet application and need some additional information before we can proceed:</p>
+
+        <div class="admin-message">
+            <p>{{ admin_message }}</p>
+        </div>
+
+        <p class="message">Please log in to your MediGo account and update your application with the requested information.</p>
+
+        <div class="footer">
+            <p>&copy; 2026 MediGo. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>

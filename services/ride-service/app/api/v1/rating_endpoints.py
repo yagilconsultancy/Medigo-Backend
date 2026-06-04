@@ -41,7 +41,7 @@ def _get_ride_service(
 async def submit_rating(
     ride_id: UUID,
     request: SubmitRatingRequest,
-    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
     rating = await service.submit_rating(

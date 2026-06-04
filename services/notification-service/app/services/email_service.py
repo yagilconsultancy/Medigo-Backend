@@ -271,6 +271,31 @@ async def send_admin_message_email(
     return await send_email(to, subject, html)
 
 
+async def send_fleet_info_request_email(
+    to: str, company_name: str, message: str
+) -> bool:
+    """Send email to fleet applicant requesting additional information."""
+    try:
+        template = _template_env.get_template("fleet_info_request.html")
+        html = template.render(company_name=company_name, admin_message=message)
+    except Exception as e:
+        logger.exception("Failed to render fleet info request email for %s: %s", to, e)
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - Additional Information Required</h2>
+            <p>Hi {company_name},</p>
+            <p>We've reviewed your fleet application and need some additional information before we can proceed:</p>
+            <div style="background-color: #f0f4ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #3B5998;">
+                <p>{message}</p>
+            </div>
+            <p>Please log in to your MediGo account and update your application with the requested information.</p>
+        </body>
+        </html>
+        """
+    return await send_email(to, "MediGo - Additional Information Required for Your Fleet Application", html)
+
+
 async def send_payment_receipt_email(
     to: str,
     name: str,

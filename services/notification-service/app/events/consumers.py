@@ -14,6 +14,7 @@ from app.config import settings
 from app.services.email_service import (
     send_admin_invite_email,
     send_driver_invite_email,
+    send_fleet_info_request_email,
     send_otp_email,
     send_password_reset_email,
     send_payment_receipt_email,
@@ -27,6 +28,7 @@ from mediride_common.events.schemas import (
     AdminInviteSentPayload,
     DriverInviteSentPayload,
     EventEnvelope,
+    FleetApplicationInfoRequestedPayload,
     PasswordResetRequestedPayload,
     PaymentCompletedPayload,
     RideCreatedPayload,
@@ -472,6 +474,30 @@ class PaymentEventConsumer(BaseEventConsumer):
                 raise
 
 
+class FleetEventConsumer(BaseEventConsumer):
+    """Consumes fleet events to send email notifications to applicants."""
+
+    async def handle(self, envelope: EventEnvelope) -> None:
+        if envelope.event_type == RoutingKeys.FLEET_APPLICATION_INFO_REQUESTED:
+            payload = FleetApplicationInfoRequestedPayload(**envelope.payload)
+            sent = await send_fleet_info_request_email(
+                to=payload.email,
+                company_name=payload.company_name,
+                message=payload.message,
+            )
+            if sent:
+                logger.info(
+                    "Fleet info request email sent to %s for application %s",
+                    payload.email,
+                    payload.application_id,
+                )
+            else:
+                logger.error(
+                    "Fleet info request email failed for %s",
+                    payload.email,
+                )
+
+
 class ChatConversationConsumer(BaseEventConsumer):
     """Auto-creates a chat conversation when a driver is assigned to a ride."""
 
@@ -555,6 +581,15 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
         routing_keys=[
             RoutingKeys.PAYMENT_COMPLETED,
             RoutingKeys.PAYMENT_FAILED,
+        ],
+    )
+
+    fleet_consumer = FleetEventConsumer(broker)
+    await fleet_consumer.setup_queue(
+        queue_name=Queues.NOTIFICATION_FLEET_EVENTS,
+        exchange_name=Exchanges.USERS,
+        routing_keys=[
+            RoutingKeys.FLEET_APPLICATION_INFO_REQUESTED,
         ],
     )
 
