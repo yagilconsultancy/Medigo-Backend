@@ -147,10 +147,7 @@ async def unified_openapi():
     return JSONResponse(content=schema)
 
 
-@router.get("/docs", include_in_schema=False)
-async def unified_swagger_ui():
-    """Unified Swagger UI for all MediRide services."""
-    return HTMLResponse(content=f"""
+_SWAGGER_HTML = """
     <!DOCTYPE html>
     <html>
     <head>
@@ -164,7 +161,7 @@ async def unified_swagger_ui():
         <div id="swagger-ui"></div>
         <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
         <script>
-        SwaggerUIBundle({{
+        SwaggerUIBundle({
             url: "/docs/openapi.json",
             dom_id: '#swagger-ui',
             presets: [
@@ -176,17 +173,32 @@ async def unified_swagger_ui():
             persistAuthorization: true,
             filter: true,
             tagsSorter: "alpha",
-        }})
+        })
         </script>
     </body>
     </html>
-    """)
+"""
 
 
-@router.get("/redoc", include_in_schema=False)
-async def unified_redoc():
-    """Unified ReDoc for all MediRide services."""
-    return HTMLResponse(content=f"""
+@router.get("", include_in_schema=False)
+async def docs_root():
+    """Swagger UI at /docs."""
+    return HTMLResponse(content=_SWAGGER_HTML)
+
+
+@router.get("/", include_in_schema=False)
+async def docs_root_slash():
+    """Swagger UI at /docs/."""
+    return HTMLResponse(content=_SWAGGER_HTML)
+
+
+@router.get("/docs", include_in_schema=False)
+async def unified_swagger_ui():
+    """Swagger UI at /docs/docs (legacy path)."""
+    return HTMLResponse(content=_SWAGGER_HTML)
+
+
+_REDOC_HTML = """
     <!DOCTYPE html>
     <html>
     <head>
@@ -195,11 +207,17 @@ async def unified_redoc():
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700"
               rel="stylesheet">
-        <style> body {{ margin: 0; padding: 0; }} </style>
+        <style> body { margin: 0; padding: 0; } </style>
     </head>
     <body>
         <redoc spec-url='/docs/openapi.json'></redoc>
         <script src="https://unpkg.com/redoc@latest/bundles/redoc.standalone.js"></script>
     </body>
     </html>
-    """)
+"""
+
+
+@router.get("/redoc", include_in_schema=False)
+async def unified_redoc():
+    """Unified ReDoc for all MediRide services."""
+    return HTMLResponse(content=_REDOC_HTML)

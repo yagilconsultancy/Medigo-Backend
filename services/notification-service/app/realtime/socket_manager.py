@@ -7,13 +7,14 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Create Socket.IO server with Redis adapter for horizontal scaling
+# Create Socket.IO server with Redis adapter for horizontal scaling.
 redis_manager = socketio.AsyncRedisManager(settings.REDIS_URL)
 sio = socketio.AsyncServer(
     async_mode="asgi",
     cors_allowed_origins="*",
     client_manager=redis_manager,
     namespaces=["/chat"],
+    logger=logger,
 )
 
 
