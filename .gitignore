@@ -46,4 +46,7 @@ Thumbs.db
 *.log
 logs/
 .env
+deploy/deploy_command.txt
 scripts/
+# AWS keys
+*.pem
