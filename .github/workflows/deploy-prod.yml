@@ -30,7 +30,7 @@ jobs:
             COMPOSE_FILE=deploy/docker-compose.prod.yml
             DC="docker compose --env-file $APP_DIR/.env -f $APP_DIR/$COMPOSE_FILE"
             REPO_URL="https://github.com/${{ github.repository }}.git"
-            AUTH_REPO_URL="https://x-access-token:${{ secrets.GT }}@github.com/${{ github.repository }}.git"
+            AUTH_REPO_URL="https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git"
 
             echo "=== Deploying MediRide to production ==="
 
