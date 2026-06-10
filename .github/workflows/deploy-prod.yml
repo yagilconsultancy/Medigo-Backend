@@ -69,13 +69,13 @@ jobs:
               echo "First-time setup: cloning repository..."
               sudo mkdir -p /opt/mediride
               sudo chown ec2-user:ec2-user /opt/mediride
-              GIT_TERMINAL_PROMPT=0 git clone "$AUTH_REPO_URL" "$APP_DIR"
+              GIT_TERMINAL_PROMPT=0 git clone -b pro "$AUTH_REPO_URL" "$APP_DIR"
               cd $APP_DIR
               git remote set-url origin "$REPO_URL"
             else
               echo "Pulling latest changes..."
               cd $APP_DIR
-              GIT_TERMINAL_PROMPT=0 git fetch "$AUTH_REPO_URL" main
+              GIT_TERMINAL_PROMPT=0 git fetch "$AUTH_REPO_URL" pro
               git reset --hard FETCH_HEAD
               git remote set-url origin "$REPO_URL"
             fi
