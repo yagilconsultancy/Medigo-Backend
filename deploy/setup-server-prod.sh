@@ -76,6 +76,7 @@ limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/s;
 
 server {
     listen 80;
+    listen [::]:80;
     server_name prod-api.getmedigo.com;
 
     client_max_body_size 20M;
