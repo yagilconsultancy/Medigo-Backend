@@ -66,15 +66,22 @@ jobs:
 
             # --- Clone or pull code ---
             if [ ! -d "$APP_DIR/.git" ]; then
-              echo "First-time setup: cloning repository..."
-              sudo mkdir -p /opt/mediride
-              sudo chown ec2-user:ec2-user /opt/mediride
-              GIT_TERMINAL_PROMPT=0 git clone -b pro "$AUTH_REPO_URL" "$APP_DIR"
-              cd $APP_DIR
+              echo "First-time setup: initializing repo..."
+              sudo mkdir -p "$APP_DIR"
+              sudo chown ec2-user:ec2-user "$APP_DIR"
+              # Back up .env if it exists
+              [ -f "$APP_DIR/.env" ] && cp "$APP_DIR/.env" /tmp/.env.bak
+              cd "$APP_DIR"
+              git init
+              git remote add origin "$REPO_URL"
+              GIT_TERMINAL_PROMPT=0 git fetch "$AUTH_REPO_URL" pro
+              git reset --hard FETCH_HEAD
               git remote set-url origin "$REPO_URL"
+              # Restore .env
+              [ -f /tmp/.env.bak ] && cp /tmp/.env.bak "$APP_DIR/.env" && rm /tmp/.env.bak
             else
               echo "Pulling latest changes..."
-              cd $APP_DIR
+              cd "$APP_DIR"
               GIT_TERMINAL_PROMPT=0 git fetch "$AUTH_REPO_URL" pro
               git reset --hard FETCH_HEAD
               git remote set-url origin "$REPO_URL"
