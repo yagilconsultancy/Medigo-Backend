@@ -47,3 +47,5 @@ Thumbs.db
 logs/
 .env
 scripts/
+mediride-prod.pem
+deploy_command.txt

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class FleetApplicationCreate(BaseModel):
@@ -73,13 +73,23 @@ class RequestInfoRequest(BaseModel):
 class FleetDocumentResponse(BaseModel):
     id: UUID
     document_type: str
+    file_key: str
     file_name: str
     file_size: int
     mime_type: str
+    file_url: str | None = None
     verification_status: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def build_file_url(self) -> "FleetDocumentResponse":
+        if self.file_key and not self.file_url:
+            from app.config import settings
+
+            self.file_url = f"{settings.S3_ENDPOINT_URL}/{settings.S3_BUCKET_DOCUMENTS}/{self.file_key}"
+        return self
 
 
 class FleetApplicationResponse(BaseModel):
