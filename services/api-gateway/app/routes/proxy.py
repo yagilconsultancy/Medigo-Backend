@@ -41,6 +41,7 @@ PUBLIC_PATHS = {
     "/locations/public/check-address",  # Public address validation
     "/users/public/fleet/apply",  # Public fleet partner application
     "/notifications/public/contact",  # Public contact form submission
+    "/rides/public",  # Public guest booking & booking flow endpoints
 }
 
 
