@@ -139,10 +139,11 @@ services:
       <<: *service-env
       DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_users
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      S3_ENDPOINT_URL: http://minio:9000
+      S3_ENDPOINT_URL: https://s3.${S3_REGION:-us-east-2}.amazonaws.com
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
-      S3_BUCKET_DOCUMENTS: ${S3_BUCKET_DOCUMENTS:-mediride-documents}
+      S3_REGION: ${S3_REGION:-us-east-2}
+      S3_BUCKET_DOCUMENTS: ${S3_BUCKET_DOCUMENTS:-medigo-900}
     depends_on:
       postgres:
         condition: service_healthy
