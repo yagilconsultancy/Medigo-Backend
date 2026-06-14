@@ -1,0 +1,164 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [pro]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to prod-api.getmedigo.com
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ec2-user
+          key: ${{ secrets.PROD_SSH_KEY }}
+          command_timeout: 25m
+          script: |
+            set -euo pipefail
+
+            APP_DIR=/opt/mediride
+            COMPOSE_FILE=deploy/docker-compose.prod.yml
+            DC="docker compose --env-file $APP_DIR/.env -f $APP_DIR/$COMPOSE_FILE"
+            REPO_URL="https://github.com/${{ github.repository }}.git"
+            AUTH_REPO_URL="https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ github.repository }}.git"
+
+            echo "=== Deploying MediRide to production ==="
+
+            # --- Ensure dependencies are installed ---
+            if ! command -v git &>/dev/null; then
+              echo "Installing git..."
+              sudo dnf install -y git
+            fi
+
+            if ! command -v docker &>/dev/null; then
+              echo "Installing Docker..."
+              sudo dnf install -y docker
+              sudo systemctl enable docker
+              sudo systemctl start docker
+              sudo usermod -aG docker ec2-user
+            fi
+
+            # --- Ensure Docker DNS is configured ---
+            if [ ! -f /etc/docker/daemon.json ] || ! grep -q '"dns"' /etc/docker/daemon.json 2>/dev/null; then
+              echo "Configuring Docker DNS..."
+              echo '{"dns": ["8.8.8.8", "8.8.4.4"]}' | sudo tee /etc/docker/daemon.json
+              sudo systemctl restart docker
+              sleep 3
+            fi
+
+            NEED_BUILDX=false
+            if ! docker buildx version &>/dev/null; then
+              NEED_BUILDX=true
+            else
+              CURRENT_BUILDX=$(docker buildx version | grep -oP 'v?\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+              REQUIRED_BUILDX="0.17.0"
+              if printf '%s\n' "$REQUIRED_BUILDX" "$CURRENT_BUILDX" | sort -V | head -1 | grep -q "$REQUIRED_BUILDX"; then
+                echo "Buildx $CURRENT_BUILDX is >= $REQUIRED_BUILDX, OK"
+              else
+                echo "Buildx $CURRENT_BUILDX is older than $REQUIRED_BUILDX, upgrading..."
+                NEED_BUILDX=true
+              fi
+            fi
+            if [ "$NEED_BUILDX" = true ]; then
+              echo "Installing/upgrading Docker Buildx plugin..."
+              BUILDX_VER=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+              sudo mkdir -p /usr/local/lib/docker/cli-plugins
+              sudo curl -SL "https://github.com/docker/buildx/releases/download/${BUILDX_VER}/buildx-${BUILDX_VER}.linux-amd64" -o /usr/local/lib/docker/cli-plugins/docker-buildx
+              sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
+            fi
+
+            NEED_COMPOSE=false
+            if ! docker compose version &>/dev/null; then
+              NEED_COMPOSE=true
+            else
+              CURRENT_COMPOSE=$(docker compose version | grep -oP 'v?\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+              echo "Docker Compose version: $CURRENT_COMPOSE"
+            fi
+            if [ "$NEED_COMPOSE" = true ]; then
+              echo "Installing Docker Compose plugin..."
+              COMPOSE_VER=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+              sudo mkdir -p /usr/local/lib/docker/cli-plugins
+              sudo curl -SL "https://github.com/docker/compose/releases/download/${COMPOSE_VER}/docker-compose-linux-x86_64" -o /usr/local/lib/docker/cli-plugins/docker-compose
+              sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+            fi
+
+            # --- Clone or pull code ---
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "First-time setup: initializing repo..."
+              sudo mkdir -p "$APP_DIR"
+              sudo chown ec2-user:ec2-user "$APP_DIR"
+              # Back up .env if it exists
+              [ -f "$APP_DIR/.env" ] && cp "$APP_DIR/.env" /tmp/.env.bak
+              cd "$APP_DIR"
+              git init
+              git remote add origin "$REPO_URL"
+              GIT_TERMINAL_PROMPT=0 git fetch "$AUTH_REPO_URL" pro
+              git reset --hard FETCH_HEAD
+              git remote set-url origin "$REPO_URL"
+              # Restore .env
+              [ -f /tmp/.env.bak ] && cp /tmp/.env.bak "$APP_DIR/.env" && rm /tmp/.env.bak
+            else
+              echo "Pulling latest changes..."
+              cd "$APP_DIR"
+              GIT_TERMINAL_PROMPT=0 git fetch "$AUTH_REPO_URL" pro
+              git reset --hard FETCH_HEAD
+              git remote set-url origin "$REPO_URL"
+            fi
+
+            cd $APP_DIR
+
+            # --- Verify .env exists ---
+            if [ ! -f ".env" ]; then
+              echo "ERROR: .env file missing at $APP_DIR/.env"
+              echo "SSH into the server and create it first:"
+              echo "  cp deploy/env.prod.example .env"
+              echo "  nano .env  # fill in real values"
+              exit 1
+            fi
+
+            # --- Build and deploy ---
+            echo "Building services..."
+            $DC build
+
+            echo "Starting services..."
+            $DC up -d
+
+            # --- Wait for infrastructure ---
+            echo "Waiting for infrastructure to be healthy..."
+            sleep 25
+
+            # --- Run migrations ---
+            echo "Running migrations..."
+            SERVICES="auth-service user-service ride-service location-service payment-service tracking-service notification-service"
+            for SVC in $SERVICES; do
+              $DC exec -T "$SVC" alembic upgrade head || echo "$SVC migration skipped"
+            done
+
+            # --- Health check ---
+            echo "Running health checks..."
+            sleep 5
+            HEALTH=$(curl -sf http://localhost:8080/health/live || echo "FAILED")
+            echo "API Gateway health: $HEALTH"
+
+            if [ "$HEALTH" = "FAILED" ]; then
+              echo "WARNING: Health check failed. Check logs with:"
+              echo "  docker compose -f $COMPOSE_FILE logs --tail=50"
+            fi
+
+            # --- Cleanup ---
+            echo "Cleaning up old images..."
+            docker image prune -f
+
+            echo ""
+            echo "=== Production deployment complete! ==="
+            echo "URL: https://prod-api.getmedigo.com"

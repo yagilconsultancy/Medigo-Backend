@@ -35,10 +35,6 @@ _BASE_SERVICE_TYPE_PROFILE = {
     "standard": {"ride_type": "ambulatory", "trip_type": "transport_only"},
     "wheelchair_wav": {"ride_type": "wheelchair", "trip_type": "transport_only"},
     "stretcher": {"ride_type": "stretcher", "trip_type": "transport_only"},
-    "psw_caregiver": {
-        "ride_type": "ambulatory",
-        "trip_type": "transport_care_assistant",
-    },
 }
 
 

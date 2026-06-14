@@ -46,6 +46,7 @@ Thumbs.db
 *.log
 logs/
 .env
+deploy/deploy_command.txt
 scripts/
-mediride-prod.pem
-deploy_command.txt
+# AWS keys
+*.pem

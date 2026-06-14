@@ -1,0 +1,286 @@
+x-service-defaults: &service-defaults
+  restart: always
+  networks:
+    - mediride-network
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+x-service-env: &service-env
+  ENVIRONMENT: production
+  LOG_LEVEL: ${LOG_LEVEL:-WARNING}
+  DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Canada/Eastern}
+  RABBITMQ_URL: amqp://mediride:${RABBITMQ_PASSWORD}@rabbitmq:5672/mediride
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+
+services:
+  # ==================== INFRASTRUCTURE ====================
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    <<: *service-defaults
+    environment:
+      RABBITMQ_DEFAULT_USER: mediride
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: mediride
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  redis:
+    image: redis:7-alpine
+    <<: *service-defaults
+    command: >
+      redis-server
+        --maxmemory 512mb
+        --maxmemory-policy allkeys-lru
+        --requirepass ${REDIS_PASSWORD}
+        --appendonly yes
+        --appendfsync everysec
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 640M
+        reservations:
+          memory: 256M
+
+  # ==================== APPLICATION SERVICES ====================
+
+  api-gateway:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: services/api-gateway/Dockerfile
+    image: mediride/api-gateway:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8080:8000"
+    environment:
+      <<: *service-env
+      AUTH_SERVICE_URL: http://auth-service:8001
+      USER_SERVICE_URL: http://user-service:8002
+      RIDE_SERVICE_URL: http://ride-service:8003
+      LOCATION_SERVICE_URL: http://location-service:8004
+      PAYMENT_SERVICE_URL: http://payment-service:8005
+      TRACKING_SERVICE_URL: http://tracking-service:8006
+      NOTIFICATION_SERVICE_URL: http://notification-service:8007
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-60}
+      RATE_LIMIT_WINDOW: ${RATE_LIMIT_WINDOW:-60}
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  auth-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: services/auth-service/Dockerfile
+    image: mediride/auth-service:${IMAGE_TAG:-latest}
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://${RDS_USERNAME}:${RDS_PASSWORD}@${RDS_HOST}:${RDS_PORT:-5432}/mediride_auth
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      JWT_REFRESH_TOKEN_EXPIRE_DAYS: ${JWT_REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      OTP_EXPIRE_MINUTES: ${OTP_EXPIRE_MINUTES:-5}
+      USER_SERVICE_URL: http://user-service:8002
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+
+  user-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: services/user-service/Dockerfile
+    image: mediride/user-service:${IMAGE_TAG:-latest}
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://${RDS_USERNAME}:${RDS_PASSWORD}@${RDS_HOST}:${RDS_PORT:-5432}/mediride_users
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      S3_ENDPOINT_URL: https://s3.${AWS_REGION:-ca-central-1}.amazonaws.com
+      S3_ACCESS_KEY: ${AWS_ACCESS_KEY_ID}
+      S3_SECRET_KEY: ${AWS_SECRET_ACCESS_KEY}
+      S3_BUCKET_DOCUMENTS: ${S3_BUCKET_DOCUMENTS:-mediride-documents}
+      S3_REGION: ${AWS_REGION:-ca-central-1}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+
+  ride-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: services/ride-service/Dockerfile
+    image: mediride/ride-service:${IMAGE_TAG:-latest}
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://${RDS_USERNAME}:${RDS_PASSWORD}@${RDS_HOST}:${RDS_PORT:-5432}/mediride_rides
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      USER_SERVICE_URL: http://user-service:8002
+      PAYMENT_SERVICE_URL: http://payment-service:8005
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+
+  location-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: services/location-service/Dockerfile
+    image: mediride/location-service:${IMAGE_TAG:-latest}
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://${RDS_USERNAME}:${RDS_PASSWORD}@${RDS_HOST}:${RDS_PORT:-5432}/mediride_locations
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+
+  payment-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: services/payment-service/Dockerfile
+    image: mediride/payment-service:${IMAGE_TAG:-latest}
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://${RDS_USERNAME}:${RDS_PASSWORD}@${RDS_HOST}:${RDS_PORT:-5432}/mediride_payments
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      RIDE_SERVICE_URL: http://ride-service:8003
+      USER_SERVICE_URL: http://user-service:8002
+      LOCATION_SERVICE_URL: http://location-service:8004
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_MOCK_IN_DEVELOPMENT: "false"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+
+  tracking-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: services/tracking-service/Dockerfile
+    image: mediride/tracking-service:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8006:8006"
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://${RDS_USERNAME}:${RDS_PASSWORD}@${RDS_HOST}:${RDS_PORT:-5432}/mediride_tracking
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      LOCATION_SERVICE_URL: http://location-service:8004
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  notification-service:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: services/notification-service/Dockerfile
+    image: mediride/notification-service:${IMAGE_TAG:-latest}
+    ports:
+      - "127.0.0.1:8007:8007"
+    environment:
+      <<: *service-env
+      DATABASE_URL: postgresql+asyncpg://${RDS_USERNAME}:${RDS_PASSWORD}@${RDS_HOST}:${RDS_PORT:-5432}/mediride_notifications
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SMTP_HOST: ${SMTP_HOST:-smtp.zeptomail.ca}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-30}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@getmedigo.com}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+
+volumes:
+  rabbitmq-data:
+  redis-data:
+
+networks:
+  mediride-network:
+    driver: bridge
