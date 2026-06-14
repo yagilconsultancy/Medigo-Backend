@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class DocumentType(str, Enum):
@@ -23,22 +23,42 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 class DocumentUploadResponse(BaseModel):
     id: UUID
     document_type: str
+    file_key: str
     file_name: str
+    file_url: str | None = None
     verification_status: str
     created_at: datetime
+
+    @model_validator(mode="after")
+    def build_file_url(self) -> "DocumentUploadResponse":
+        if self.file_key and not self.file_url:
+            from app.config import settings
+
+            self.file_url = f"{settings.S3_ENDPOINT_URL}/{settings.S3_BUCKET_DOCUMENTS}/{self.file_key}"
+        return self
 
 
 class DocumentResponse(BaseModel):
     id: UUID
     document_type: str
+    file_key: str
     file_name: str
     file_size: int
     mime_type: str
+    file_url: str | None = None
     verification_status: str
     rejection_reason: str | None = None
     presigned_url: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="after")
+    def build_file_url(self) -> "DocumentResponse":
+        if self.file_key and not self.file_url:
+            from app.config import settings
+
+            self.file_url = f"{settings.S3_ENDPOINT_URL}/{settings.S3_BUCKET_DOCUMENTS}/{self.file_key}"
+        return self
 
 
 class DocumentVerifyRequest(BaseModel):

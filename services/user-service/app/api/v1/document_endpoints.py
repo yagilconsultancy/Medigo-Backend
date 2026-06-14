@@ -60,6 +60,7 @@ async def upload_document(
         data=DocumentUploadResponse(
             id=document.id,
             document_type=document.document_type,
+            file_key=document.file_key,
             file_name=document.file_name,
             verification_status=document.verification_status,
             created_at=document.created_at,
@@ -83,6 +84,7 @@ async def list_my_documents(
             DocumentUploadResponse(
                 id=doc.id,
                 document_type=doc.document_type,
+                file_key=doc.file_key,
                 file_name=doc.file_name,
                 verification_status=doc.verification_status,
                 created_at=doc.created_at,
@@ -113,6 +115,7 @@ async def get_my_document(
         data=DocumentResponse(
             id=document.id,
             document_type=document.document_type,
+            file_key=document.file_key,
             file_name=document.file_name,
             file_size=document.file_size,
             mime_type=document.mime_type,
@@ -142,6 +145,7 @@ async def list_user_documents(
             DocumentUploadResponse(
                 id=doc.id,
                 document_type=doc.document_type,
+                file_key=doc.file_key,
                 file_name=doc.file_name,
                 verification_status=doc.verification_status,
                 created_at=doc.created_at,
@@ -174,6 +178,7 @@ async def verify_document(
         data=DocumentResponse(
             id=document.id,
             document_type=document.document_type,
+            file_key=document.file_key,
             file_name=document.file_name,
             file_size=document.file_size,
             mime_type=document.mime_type,
