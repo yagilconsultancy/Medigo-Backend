@@ -10,6 +10,7 @@ from app.api.v1.commission_endpoints import router as commission_router
 from app.api.v1.earnings_endpoints import router as earnings_router
 from app.api.v1.fare_config_endpoints import router as fare_config_router
 from app.api.v1.fare_estimate_endpoints import router as fare_estimate_router
+from app.api.v1.guest_payment_endpoints import router as guest_payment_router
 from app.api.v1.mobile_payment_endpoints import router as mobile_payment_router
 from app.api.v1.payment_method_endpoints import router as pm_router
 from app.api.v1.pricing_config_endpoints import router as pricing_config_router
@@ -30,6 +31,7 @@ router.include_router(earnings_router, prefix="/earnings", tags=["Earnings"])
 router.include_router(withdrawal_router, prefix="/withdrawals", tags=["Withdrawals"])
 router.include_router(pm_router, prefix="/payment-methods", tags=["Payment Methods"])
 router.include_router(mobile_payment_router, prefix="/mobile", tags=["Mobile Payments"])
+router.include_router(guest_payment_router, tags=["Guest Payments"])
 router.include_router(rate_card_router, prefix="/rate-cards", tags=["Rate Cards"])
 router.include_router(receipt_router, prefix="/receipts", tags=["Receipts"])
 router.include_router(webhook_router, prefix="/webhooks", tags=["Webhooks"])

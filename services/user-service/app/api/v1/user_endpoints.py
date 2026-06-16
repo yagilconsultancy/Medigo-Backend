@@ -5,6 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clients.auth_service_client import AuthServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_s3_client
 from app.repositories.user_repo import UserRepository
@@ -31,6 +32,13 @@ router = APIRouter()
 
 def _get_user_service(session: AsyncSession = Depends(get_db)) -> UserService:
     return UserService(UserRepository(session))
+
+
+def _get_user_service_with_auth(session: AsyncSession = Depends(get_db)) -> UserService:
+    return UserService(
+        UserRepository(session),
+        auth_client=AuthServiceClient(settings.AUTH_SERVICE_URL),
+    )
 
 
 @router.get("/me", response_model=StandardResponse[UserProfileResponse])
@@ -271,3 +279,14 @@ async def advance_onboarding(
         data=OnboardingStatusResponse(**status),
         message="Onboarding progress updated",
     )
+
+
+# Account Deletion
+@router.delete("/me", response_model=StandardResponse)
+async def delete_my_account(
+    user: UserClaims = Depends(get_current_user),
+    service: UserService = Depends(_get_user_service_with_auth),
+):
+    """Permanently delete the current user's account (soft-delete)."""
+    await service.delete_account(user.id)
+    return StandardResponse(message="Account deleted successfully")

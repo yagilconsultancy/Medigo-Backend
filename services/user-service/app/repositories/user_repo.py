@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -53,3 +54,11 @@ class UserRepository:
         )
         await self.session.flush()
         self.session.expire_all()
+
+    async def soft_delete(self, user_id: UUID) -> None:
+        await self.session.execute(
+            update(User)
+            .where(User.id == user_id, User.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(timezone.utc), is_active=False)
+        )
+        await self.session.flush()

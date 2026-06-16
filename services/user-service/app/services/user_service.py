@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
+from app.clients.auth_service_client import AuthServiceClient
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
 from mediride_common.exceptions import AuthorizationError, NotFoundError
@@ -11,8 +12,13 @@ logger = logging.getLogger(__name__)
 
 
 class UserService:
-    def __init__(self, user_repo: UserRepository):
+    def __init__(
+        self,
+        user_repo: UserRepository,
+        auth_client: AuthServiceClient | None = None,
+    ):
         self.user_repo = user_repo
+        self.auth_client = auth_client
 
     async def create_profile_from_registration(
         self,
@@ -123,6 +129,22 @@ class UserService:
             "completed": user.onboarding_completed,
             "steps": steps,
         }
+
+    async def delete_account(self, user_id: UUID) -> None:
+        """Soft-delete a user account and deactivate auth credentials."""
+        user = await self.user_repo.get_by_id(user_id)
+        if not user:
+            raise NotFoundError("User profile not found")
+
+        # 1. Soft-delete the user profile
+        await self.user_repo.soft_delete(user_id)
+        logger.info(f"Soft-deleted user profile {user_id}")
+
+        # 2. Deactivate auth credentials so the user can no longer log in
+        if self.auth_client:
+            deactivated = await self.auth_client.deactivate_account(user_id)
+            if not deactivated:
+                logger.warning(f"Failed to deactivate auth credentials for user {user_id}")
 
     async def list_users(
         self,
