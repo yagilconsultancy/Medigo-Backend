@@ -70,6 +70,10 @@ class GuestBookingService:
         await self.get_session(session_id)
         return await self.ride_repo.get_latest_by_guest_session(session_id)
 
+    async def get_all_bookings(self, session_id: UUID):
+        await self.get_session(session_id)
+        return await self.ride_repo.get_all_by_guest_session(session_id)
+
     async def get_booking(self, session_id: UUID, ride_id: UUID):
         await self.get_session(session_id)
         ride = await self.ride_repo.get_by_guest_session_and_ride_id(session_id, ride_id)

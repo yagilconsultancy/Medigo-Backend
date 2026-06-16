@@ -189,7 +189,7 @@ class AuthService:
         phone = normalize_phone(phone)
         credential = await self.credential_repo.get_by_email_or_phone(email, phone)
         if not credential:
-            raise AuthenticationError("Invalid credentials")
+            raise AuthenticationError("Email or password is not correct")
 
         # Check if account is locked
         if credential.locked_until and credential.locked_until > utc_now():
@@ -212,7 +212,7 @@ class AuthService:
                 )
                 await self.credential_repo.lock_account(credential.id, locked_until)
 
-            raise AuthenticationError("Invalid credentials")
+            raise AuthenticationError("Email or password is not correct")
 
         # Check if verified
         if not credential.is_verified:
@@ -268,7 +268,7 @@ class AuthService:
                 success=False,
                 failure_reason="Invalid credentials",
             )
-            raise AuthenticationError("Invalid credentials")
+            raise AuthenticationError("Email or password is not correct")
 
         admin_name = credential.email or "Admin"
         admin_email = credential.email or ""
@@ -317,7 +317,7 @@ class AuthService:
                 success=False,
                 failure_reason="Invalid password",
             )
-            raise AuthenticationError("Invalid credentials")
+            raise AuthenticationError("Email or password is not correct")
 
         if not credential.is_verified:
             await self._record_login(
@@ -612,7 +612,7 @@ class AuthService:
         if existing:
             # Credential was pre-created by admin — verify password and log in
             if not verify_password(password, existing.password_hash):
-                raise AuthenticationError("Invalid credentials")
+                raise AuthenticationError("Email or password is not correct")
 
             # Accept the invitation in user-service
             await self.user_service_client.accept_invitation(

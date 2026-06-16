@@ -204,6 +204,17 @@ class RideRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_all_by_guest_session(self, guest_session_id: UUID) -> list[Ride]:
+        result = await self.session.execute(
+            select(Ride)
+            .where(
+                Ride.guest_session_id == guest_session_id,
+                Ride.deleted_at.is_(None),
+            )
+            .order_by(Ride.created_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def get_latest_by_guest_session(self, guest_session_id: UUID) -> Ride | None:
         result = await self.session.execute(
             select(Ride)

@@ -16,6 +16,7 @@ from app.schemas.guest_booking import (
     CreateGuestBookingRequest,
     CreateGuestSessionRequest,
     GuestBookingAccessResponse,
+    GuestBookingListResponse,
     GuestBookingResponse,
     GuestSessionResponse,
 )
@@ -125,6 +126,25 @@ async def create_guest_booking(
             booking=_build_guest_booking_access_response(ride),
         ),
         message="Guest booking created",
+    )
+
+
+@router.get("/guest-bookings", response_model=StandardResponse[GuestBookingListResponse])
+async def list_guest_bookings(
+    session_id: UUID,
+    service: GuestBookingService = Depends(_get_guest_booking_service),
+):
+    """List all bookings for a guest session."""
+    guest_session = await service.get_session(session_id)
+    rides = await service.get_all_bookings(session_id)
+    return StandardResponse(
+        data=GuestBookingListResponse(
+            session_id=guest_session.id,
+            rider_id=guest_session.rider_id,
+            is_guest=True,
+            bookings=[_build_guest_booking_access_response(r) for r in rides],
+        ),
+        message="Guest bookings retrieved",
     )
 
 

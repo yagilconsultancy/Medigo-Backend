@@ -52,3 +52,10 @@ class GuestBookingResponse(BaseModel):
     rider_id: UUID
     is_guest: bool = True
     booking: GuestBookingAccessResponse
+
+
+class GuestBookingListResponse(BaseModel):
+    session_id: UUID
+    rider_id: UUID
+    is_guest: bool = True
+    bookings: list[GuestBookingAccessResponse]
