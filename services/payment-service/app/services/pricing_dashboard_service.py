@@ -78,7 +78,11 @@ class PricingDashboardService:
                 route_label = route_key.replace("_to_", " → ").replace("_", " ").title()
                 if route_label not in route_map:
                     route_map[route_label] = {"route": route_label}
-                route_map[route_label][cfg.service_type] = route_data.get("estimated_fare")
+                route_map[route_label][cfg.service_type] = (
+                    route_data.get("typical_total")
+                    or route_data.get("total")
+                    or route_data.get("estimated_fare")
+                )
 
         return list(route_map.values())
 

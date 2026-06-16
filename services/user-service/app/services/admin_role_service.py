@@ -275,8 +275,15 @@ class AdminRoleService:
         }
 
     async def check_module_access(self, user_id: UUID, module_name: str) -> bool:
-        """Check if user has access to a specific module."""
+        """Check if user has access to a specific module.
+
+        Admin users with no explicit role assignments get full access
+        (backward compatibility for admins created before the role system).
+        """
         user_roles = await self.role_repo.get_user_roles(user_id)
+
+        if not user_roles:
+            return True
 
         for role in user_roles:
             permissions = await self.role_repo.get_role_permissions(role.id)
