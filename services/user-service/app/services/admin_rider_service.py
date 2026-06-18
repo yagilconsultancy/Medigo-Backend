@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from uuid import UUID
 
+from app.clients.auth_service_client import AuthServiceClient
 from app.clients.payment_service_client import PaymentServiceClient
 from app.clients.ride_service_client import RideServiceClient
 from app.models.rider_issue import RiderIssue
@@ -43,12 +44,14 @@ class AdminRiderService:
         issue_repo: RiderIssueRepository,
         ride_client: RideServiceClient,
         payment_client: PaymentServiceClient,
+        auth_client: AuthServiceClient,
         publisher: EventPublisher,
     ):
         self.repo = repo
         self.issue_repo = issue_repo
         self.ride_client = ride_client
         self.payment_client = payment_client
+        self.auth_client = auth_client
         self.publisher = publisher
 
     # --- Helpers ---
@@ -211,6 +214,9 @@ class AdminRiderService:
 
         await self.repo.suspend_rider(rider_id, reason, admin_id)
 
+        # Deactivate auth credentials so the rider can no longer log in
+        await self.auth_client.deactivate_account(rider_id)
+
         await self.publisher.publish(
             exchange_name=Exchanges.USERS,
             routing_key=RoutingKeys.RIDER_SUSPENDED,
@@ -233,6 +239,9 @@ class AdminRiderService:
             raise ValueError("Rider is not suspended")
 
         await self.repo.reinstate_rider(rider_id)
+
+        # Reactivate auth credentials so the rider can log in again
+        await self.auth_client.reactivate_account(rider_id)
 
         await self.publisher.publish(
             exchange_name=Exchanges.USERS,
