@@ -39,14 +39,14 @@ from app.services import email_service
 def _reset_settings(monkeypatch):
     _send_calls.clear()
     monkeypatch.setattr(email_service.aiosmtplib, "send", _dummy_send, raising=False)
-    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.zeptomail.ca")
+    monkeypatch.setattr(email_service.settings, "SMTP_HOST", "smtp.mailgun.org")
     monkeypatch.setattr(email_service.settings, "SMTP_PORT", 587)
-    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "emailapikey")
+    monkeypatch.setattr(email_service.settings, "SMTP_USERNAME", "noreply@mail.getmedigo.com")
     monkeypatch.setattr(email_service.settings, "SMTP_PASSWORD", "secret")
     monkeypatch.setattr(email_service.settings, "SMTP_STARTTLS", True)
     monkeypatch.setattr(email_service.settings, "SMTP_USE_TLS", False)
     monkeypatch.setattr(email_service.settings, "SMTP_TIMEOUT_SECONDS", 30)
-    monkeypatch.setattr(email_service.settings, "EMAIL_FROM", "noreply@getmedigo.com")
+    monkeypatch.setattr(email_service.settings, "EMAIL_FROM", "noreply@mail.getmedigo.com")
 
 
 @pytest.mark.asyncio
@@ -59,7 +59,7 @@ async def test_send_email_uses_starttls_for_submission_port():
 
     assert sent is True
     assert len(_send_calls) == 1
-    assert _send_calls[0]["hostname"] == "smtp.zeptomail.ca"
+    assert _send_calls[0]["hostname"] == "smtp.mailgun.org"
     assert _send_calls[0]["port"] == 587
     assert _send_calls[0]["start_tls"] is True
     assert _send_calls[0]["use_tls"] is False

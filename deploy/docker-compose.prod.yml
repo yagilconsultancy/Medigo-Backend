@@ -257,14 +257,14 @@ services:
       <<: *service-env
       DATABASE_URL: postgresql+asyncpg://${RDS_USERNAME}:${RDS_PASSWORD}@${RDS_HOST}:${RDS_PORT:-5432}/mediride_notifications
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      SMTP_HOST: ${SMTP_HOST:-smtp.zeptomail.ca}
+      SMTP_HOST: ${SMTP_HOST:-smtp.mailgun.org}
       SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_USERNAME: ${SMTP_USERNAME:-noreply@mail.getmedigo.com}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
       SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-30}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@getmedigo.com}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@mail.getmedigo.com}
     depends_on:
       rabbitmq:
         condition: service_healthy

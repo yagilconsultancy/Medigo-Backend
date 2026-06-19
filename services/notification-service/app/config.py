@@ -18,15 +18,18 @@ class NotificationSettings(BaseServiceSettings):
     AWS_SECRET_ACCESS_KEY: str = ""
     SES_CONFIGURATION_SET: str = ""
 
-    # SMTP (ZeptoMail / Zoho)
-    SMTP_HOST: str = "smtp.zeptomail.ca"
+    # SMTP (Mailgun)
+    SMTP_HOST: str = "smtp.mailgun.org"
     SMTP_PORT: int = 587
-    SMTP_USERNAME: str = Field(default="", validation_alias=AliasChoices("SMTP_USERNAME", "SMTP_USER"))
+    SMTP_USERNAME: str = Field(
+        default="noreply@mail.getmedigo.com",
+        validation_alias=AliasChoices("SMTP_USERNAME", "SMTP_USER", "SMTP_LOGIN"),
+    )
     SMTP_PASSWORD: str = Field(default="", validation_alias=AliasChoices("SMTP_PASSWORD", "SMTP_PASS"))
     SMTP_STARTTLS: bool = True
     SMTP_USE_TLS: bool = False
     SMTP_TIMEOUT_SECONDS: int = 30
-    EMAIL_FROM: str = "noreply@getmedigo.com"
+    EMAIL_FROM: str = "noreply@mail.getmedigo.com"
 
 
 settings = NotificationSettings()
