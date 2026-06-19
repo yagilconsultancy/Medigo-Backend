@@ -32,6 +32,14 @@ class NotificationSettings(BaseServiceSettings):
     EMAIL_FROM: str = "noreply@mail.getmedigo.com"
     PARTNERS_EMAIL_FROM: str = "partners@mail.getmedigo.com"
     PARTNERS_EMAIL_REPLY_TO: str = "partners@mail.getmedigo.com"
+    PARTNERS_SMTP_USERNAME: str = Field(
+        default="partners@mail.getmedigo.com",
+        validation_alias=AliasChoices("PARTNERS_SMTP_USERNAME", "PARTNERS_SMTP_USER", "PARTNERS_SMTP_LOGIN"),
+    )
+    PARTNERS_SMTP_PASSWORD: str = Field(
+        default="",
+        validation_alias=AliasChoices("PARTNERS_SMTP_PASSWORD", "PARTNERS_SMTP_PASS"),
+    )
 
 
 settings = NotificationSettings()

@@ -49,6 +49,8 @@ def _reset_settings(monkeypatch):
     monkeypatch.setattr(email_service.settings, "EMAIL_FROM", "noreply@mail.getmedigo.com")
     monkeypatch.setattr(email_service.settings, "PARTNERS_EMAIL_FROM", "partners@mail.getmedigo.com")
     monkeypatch.setattr(email_service.settings, "PARTNERS_EMAIL_REPLY_TO", "partners@mail.getmedigo.com")
+    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_USERNAME", "partners@mail.getmedigo.com")
+    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_PASSWORD", "partners-secret")
 
 
 @pytest.mark.asyncio
@@ -115,4 +117,6 @@ async def test_send_fleet_application_received_email_uses_partners_sender():
     assert _send_calls[0]["message"]["To"] == "fleet@example.com"
     assert _send_calls[0]["message"]["From"] == "partners@mail.getmedigo.com"
     assert _send_calls[0]["message"]["Reply-To"] == "partners@mail.getmedigo.com"
+    assert _send_calls[0]["username"] == "partners@mail.getmedigo.com"
+    assert _send_calls[0]["password"] == "partners-secret"
     assert _send_calls[0]["message"]["Subject"] == "MediGo - Fleet Application Received"

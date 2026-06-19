@@ -25,16 +25,20 @@ async def send_email(
     html_body: str,
     from_email: str | None = None,
     reply_to: str | None = None,
+    smtp_username: str | None = None,
+    smtp_password: str | None = None,
 ) -> bool:
     """Send email via SMTP."""
     sender = from_email or settings.EMAIL_FROM
+    auth_username = smtp_username or settings.SMTP_USERNAME
+    auth_password = smtp_password or settings.SMTP_PASSWORD
     missing_fields = [
         name
         for name, value in (
             ("SMTP_HOST", settings.SMTP_HOST),
             ("SMTP_PORT", settings.SMTP_PORT),
-            ("SMTP_USERNAME", settings.SMTP_USERNAME),
-            ("SMTP_PASSWORD", settings.SMTP_PASSWORD),
+            ("SMTP_USERNAME", auth_username),
+            ("SMTP_PASSWORD", auth_password),
             ("EMAIL_FROM", sender),
         )
         if not value
@@ -60,8 +64,8 @@ async def send_email(
             message,
             hostname=settings.SMTP_HOST,
             port=settings.SMTP_PORT,
-            username=settings.SMTP_USERNAME,
-            password=settings.SMTP_PASSWORD,
+            username=auth_username,
+            password=auth_password,
             start_tls=start_tls,
             use_tls=use_tls,
             timeout=settings.SMTP_TIMEOUT_SECONDS,
@@ -78,6 +82,8 @@ async def send_fleet_application_received_email(to: str, company_name: str) -> b
     subject = "MediGo - Fleet Application Received"
     sender = settings.PARTNERS_EMAIL_FROM
     reply_to = settings.PARTNERS_EMAIL_REPLY_TO
+    smtp_username = settings.PARTNERS_SMTP_USERNAME or settings.SMTP_USERNAME
+    smtp_password = settings.PARTNERS_SMTP_PASSWORD or settings.SMTP_PASSWORD
 
     try:
         template = _template_env.get_template("fleet_application_received.html")
@@ -116,6 +122,8 @@ async def send_fleet_application_received_email(to: str, company_name: str) -> b
         html_body=html,
         from_email=sender,
         reply_to=reply_to,
+        smtp_username=smtp_username,
+        smtp_password=smtp_password,
     )
 
 
