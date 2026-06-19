@@ -30,6 +30,8 @@ class NotificationSettings(BaseServiceSettings):
     SMTP_USE_TLS: bool = False
     SMTP_TIMEOUT_SECONDS: int = 30
     EMAIL_FROM: str = "noreply@mail.getmedigo.com"
+    PARTNERS_EMAIL_FROM: str = "partners@mail.getmedigo.com"
+    PARTNERS_EMAIL_REPLY_TO: str = "partners@mail.getmedigo.com"
 
 
 settings = NotificationSettings()

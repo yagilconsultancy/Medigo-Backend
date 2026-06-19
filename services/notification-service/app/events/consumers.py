@@ -14,6 +14,7 @@ from app.config import settings
 from app.services.email_service import (
     send_admin_invite_email,
     send_driver_invite_email,
+    send_fleet_application_received_email,
     send_fleet_info_request_email,
     send_otp_email,
     send_password_reset_email,
@@ -28,6 +29,7 @@ from mediride_common.events.schemas import (
     AdminInviteSentPayload,
     DriverInviteSentPayload,
     EventEnvelope,
+    FleetApplicationCreatedPayload,
     FleetApplicationInfoRequestedPayload,
     PasswordResetRequestedPayload,
     PaymentCompletedPayload,
@@ -478,7 +480,32 @@ class FleetEventConsumer(BaseEventConsumer):
     """Consumes fleet events to send email notifications to applicants."""
 
     async def handle(self, envelope: EventEnvelope) -> None:
-        if envelope.event_type == RoutingKeys.FLEET_APPLICATION_INFO_REQUESTED:
+        if envelope.event_type == RoutingKeys.FLEET_APPLICATION_CREATED:
+            payload = FleetApplicationCreatedPayload(**envelope.payload)
+            if payload.created_by != "public":
+                logger.info(
+                    "Skipping fleet application confirmation email for non-public application %s",
+                    payload.application_id,
+                )
+                return
+
+            sent = await send_fleet_application_received_email(
+                to=payload.email,
+                company_name=payload.company_name,
+            )
+            if sent:
+                logger.info(
+                    "Fleet application confirmation email sent to %s for application %s",
+                    payload.email,
+                    payload.application_id,
+                )
+            else:
+                logger.error(
+                    "Fleet application confirmation email failed for %s",
+                    payload.email,
+                )
+
+        elif envelope.event_type == RoutingKeys.FLEET_APPLICATION_INFO_REQUESTED:
             payload = FleetApplicationInfoRequestedPayload(**envelope.payload)
             sent = await send_fleet_info_request_email(
                 to=payload.email,
@@ -589,6 +616,7 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
         queue_name=Queues.NOTIFICATION_FLEET_EVENTS,
         exchange_name=Exchanges.USERS,
         routing_keys=[
+            RoutingKeys.FLEET_APPLICATION_CREATED,
             RoutingKeys.FLEET_APPLICATION_INFO_REQUESTED,
         ],
     )
