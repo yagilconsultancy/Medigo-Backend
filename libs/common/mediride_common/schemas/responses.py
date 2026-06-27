@@ -15,7 +15,7 @@ class ErrorResponse(BaseModel):
     success: bool = False
     message: str
     error_code: str
-    details: dict | None = None
+    details: dict | list | None = None
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
