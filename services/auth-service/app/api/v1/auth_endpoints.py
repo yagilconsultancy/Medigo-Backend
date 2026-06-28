@@ -72,7 +72,7 @@ async def register(
     request: RegisterRequest,
     auth_service: AuthService = Depends(_get_auth_service),
 ):
-    user_id, otp_code = await auth_service.register(
+    user_id, _ = await auth_service.register(
         email=request.email,
         phone=request.phone,
         password=request.password,
@@ -80,11 +80,7 @@ async def register(
         first_name=request.first_name,
         last_name=request.last_name,
     )
-    # OTP is published for delivery via notification-service in all environments.
-    # In development, we also return it in the response for easier testing.
     message = "Registration successful. Please verify your account."
-    if settings.ENVIRONMENT != "production":
-        message += f" [DEV] OTP: {otp_code}"
 
     return StandardResponse(
         data=RegisterResponse(user_id=user_id, message=message),
@@ -202,11 +198,8 @@ async def resend_otp(
     purpose: str = "registration",
     auth_service: AuthService = Depends(_get_auth_service),
 ):
-    otp_code = await auth_service.resend_otp(user_id, purpose)
-    message = "OTP sent successfully"
-    if settings.ENVIRONMENT != "production":
-        message += f" [DEV] OTP: {otp_code}"
-    return StandardResponse(message=message)
+    await auth_service.resend_otp(user_id, purpose)
+    return StandardResponse(message="OTP sent successfully")
 
 
 @router.post("/forgot-password", response_model=StandardResponse[ForgotPasswordResponse])
@@ -219,9 +212,7 @@ async def forgot_password(
     )
     message = "If an account exists, a password reset OTP has been sent."
     if result:
-        user_id, otp_code = result
-        if settings.ENVIRONMENT != "production":
-            message += f" [DEV] OTP: {otp_code}"
+        user_id, _ = result
         return StandardResponse(
             data=ForgotPasswordResponse(user_id=user_id, message=message),
             message=message,
@@ -287,10 +278,8 @@ async def register_driver(
         )
 
     # Otherwise it's a new registration (user_id, otp_code)
-    user_id, otp_code = result
+    user_id, _ = result
     message = "Driver registration successful. Please verify your account."
-    if settings.ENVIRONMENT != "production":
-        message += f" [DEV] OTP: {otp_code}"
 
     return StandardResponse(
         data=RegisterResponse(user_id=user_id, message=message),

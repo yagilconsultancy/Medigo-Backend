@@ -7,7 +7,7 @@ from mediride_common.schemas.enums import UserRole
 
 class TokenPayload(BaseModel):
     sub: str
-    role: UserRole
+    role: UserRole | None = None
     business_id: str | None = None
     email: str | None = None
     jti: str
