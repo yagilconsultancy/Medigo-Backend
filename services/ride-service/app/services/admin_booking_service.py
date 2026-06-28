@@ -269,9 +269,10 @@ class AdminBookingService:
         notes = await self.note_repo.get_by_ride(ride_id)
 
         # Fetch external data concurrently (HTTP calls)
-        rider_profile, driver_profile, fare_data = await asyncio.gather(
+        rider_profile, driver_profile, caregiver_profile, fare_data = await asyncio.gather(
             self.user_client.get_user_profile(ride.rider_id),
             self.user_client.get_driver_profile(ride.driver_id) if ride.driver_id else _none(),
+            self.user_client.get_driver_profile(ride.caregiver_id) if ride.caregiver_id else _none(),
             self.payment_client.get_fare_breakdown(ride_id) if ride.status == RideStatus.COMPLETED else _none(),
         )
 
@@ -290,7 +291,11 @@ class AdminBookingService:
             driver_name = _extract_name(driver_profile)
             driver_phone = driver_profile.get("phone")
             driver_rating = float(driver_profile.get("rating", 5.0))
-            driver_vehicle = driver_profile.get("vehicle", {}) or {}
+            # Vehicle fields are returned at the top level of the profile.
+            driver_vehicle = driver_profile
+
+        # Build caregiver info
+        caregiver_name = _extract_name(caregiver_profile) if caregiver_profile else None
 
         # Build timeline
         timeline = [
@@ -335,6 +340,7 @@ class AdminBookingService:
             id=ride.id,
             rider_id=ride.rider_id,
             driver_id=ride.driver_id,
+            caregiver_id=ride.caregiver_id,
             business_id=ride.business_id,
             ride_type=ride.ride_type,
             trip_type=ride.trip_type,
@@ -362,6 +368,9 @@ class AdminBookingService:
             visit_type=ride.visit_type,
             facility_name=ride.facility_name,
             appointment_time=ride.appointment_time,
+            passenger_first_name=ride.passenger_first_name,
+            passenger_last_name=ride.passenger_last_name,
+            passenger_phone=ride.passenger_phone,
             cancellation_reason=ride.cancellation_reason,
             cancelled_at=ride.cancelled_at,
             cancelled_by=ride.cancelled_by,
@@ -371,14 +380,15 @@ class AdminBookingService:
             rider_phone=rider_phone,
             rider_rating=rider_rating,
             rider_trip_count=rider_trip_count,
+            caregiver_name=caregiver_name,
             driver_name=driver_name,
             driver_phone=driver_phone,
             driver_rating=driver_rating,
             driver_vehicle_type=driver_vehicle.get("vehicle_type"),
-            driver_vehicle_make=driver_vehicle.get("make"),
-            driver_vehicle_model=driver_vehicle.get("model"),
-            driver_vehicle_plate=driver_vehicle.get("plate"),
-            driver_vehicle_color=driver_vehicle.get("color"),
+            driver_vehicle_make=driver_vehicle.get("vehicle_make"),
+            driver_vehicle_model=driver_vehicle.get("vehicle_model"),
+            driver_vehicle_plate=driver_vehicle.get("vehicle_plate"),
+            driver_vehicle_color=driver_vehicle.get("vehicle_color"),
             timeline=timeline,
             admin_notes=admin_notes_resp,
             fare_breakdown=fare_breakdown,
@@ -418,6 +428,48 @@ class AdminBookingService:
             ride_id, admin_id, f"Booking declined: {reason}"
         )
         return ride
+
+    # ==================== Edit Booking ====================
+
+    # Bookings can only be edited before they are in transit or finished.
+    NON_EDITABLE_STATUSES = {
+        RideStatus.IN_PROGRESS,
+        RideStatus.COMPLETED,
+        RideStatus.CANCELLED,
+        RideStatus.NO_SHOW,
+    }
+
+    async def update_booking(
+        self, ride_id: UUID, admin_id: UUID, updates: dict
+    ) -> Ride:
+        """Edit a booking's trip and medical details.
+
+        Only fields present in ``updates`` are changed. Editing is rejected
+        once the ride is in progress or in a terminal state.
+        """
+        ride = await self.ride_repo.get_by_id(ride_id)
+        if ride is None:
+            raise NotFoundError("Booking not found")
+
+        if ride.status in self.NON_EDITABLE_STATUSES:
+            raise ValidationError(
+                f"Booking cannot be edited while status is '{ride.status}'"
+            )
+
+        # Drop keys that were not provided (None) so we never null out columns.
+        clean_updates = {k: v for k, v in updates.items() if v is not None}
+        if not clean_updates:
+            return ride
+
+        await self.ride_repo.update(ride_id, **clean_updates)
+
+        changed_fields = ", ".join(sorted(clean_updates.keys()))
+        await self._create_system_note(
+            ride_id, admin_id, f"Booking edited by admin. Fields: {changed_fields}"
+        )
+
+        updated = await self.ride_repo.get_by_id(ride_id)
+        return updated or ride
 
     # ==================== Assign / Reassign Driver ====================
 

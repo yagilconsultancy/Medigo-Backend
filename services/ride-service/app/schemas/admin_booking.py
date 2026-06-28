@@ -36,6 +36,39 @@ class CancelTripRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
 
 
+class UpdateBookingRequest(BaseModel):
+    """Admin edit of a booking's trip and medical details.
+
+    All fields are optional; only the ones provided are updated.
+    """
+
+    # Locations
+    pickup_address: str | None = Field(None, min_length=1)
+    pickup_latitude: float | None = None
+    pickup_longitude: float | None = None
+    destination_address: str | None = Field(None, min_length=1)
+    destination_latitude: float | None = None
+    destination_longitude: float | None = None
+
+    # Scheduling
+    scheduled_at: datetime | None = None
+
+    # Classification
+    ride_type: str | None = Field(None, max_length=20)
+    trip_type: str | None = Field(None, max_length=30)
+    trip_structure: str | None = Field(None, max_length=20)
+
+    # Medical / passenger info
+    visit_type: str | None = Field(None, max_length=100)
+    facility_name: str | None = Field(None, max_length=255)
+    mobility_level: str | None = Field(None, max_length=30)
+    assistance_level: str | None = Field(None, max_length=30)
+    special_instructions: str | None = None
+    passenger_first_name: str | None = Field(None, max_length=100)
+    passenger_last_name: str | None = Field(None, max_length=100)
+    passenger_phone: str | None = Field(None, max_length=20)
+
+
 # ==================== Response Schemas ====================
 
 class AdminNoteResponse(BaseModel):
@@ -167,6 +200,7 @@ class AdminBookingDetailResponse(BaseModel):
     id: UUID
     rider_id: UUID
     driver_id: UUID | None = None
+    caregiver_id: UUID | None = None
     business_id: UUID | None = None
     ride_type: str
     trip_type: str
@@ -205,6 +239,11 @@ class AdminBookingDetailResponse(BaseModel):
     facility_name: str | None = None
     appointment_time: datetime | None = None
 
+    # Passenger
+    passenger_first_name: str | None = None
+    passenger_last_name: str | None = None
+    passenger_phone: str | None = None
+
     # Cancellation
     cancellation_reason: str | None = None
     cancelled_at: datetime | None = None
@@ -219,6 +258,9 @@ class AdminBookingDetailResponse(BaseModel):
     rider_phone: str | None = None
     rider_rating: float = 5.0
     rider_trip_count: int = 0
+
+    # Enriched: Caregiver info
+    caregiver_name: str | None = None
 
     # Enriched: Driver info
     driver_name: str | None = None

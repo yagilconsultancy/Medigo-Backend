@@ -1,4 +1,4 @@
-.PHONY: up down logs build migrate test lint seed clean
+.PHONY: up down logs build migrate test lint seed seed-admin seed-rides clean
 
 up:
 	docker compose up -d
@@ -54,6 +54,12 @@ lint:
 # Seed data
 seed:
 	docker compose exec auth-service python -m scripts.seed_data
+
+seed-admin:
+	docker compose exec auth-service python -m scripts.seed_admin
+
+seed-rides:
+	docker compose exec ride-service python -m scripts.seed_data
 
 # Clean
 clean:
