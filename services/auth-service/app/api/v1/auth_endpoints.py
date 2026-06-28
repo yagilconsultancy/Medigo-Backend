@@ -26,6 +26,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     TokenResponse,
     VerifyOTPRequest,
+    VerifyPasswordRequest,
 )
 from app.services.auth_service import AuthService
 from mediride_common.auth.models import TokenPair
@@ -194,6 +195,17 @@ async def change_password(
         new_password=request.new_password,
     )
     return StandardResponse(message="Password changed successfully")
+
+
+@router.post("/verify-password", response_model=StandardResponse)
+async def verify_password(
+    request: VerifyPasswordRequest,
+    user: UserClaims = Depends(get_current_user),
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    """Verify the current admin's own password (re-auth for sensitive actions)."""
+    await auth_service.verify_password(user_id=user.id, password=request.password)
+    return StandardResponse(message="Password verified")
 
 
 @router.post("/resend-otp", response_model=StandardResponse)

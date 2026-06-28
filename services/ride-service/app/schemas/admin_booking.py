@@ -36,6 +36,11 @@ class CancelTripRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
 
 
+class ChangeStatusRequest(BaseModel):
+    status: str = Field(..., min_length=1, max_length=40)
+    notes: str | None = Field(None, max_length=500)
+
+
 class UpdateBookingRequest(BaseModel):
     """Admin edit of a booking's trip and medical details.
 
@@ -284,6 +289,9 @@ class AdminBookingDetailResponse(BaseModel):
     # Recurring info
     recurring_ride_id: UUID | None = None
     is_recurring: bool = False
+
+    # Statuses the admin may transition to from the current status
+    allowed_status_transitions: list[str] = []
 
     model_config = {"from_attributes": True}
 

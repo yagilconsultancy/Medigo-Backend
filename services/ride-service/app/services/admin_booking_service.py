@@ -25,6 +25,7 @@ from app.schemas.admin_booking import (
     StatusLogEntry,
 )
 from app.services.ride_service import RideService
+from app.services.ride_state_machine import VALID_TRANSITIONS
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.exceptions import NotFoundError, ValidationError
 from mediride_common.schemas.enums import RideStatus
@@ -394,6 +395,7 @@ class AdminBookingService:
             fare_breakdown=fare_breakdown,
             recurring_ride_id=ride.recurring_ride_id,
             is_recurring=ride.recurring_ride_id is not None,
+            allowed_status_transitions=list(VALID_TRANSITIONS.get(ride.status, [])),
         )
 
     # ==================== Approve / Decline ====================
@@ -463,13 +465,46 @@ class AdminBookingService:
 
         await self.ride_repo.update(ride_id, **clean_updates)
 
-        changed_fields = ", ".join(sorted(clean_updates.keys()))
+        changed_keys = sorted(clean_updates.keys())
         await self._create_system_note(
-            ride_id, admin_id, f"Booking edited by admin. Fields: {changed_fields}"
+            ride_id, admin_id, f"Booking edited by admin. Fields: {', '.join(changed_keys)}"
+        )
+
+        # Notify the rider that their booking details changed.
+        await self.publisher.publish(
+            Exchanges.RIDES,
+            RoutingKeys.RIDE_UPDATED,
+            {
+                "ride_id": str(ride_id),
+                "rider_id": str(ride.rider_id),
+                "updated_by": str(admin_id),
+                "changed_fields": changed_keys,
+            },
         )
 
         updated = await self.ride_repo.get_by_id(ride_id)
         return updated or ride
+
+    # ==================== Change Status ====================
+
+    async def change_status(
+        self, ride_id: UUID, admin_id: UUID, to_status: str, notes: str | None = None
+    ) -> Ride:
+        """Admin-driven status change.
+
+        Goes through the ride state machine, so only valid transitions are
+        accepted and the matching rider notification/event is published.
+        """
+        ride = await self.ride_service.transition_status(
+            ride_id=ride_id,
+            to_status=to_status,
+            changed_by=admin_id,
+            notes=notes or f"Status changed to {to_status} by admin",
+        )
+        await self._create_system_note(
+            ride_id, admin_id, f"Status changed to '{to_status}' by admin"
+        )
+        return ride
 
     # ==================== Assign / Reassign Driver ====================
 

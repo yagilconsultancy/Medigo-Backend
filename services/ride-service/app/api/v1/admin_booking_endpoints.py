@@ -24,6 +24,7 @@ from app.schemas.admin_booking import (
     CancelledTripResponse,
     CancelledTripsKPIs,
     CancelTripRequest,
+    ChangeStatusRequest,
     CreateAdminNoteRequest,
     DeclineBookingRequest,
     PendingBookingResponse,
@@ -274,6 +275,27 @@ async def update_booking(
     return StandardResponse(
         data=RideResponse.model_validate(ride),
         message="Booking updated",
+    )
+
+
+@router.put("/bookings/{ride_id}/status", response_model=StandardResponse[RideResponse])
+async def change_status(
+    ride_id: UUID,
+    body: ChangeStatusRequest,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminBookingService = Depends(_get_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Change a booking's status (admin).
+
+    Only transitions allowed by the ride state machine are accepted; the
+    matching rider notification is published automatically.
+    """
+    ride = await service.change_status(ride_id, user.id, body.status, body.notes)
+    await session.commit()
+    return StandardResponse(
+        data=RideResponse.model_validate(ride),
+        message="Status updated",
     )
 
 
