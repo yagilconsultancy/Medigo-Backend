@@ -86,6 +86,13 @@ class DriverStatusPayload(BaseModel):
     business_id: UUID
 
 
+class FleetApplicationCreatedPayload(BaseModel):
+    application_id: UUID
+    company_name: str
+    email: str
+    created_by: str
+
+
 class FleetApplicationInfoRequestedPayload(BaseModel):
     application_id: UUID
     company_name: str

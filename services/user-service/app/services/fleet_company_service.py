@@ -138,6 +138,7 @@ class FleetCompanyService:
                 {
                     "id": d.id,
                     "document_type": d.document_type,
+                    "file_key": d.file_key,
                     "file_name": d.file_name,
                     "file_size": d.file_size,
                     "mime_type": d.mime_type,
@@ -183,6 +184,7 @@ class FleetCompanyService:
                     {
                         "id": d.id,
                         "document_type": d.document_type,
+                        "file_key": d.file_key,
                         "file_name": d.file_name,
                         "file_size": d.file_size,
                         "mime_type": d.mime_type,

@@ -10,6 +10,21 @@ from mediride_common.schemas.responses import ErrorResponse
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_errors(errors: list) -> list:
+    """Make pydantic validation errors JSON-serializable by converting
+    non-serializable objects (e.g. ValueError) in 'ctx' to strings."""
+    sanitized = []
+    for err in errors:
+        err = dict(err)
+        if "ctx" in err and isinstance(err["ctx"], dict):
+            err["ctx"] = {
+                k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                for k, v in err["ctx"].items()
+            }
+        sanitized.append(err)
+    return sanitized
+
+
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
@@ -26,7 +41,7 @@ def register_error_handlers(app: FastAPI) -> None:
             content=ErrorResponse(
                 message="Validation error",
                 error_code="VALIDATION_ERROR",
-                details=exc.errors(),
+                details=_sanitize_errors(exc.errors()),
             ).model_dump(),
         )
 

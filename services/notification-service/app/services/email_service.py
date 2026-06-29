@@ -19,16 +19,27 @@ _template_env = Environment(
 )
 
 
-async def send_email(to: str, subject: str, html_body: str) -> bool:
+async def send_email(
+    to: str,
+    subject: str,
+    html_body: str,
+    from_email: str | None = None,
+    reply_to: str | None = None,
+    smtp_username: str | None = None,
+    smtp_password: str | None = None,
+) -> bool:
     """Send email via SMTP."""
+    sender = from_email or settings.EMAIL_FROM
+    auth_username = smtp_username or settings.SMTP_USERNAME
+    auth_password = smtp_password or settings.SMTP_PASSWORD
     missing_fields = [
         name
         for name, value in (
             ("SMTP_HOST", settings.SMTP_HOST),
             ("SMTP_PORT", settings.SMTP_PORT),
-            ("SMTP_USERNAME", settings.SMTP_USERNAME),
-            ("SMTP_PASSWORD", settings.SMTP_PASSWORD),
-            ("EMAIL_FROM", settings.EMAIL_FROM),
+            ("SMTP_USERNAME", auth_username),
+            ("SMTP_PASSWORD", auth_password),
+            ("EMAIL_FROM", sender),
         )
         if not value
     ]
@@ -38,9 +49,11 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
         )
 
     message = MIMEMultipart("alternative")
-    message["From"] = settings.EMAIL_FROM
+    message["From"] = sender
     message["To"] = to
     message["Subject"] = subject
+    if reply_to:
+        message["Reply-To"] = reply_to
     message.attach(MIMEText(html_body, "html"))
 
     use_tls = settings.SMTP_USE_TLS or settings.SMTP_PORT == 465
@@ -51,8 +64,8 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
             message,
             hostname=settings.SMTP_HOST,
             port=settings.SMTP_PORT,
-            username=settings.SMTP_USERNAME,
-            password=settings.SMTP_PASSWORD,
+            username=auth_username,
+            password=auth_password,
             start_tls=start_tls,
             use_tls=use_tls,
             timeout=settings.SMTP_TIMEOUT_SECONDS,
@@ -62,6 +75,56 @@ async def send_email(to: str, subject: str, html_body: str) -> bool:
     except Exception as e:
         logger.exception("Failed to send email to %s: %s", to, e)
         raise RetryableError(f"SMTP delivery failed for {to}") from e
+
+
+async def send_fleet_application_received_email(to: str, company_name: str) -> bool:
+    """Send fleet application submission confirmation email."""
+    subject = "MediGo - Fleet Application Received"
+    sender = settings.PARTNERS_EMAIL_FROM
+    reply_to = settings.PARTNERS_EMAIL_REPLY_TO
+    smtp_username = settings.PARTNERS_SMTP_USERNAME or settings.SMTP_USERNAME
+    smtp_password = settings.PARTNERS_SMTP_PASSWORD or settings.SMTP_PASSWORD
+
+    try:
+        template = _template_env.get_template("fleet_application_received.html")
+        html = template.render(company_name=company_name)
+    except Exception as e:
+        logger.exception(
+            "Failed to render fleet application received email for %s: %s",
+            to,
+            e,
+        )
+        html = f"""
+        <html>
+        <body>
+            <p>Hello {company_name},</p>
+            <p>Thank you for your interest in partnering with MediGo.</p>
+            <p>We are pleased to confirm that your fleet application has been successfully submitted and received by our operations team.</p>
+            <p>Our team will carefully review the information and supporting documents provided as part of your application. If additional information or clarification is required during the review process, a member of the MediGo team will contact you directly.</p>
+            <p>While your application is being processed, we kindly recommend preparing the following to help ensure a smooth onboarding process if approved:</p>
+            <ul>
+                <li>Driver information and profiles</li>
+                <li>Vehicle details and documentation</li>
+                <li>Insurance records</li>
+                <li>Licensing and compliance documents</li>
+                <li>Operational contact information</li>
+            </ul>
+            <p>Once the review process is completed, you will receive an update regarding your application status and next steps.</p>
+            <p>Thank you again for your interest in becoming a MediGo transportation partner.</p>
+            <p>Warm regards,<br>MediGo Operations Team</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(
+        to=to,
+        subject=subject,
+        html_body=html,
+        from_email=sender,
+        reply_to=reply_to,
+        smtp_username=smtp_username,
+        smtp_password=smtp_password,
+    )
 
 
 async def send_otp_email(to: str, otp_code: str) -> bool:
@@ -309,7 +372,7 @@ async def send_payment_receipt_email(
         "name": name,
         "trip_number": trip_number,
         "currency": receipt.get("currency", "CAD"),
-        "total_fare": f"{float(receipt.get('total_fare') or 0) / 100:.2f}",
+        "total_fare": f"{float(receipt.get('total_fare') or 0):.2f}",
         "ride_date": receipt.get("ride_date") or "N/A",
         "pickup_address": receipt.get("pickup_address") or "N/A",
         "destination_address": receipt.get("destination_address") or "N/A",

@@ -47,6 +47,10 @@ def _reset_settings(monkeypatch):
     monkeypatch.setattr(email_service.settings, "SMTP_USE_TLS", False)
     monkeypatch.setattr(email_service.settings, "SMTP_TIMEOUT_SECONDS", 30)
     monkeypatch.setattr(email_service.settings, "EMAIL_FROM", "noreply@mail.getmedigo.com")
+    monkeypatch.setattr(email_service.settings, "PARTNERS_EMAIL_FROM", "partners@mail.getmedigo.com")
+    monkeypatch.setattr(email_service.settings, "PARTNERS_EMAIL_REPLY_TO", "partners@mail.getmedigo.com")
+    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_USERNAME", "partners@mail.getmedigo.com")
+    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_PASSWORD", "partners-secret")
 
 
 @pytest.mark.asyncio
@@ -99,3 +103,20 @@ async def test_send_payment_receipt_email_formats_receipt_contents():
     assert len(_send_calls) == 1
     assert _send_calls[0]["message"]["To"] == "rider@example.com"
     assert "Receipt for TRIP-ABC123" in _send_calls[0]["message"]["Subject"]
+
+
+@pytest.mark.asyncio
+async def test_send_fleet_application_received_email_uses_partners_sender():
+    sent = await email_service.send_fleet_application_received_email(
+        to="fleet@example.com",
+        company_name="Acme Fleet",
+    )
+
+    assert sent is True
+    assert len(_send_calls) == 1
+    assert _send_calls[0]["message"]["To"] == "fleet@example.com"
+    assert _send_calls[0]["message"]["From"] == "partners@mail.getmedigo.com"
+    assert _send_calls[0]["message"]["Reply-To"] == "partners@mail.getmedigo.com"
+    assert _send_calls[0]["username"] == "partners@mail.getmedigo.com"
+    assert _send_calls[0]["password"] == "partners-secret"
+    assert _send_calls[0]["message"]["Subject"] == "MediGo - Fleet Application Received"
