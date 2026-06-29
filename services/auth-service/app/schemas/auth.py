@@ -52,6 +52,10 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=8, max_length=128)
 
 
+class VerifyPasswordRequest(BaseModel):
+    password: str = Field(..., min_length=1)
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr | None = None
     phone: str | None = None

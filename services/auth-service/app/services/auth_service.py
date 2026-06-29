@@ -509,6 +509,12 @@ class AuthService:
         # Revoke all refresh tokens (force re-login)
         await self.token_repo.revoke_all_for_user(user_id)
 
+    async def verify_password(self, user_id: UUID, password: str) -> None:
+        """Verify a user's own password (re-authentication for sensitive actions)."""
+        credential = await self.credential_repo.get_by_id(user_id)
+        if not credential or not verify_password(password, credential.password_hash):
+            raise AuthenticationError("Password is not correct")
+
     async def resend_otp(self, user_id: UUID, purpose: str) -> str:
         """Resend OTP for a user."""
         credential = await self.credential_repo.get_by_id(user_id)

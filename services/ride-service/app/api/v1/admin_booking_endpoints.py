@@ -24,6 +24,7 @@ from app.schemas.admin_booking import (
     CancelledTripResponse,
     CancelledTripsKPIs,
     CancelTripRequest,
+    ChangeStatusRequest,
     CreateAdminNoteRequest,
     DeclineBookingRequest,
     PendingBookingResponse,
@@ -31,6 +32,7 @@ from app.schemas.admin_booking import (
     ReassignDriverRequest,
     ScheduledTripResponse,
     ScheduledTripsKPIs,
+    UpdateBookingRequest,
 )
 from app.schemas.ride import RideResponse
 from app.services.admin_booking_service import AdminBookingService
@@ -251,6 +253,49 @@ async def decline_booking(
     return StandardResponse(
         data=RideResponse.model_validate(ride),
         message="Booking declined",
+    )
+
+
+@router.put("/bookings/{ride_id}", response_model=StandardResponse[RideResponse])
+async def update_booking(
+    ride_id: UUID,
+    body: UpdateBookingRequest,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminBookingService = Depends(_get_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Edit a booking's trip and medical details.
+
+    Only provided fields are updated. Rejected once the ride is in progress
+    or in a terminal state (completed/cancelled/no_show).
+    """
+    updates = body.model_dump(exclude_unset=True)
+    ride = await service.update_booking(ride_id, user.id, updates)
+    await session.commit()
+    return StandardResponse(
+        data=RideResponse.model_validate(ride),
+        message="Booking updated",
+    )
+
+
+@router.put("/bookings/{ride_id}/status", response_model=StandardResponse[RideResponse])
+async def change_status(
+    ride_id: UUID,
+    body: ChangeStatusRequest,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminBookingService = Depends(_get_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Change a booking's status (admin).
+
+    Only transitions allowed by the ride state machine are accepted; the
+    matching rider notification is published automatically.
+    """
+    ride = await service.change_status(ride_id, user.id, body.status, body.notes)
+    await session.commit()
+    return StandardResponse(
+        data=RideResponse.model_validate(ride),
+        message="Status updated",
     )
 
 

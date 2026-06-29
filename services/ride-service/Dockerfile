@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -e .
 COPY services/ride-service/app ./app
 COPY services/ride-service/alembic.ini .
 COPY services/ride-service/alembic ./alembic
+COPY services/ride-service/scripts ./scripts
 COPY services/ride-service/entrypoint.sh .
 
 RUN chmod +x entrypoint.sh

@@ -206,6 +206,25 @@ class RideEventConsumer(BaseEventConsumer):
                         ride_details=ride_details,
                     )
 
+                # RIDE UPDATED - Admin edits the booking details
+                elif envelope.event_type == RoutingKeys.RIDE_UPDATED:
+                    data = dict(envelope.payload or {})
+                    rider_id = data.get("rider_id")
+                    ride_id = data.get("ride_id")
+                    if not rider_id or not ride_id:
+                        logger.warning(
+                            "Skipping ride updated notification: missing ride_id or rider_id",
+                            extra={"payload_keys": sorted(data.keys())},
+                        )
+                        return
+                    await self._send_notification(
+                        svc=svc,
+                        user_id=UUID(str(rider_id)),
+                        title="Booking Updated",
+                        body="Your booking details have been updated by our team.",
+                        data={"ride_id": str(ride_id), "screen": "ride_detail"},
+                    )
+
                 # RIDE CONFIRMED - Admin approves the ride
                 elif envelope.event_type == RoutingKeys.RIDE_CONFIRMED:
                     payload = self._parse_status_payload(envelope)
@@ -562,6 +581,7 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
         exchange_name=Exchanges.RIDES,
         routing_keys=[
             RoutingKeys.RIDE_CREATED,  # When rider books a ride
+            RoutingKeys.RIDE_UPDATED,  # When admin edits booking details
             RoutingKeys.RIDE_CONFIRMED,  # When admin approves
             RoutingKeys.RIDE_DRIVER_ASSIGNED,  # When driver is assigned
             RoutingKeys.RIDE_DRIVER_EN_ROUTE,  # Driver on the way
