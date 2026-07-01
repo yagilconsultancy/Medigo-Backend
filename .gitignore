@@ -50,3 +50,5 @@ deploy/deploy_command.txt
 scripts/
 # AWS keys
 *.pem
+*.pub
+medigo-prod
