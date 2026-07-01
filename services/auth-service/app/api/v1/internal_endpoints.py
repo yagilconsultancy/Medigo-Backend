@@ -39,6 +39,23 @@ def _require_internal_service(
     return x_internal_service
 
 
+def _mint_reactivation_token(user_id: UUID) -> str:
+    """Create a signed, self-contained reactivation JWT for the emailed link."""
+    now = datetime.now(UTC)
+    return jwt.encode(
+        {
+            "sub": str(user_id),
+            "type": "reactivation",
+            "iat": int(now.timestamp()),
+            "exp": int(
+                (now + timedelta(days=REACTIVATION_TOKEN_EXPIRE_DAYS)).timestamp()
+            ),
+        },
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+
 class CreateDriverCredentialRequest(BaseModel):
     email: EmailStr
     phone: str | None = None
@@ -202,22 +219,54 @@ async def change_user_email(
     credential.is_active = False
     await session.flush()
 
-    now = datetime.now(UTC)
-    reactivation_token = jwt.encode(
-        {
-            "sub": str(user_id),
-            "type": "reactivation",
-            "iat": int(now.timestamp()),
-            "exp": int(
-                (now + timedelta(days=REACTIVATION_TOKEN_EXPIRE_DAYS)).timestamp()
-            ),
-        },
-        settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM,
-    )
+    reactivation_token = _mint_reactivation_token(user_id)
 
     logger.info(f"User email changed + deactivated pending reactivation: {user_id}")
     return {"reactivation_token": reactivation_token, "user_id": str(user_id)}
+
+
+@router.get("/users/{user_id}/reactivation-status")
+async def get_reactivation_status(
+    user_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Return whether the credential is currently active.
+
+    user-service uses this to decide if a driver is still pending reactivation
+    after an email change (is_active is False until the driver clicks the link).
+    """
+    repo = CredentialRepository(session)
+    credential = await repo.get_by_id(user_id)
+    if not credential:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"user_id": str(user_id), "is_active": credential.is_active}
+
+
+@router.post("/users/{user_id}/resend-reactivation")
+async def resend_reactivation(
+    user_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Mint a fresh reactivation token for a driver still pending reactivation.
+
+    Rejects with 409 if the account is already active (nothing to resend).
+    """
+    repo = CredentialRepository(session)
+    credential = await repo.get_by_id(user_id)
+    if not credential:
+        raise HTTPException(status_code=404, detail="User not found")
+    if credential.is_active:
+        raise HTTPException(status_code=409, detail="Account is already active")
+
+    reactivation_token = _mint_reactivation_token(user_id)
+    logger.info(f"Reactivation email resend requested for {user_id}")
+    return {
+        "reactivation_token": reactivation_token,
+        "user_id": str(user_id),
+        "email": credential.email,
+    }
 
 
 @router.post("/activity-logs")

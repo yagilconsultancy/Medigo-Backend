@@ -154,10 +154,18 @@ class AdminDriverService:
         suspension_logs = await self.repo.get_suspension_history(driver_user_id)
         suspension_history = [SuspensionLogItem(**log) for log in suspension_logs]
 
-        # Get trip stats and ratings from ride-service (parallel)
-        trip_stats_data, ratings_data = await asyncio.gather(
+        # Get trip stats, ratings (ride-service) and login active-state (auth) in parallel
+        trip_stats_data, ratings_data, is_active = await asyncio.gather(
             self.ride_client.get_driver_stats(driver_user_id),
             self.ride_client.get_driver_ratings(driver_user_id),
+            self.auth_client.get_is_active(driver_user_id),
+        )
+
+        # Deactivated login while the profile is otherwise active/pending => the driver
+        # changed-email flow is awaiting the reactivation link (suspended/deactivated excluded).
+        pending_reactivation = (
+            is_active is False
+            and detail.get("account_status") not in ("suspended", "deactivated")
         )
 
         trip_stats = AdminDriverTripStats()
@@ -183,6 +191,7 @@ class AdminDriverService:
 
         return AdminDriverDetailResponse(
             **detail,
+            pending_reactivation=pending_reactivation,
             trip_stats=trip_stats,
             documents=documents,
             ratings=ratings,
@@ -469,6 +478,48 @@ class AdminDriverService:
         logger.info(
             f"Driver email changed; reactivation email queued for {new_email}"
         )
+
+    async def resend_reactivation(self, driver_user_id: UUID) -> str:
+        """Re-send the reactivation email to a driver still pending reactivation.
+
+        Only valid while the login is deactivated after an email change; the auth
+        service rejects (409 -> ValidationError) if the account is already active.
+        Returns the email address the message was sent to.
+        """
+        detail = await self.repo.get_driver_detail(driver_user_id)
+        if not detail:
+            raise NotFoundError("Driver not found")
+
+        try:
+            reactivation_token = await self.auth_client.resend_reactivation(
+                driver_user_id
+            )
+        except RuntimeError as e:
+            raise ValidationError(str(e))
+
+        email = detail.get("email") or ""
+        first_name = detail.get("first_name") or ""
+        last_name = detail.get("last_name") or ""
+        name = f"{first_name} {last_name}".strip() or "there"
+
+        reactivation_link = (
+            f"{settings.FRONTEND_URL.rstrip('/')}/reactivate?token={reactivation_token}"
+        )
+
+        await self.publisher.publish(
+            Exchanges.AUTH,
+            RoutingKeys.DRIVER_EMAIL_CHANGED,
+            DriverEmailChangedPayload(
+                driver_id=driver_user_id,
+                email=email,
+                name=name,
+                reactivation_link=reactivation_link,
+            ).model_dump(mode="json"),
+        )
+        logger.info(
+            f"Reactivation email resent to {email} for driver {driver_user_id}"
+        )
+        return email
 
     async def approve_driver(self, driver_user_id: UUID, admin_id: UUID) -> AdminDriverDetailResponse:
         detail = await self.repo.get_driver_detail(driver_user_id)

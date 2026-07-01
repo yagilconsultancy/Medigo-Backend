@@ -105,6 +105,49 @@ class AuthServiceClient:
             logger.error(f"Auth service reactivate error: {e}")
             return False
 
+    async def get_is_active(self, user_id: UUID) -> bool | None:
+        """Return the credential's active flag, or None if unavailable.
+
+        Used to detect a driver still pending reactivation after an email change.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/users/{user_id}/reactivation-status",
+                    headers=HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("is_active")
+                return None
+        except httpx.RequestError as e:
+            logger.error(f"Auth service reactivation-status error: {e}")
+            return None
+
+    async def resend_reactivation(self, user_id: UUID) -> str:
+        """Mint a fresh reactivation token for a pending driver.
+
+        Returns the token. Raises RuntimeError if the account is already active
+        or the auth service is unreachable.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/internal/users/{user_id}/resend-reactivation",
+                    headers=HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json()["reactivation_token"]
+                error_msg = "Failed to resend reactivation email"
+                try:
+                    body = resp.json()
+                    error_msg = body.get("detail") or body.get("message") or error_msg
+                except Exception:
+                    pass
+                raise RuntimeError(error_msg)
+        except httpx.RequestError as e:
+            logger.error(f"Auth service resend-reactivation error: {e}")
+            raise RuntimeError(f"Auth service unavailable: {e}")
+
     async def change_email(self, user_id: UUID, new_email: str) -> str:
         """Change a driver's login email and deactivate the account pending reactivation.
 
