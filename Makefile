@@ -1,4 +1,4 @@
-.PHONY: up down logs build migrate test lint seed clean
+.PHONY: up down logs build migrate test lint seed clean deploy deploy-staging
 
 up:
 	docker compose up -d
@@ -59,3 +59,15 @@ seed:
 clean:
 	docker compose down -v
 	docker system prune -f
+
+# Deploy — pushes the current commit to the branch that triggers the
+# corresponding GitHub Actions deploy workflow (see .github/workflows/).
+#   deploy         -> prod    (pushes HEAD to `pro`,  deploys prod-api.getmedigo.com)
+#   deploy-staging -> staging (pushes HEAD to `main`, deploys staging.getmedigo.com)
+deploy:
+	@echo "Deploying current commit ($$(git rev-parse --short HEAD)) to PRODUCTION via branch 'pro'..."
+	git push origin HEAD:pro
+
+deploy-staging:
+	@echo "Deploying current commit ($$(git rev-parse --short HEAD)) to STAGING via branch 'main'..."
+	git push origin HEAD:main
