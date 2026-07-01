@@ -57,6 +57,13 @@ class DriverInviteSentPayload(BaseModel):
     temporary_password: str | None = None
 
 
+class DriverEmailChangedPayload(BaseModel):
+    driver_id: UUID
+    email: str  # the new email the reactivation message is sent to
+    name: str
+    reactivation_link: str
+
+
 class AdminInviteSentPayload(BaseModel):
     invitation_id: UUID
     email: str

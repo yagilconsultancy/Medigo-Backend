@@ -39,7 +39,10 @@ from app.schemas.admin_driver import (
 )
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
-from mediride_common.events.schemas import DriverInviteSentPayload
+from mediride_common.events.schemas import (
+    DriverEmailChangedPayload,
+    DriverInviteSentPayload,
+)
 from mediride_common.exceptions import ConflictError, NotFoundError, ValidationError
 from mediride_common.utils import utc_now
 
@@ -379,6 +382,9 @@ class AdminDriverService:
 
         update_data = request.model_dump(exclude_unset=True)
 
+        # Email changes go through the auth credential + reactivation flow, not here.
+        new_email = update_data.pop("email", None)
+
         # Handle vehicle assignment separately
         vehicle_id = update_data.pop("vehicle_id", None)
         if vehicle_id and self.vehicle_repo:
@@ -404,6 +410,10 @@ class AdminDriverService:
         if driver_fields:
             await self.repo.update_driver_profile(driver_user_id, **driver_fields)
 
+        # If the email changed, update the login credential, deactivate the account,
+        # and email a reactivation link to the new address.
+        await self._handle_email_change(driver_user_id, detail, new_email, user_fields)
+
         await self.publisher.publish(
             Exchanges.USERS,
             RoutingKeys.DRIVER_PROFILE_UPDATED,
@@ -412,6 +422,53 @@ class AdminDriverService:
 
         logger.info(f"Admin updated driver: {driver_user_id}")
         return await self.get_driver_detail(driver_user_id)
+
+    async def _handle_email_change(
+        self,
+        driver_user_id: UUID,
+        detail: dict,
+        new_email: str | None,
+        user_fields: dict,
+    ) -> None:
+        """Change the driver's login email, deactivate, and queue a reactivation email.
+
+        No-op unless a new, different email was provided.
+        """
+        if not new_email:
+            return
+        current_email = (detail.get("email") or "").strip().lower()
+        if new_email.strip().lower() == current_email:
+            return
+
+        # Updates the auth credential, deactivates the account, returns a token.
+        reactivation_token = await self.auth_client.change_email(
+            driver_user_id, new_email
+        )
+
+        # Keep the user-service copy of the email in sync for display/search.
+        await self.repo.update_user(driver_user_id, email=new_email)
+
+        first_name = user_fields.get("first_name") or detail.get("first_name") or ""
+        last_name = user_fields.get("last_name") or detail.get("last_name") or ""
+        name = f"{first_name} {last_name}".strip() or "there"
+
+        reactivation_link = (
+            f"{settings.FRONTEND_URL.rstrip('/')}/reactivate?token={reactivation_token}"
+        )
+
+        await self.publisher.publish(
+            Exchanges.AUTH,
+            RoutingKeys.DRIVER_EMAIL_CHANGED,
+            DriverEmailChangedPayload(
+                driver_id=driver_user_id,
+                email=new_email,
+                name=name,
+                reactivation_link=reactivation_link,
+            ).model_dump(mode="json"),
+        )
+        logger.info(
+            f"Driver email changed; reactivation email queued for {new_email}"
+        )
 
     async def approve_driver(self, driver_user_id: UUID, admin_id: UUID) -> AdminDriverDetailResponse:
         detail = await self.repo.get_driver_detail(driver_user_id)

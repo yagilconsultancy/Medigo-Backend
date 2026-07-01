@@ -173,6 +173,7 @@ class UpdateDriverRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     phone: str | None = None
+    email: EmailStr | None = None
     fleet_id: UUID | None = None
     license_number: str | None = None
     license_expiry: date | None = None

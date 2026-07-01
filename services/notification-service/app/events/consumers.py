@@ -12,6 +12,7 @@ from app.services.chat_service import ChatService
 from app.clients.user_service_client import UserServiceClient
 from app.config import settings
 from app.services.email_service import (
+    send_account_reactivation_email,
     send_admin_invite_email,
     send_driver_invite_email,
     send_fleet_info_request_email,
@@ -26,6 +27,7 @@ from mediride_common.events.constants import Exchanges, Queues, RoutingKeys
 from mediride_common.events.consumer import BaseEventConsumer
 from mediride_common.events.schemas import (
     AdminInviteSentPayload,
+    DriverEmailChangedPayload,
     DriverInviteSentPayload,
     EventEnvelope,
     FleetApplicationInfoRequestedPayload,
@@ -89,6 +91,18 @@ class AuthEventConsumer(BaseEventConsumer):
                 logger.info("Driver invite email sent to %s", payload.email)
             else:
                 logger.error("Driver invite email failed for %s", payload.email)
+
+        elif envelope.event_type == RoutingKeys.DRIVER_EMAIL_CHANGED:
+            payload = DriverEmailChangedPayload(**envelope.payload)
+            sent = await send_account_reactivation_email(
+                to=payload.email,
+                name=payload.name,
+                reactivation_link=payload.reactivation_link,
+            )
+            if sent:
+                logger.info("Reactivation email sent to %s", payload.email)
+            else:
+                logger.error("Reactivation email failed for %s", payload.email)
 
         elif envelope.event_type == RoutingKeys.ADMIN_INVITE_SENT:
             payload = AdminInviteSentPayload(**envelope.payload)
@@ -551,6 +565,7 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
             RoutingKeys.USER_VERIFIED,
             RoutingKeys.USER_OTP_REQUESTED,
             RoutingKeys.DRIVER_INVITE_SENT,
+            RoutingKeys.DRIVER_EMAIL_CHANGED,
             RoutingKeys.ADMIN_INVITE_SENT,
             RoutingKeys.PASSWORD_RESET_REQUESTED,
         ],

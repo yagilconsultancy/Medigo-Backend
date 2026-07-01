@@ -104,3 +104,32 @@ class AuthServiceClient:
         except httpx.RequestError as e:
             logger.error(f"Auth service reactivate error: {e}")
             return False
+
+    async def change_email(self, user_id: UUID, new_email: str) -> str:
+        """Change a driver's login email and deactivate the account pending reactivation.
+
+        Returns a signed reactivation token used to build the link emailed to the
+        new address. Raises RuntimeError on failure (e.g. email already in use).
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.put(
+                    f"{self.base_url}/internal/users/{user_id}/change-email",
+                    json={"new_email": new_email},
+                    headers=HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json()["reactivation_token"]
+                error_msg = "Failed to change driver email"
+                try:
+                    body = resp.json()
+                    error_msg = body.get("detail") or body.get("message") or error_msg
+                except Exception:
+                    pass
+                logger.warning(
+                    f"Auth service change-email returned {resp.status_code}: {resp.text}"
+                )
+                raise RuntimeError(error_msg)
+        except httpx.RequestError as e:
+            logger.error(f"Auth service change-email error: {e}")
+            raise RuntimeError(f"Auth service unavailable: {e}")

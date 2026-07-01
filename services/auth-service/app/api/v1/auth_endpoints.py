@@ -1,6 +1,8 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from jose import JWTError, jwt
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.user_service_client import UserServiceClient
@@ -340,3 +342,48 @@ async def register_admin(
         ),
         message="Admin registration successful. You are now logged in.",
     )
+
+
+class ReactivateAccountRequest(BaseModel):
+    token: str
+
+
+@router.post("/reactivate", response_model=StandardResponse)
+async def reactivate_account(
+    request: ReactivateAccountRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Reactivate an account from an emailed reactivation link (link-only, no password).
+
+    Used after an admin changes a driver's email: the driver clicks the link sent to
+    their new address, which re-activates the account.
+    """
+    try:
+        payload = jwt.decode(
+            request.token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+    except JWTError:
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired reactivation link"
+        )
+
+    if payload.get("type") != "reactivation":
+        raise HTTPException(status_code=400, detail="Invalid reactivation token")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid reactivation token")
+
+    repo = CredentialRepository(session)
+    credential = await repo.get_by_id(UUID(user_id))
+    if not credential:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    credential.is_active = True
+    credential.locked_until = None
+    credential.failed_attempts = 0
+    await session.flush()
+
+    return StandardResponse(message="Account reactivated successfully")
