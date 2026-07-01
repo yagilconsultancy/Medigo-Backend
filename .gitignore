@@ -50,3 +50,10 @@ deploy/deploy_command.txt
 scripts/
 # AWS keys
 *.pem
+
+# SSH deploy keys (never commit private keys)
+medigo-prod
+medigo-prod.pub
+*.key
+id_rsa
+id_ed25519
