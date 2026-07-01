@@ -16,5 +16,8 @@ class UserSettings(BaseServiceSettings):
     # Default password for newly created admins
     DEFAULT_ADMIN_PASSWORD: str = "MediAdmin2026!"
 
+    # Base URL of the web app, used to build account-reactivation links
+    FRONTEND_URL: str = "https://backoffice.getmedigo.com"
+
 
 settings = UserSettings()

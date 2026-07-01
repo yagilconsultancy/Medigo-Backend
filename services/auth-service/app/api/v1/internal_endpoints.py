@@ -4,13 +4,16 @@ These endpoints are NOT exposed through the API gateway.
 They are called directly by other services within the Docker network.
 """
 import logging
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from jose import jwt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.dependencies import get_db
 from app.models.user_credential import UserCredential
 from app.normalization import normalize_email, normalize_phone
@@ -19,6 +22,9 @@ from app.schemas.activity_log import CreateActivityLogRequest
 from app.services.activity_log_service import ActivityLogService
 from app.services.password_service import hash_password, validate_password_strength
 from mediride_common.schemas.enums import UserRole
+
+# Reactivation tokens are self-contained signed JWTs (no DB storage needed).
+REACTIVATION_TOKEN_EXPIRE_DAYS = 7
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +168,56 @@ async def reactivate_user(
 
     logger.info(f"User reactivated internally: {user_id}")
     return {"reactivated": True, "user_id": str(user_id)}
+
+
+class ChangeEmailRequest(BaseModel):
+    new_email: EmailStr
+
+
+@router.put("/users/{user_id}/change-email")
+async def change_user_email(
+    user_id: UUID,
+    request: ChangeEmailRequest,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Change a user's login email and deactivate the account pending reactivation.
+
+    Called by user-service when an admin edits a driver's email. Returns a signed
+    reactivation token; the driver re-activates via a link emailed to the new address.
+    """
+    repo = CredentialRepository(session)
+    credential = await repo.get_by_id(user_id)
+    if not credential:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    normalized_email = normalize_email(str(request.new_email))
+
+    # Reject if the new email already belongs to a different credential.
+    existing = await repo.get_by_email_or_phone(normalized_email, None)
+    if existing and existing.id != credential.id:
+        raise HTTPException(status_code=409, detail="Email already in use")
+
+    credential.email = normalized_email
+    credential.is_active = False
+    await session.flush()
+
+    now = datetime.now(UTC)
+    reactivation_token = jwt.encode(
+        {
+            "sub": str(user_id),
+            "type": "reactivation",
+            "iat": int(now.timestamp()),
+            "exp": int(
+                (now + timedelta(days=REACTIVATION_TOKEN_EXPIRE_DAYS)).timestamp()
+            ),
+        },
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+    logger.info(f"User email changed + deactivated pending reactivation: {user_id}")
+    return {"reactivation_token": reactivation_token, "user_id": str(user_id)}
 
 
 @router.post("/activity-logs")

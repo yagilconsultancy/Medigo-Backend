@@ -190,6 +190,35 @@ async def send_driver_invite_email(
     )
 
 
+async def send_account_reactivation_email(
+    to: str, name: str, reactivation_link: str
+) -> bool:
+    """Email a driver a link to reactivate after their login email was changed."""
+    try:
+        template = _template_env.get_template("account_reactivation.html")
+        html = template.render(name=name, reactivation_link=reactivation_link)
+    except Exception as e:
+        logger.exception("Failed to render reactivation email for %s: %s", to, e)
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - Reactivate Your Account</h2>
+            <p>Hi {name},</p>
+            <p>Your MediGo login email was updated to this address. For security,
+            your account has been temporarily deactivated.</p>
+            <p>Click the button below to verify this email and reactivate your account:</p>
+            <p><a href="{reactivation_link}">Reactivate my account</a></p>
+            <p>This link expires in 7 days. If you didn't expect this, contact support.</p>
+        </body>
+        </html>
+        """
+    return await send_email(
+        to,
+        "MediGo - Reactivate Your Account",
+        html,
+    )
+
+
 async def send_password_reset_email(to: str, reset_token: str) -> bool:
     """Send password reset email."""
     try:
