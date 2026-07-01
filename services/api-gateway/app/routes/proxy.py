@@ -30,6 +30,7 @@ PUBLIC_PATHS = {
     "/auth/resend-otp",
     "/auth/forgot-password",
     "/auth/reset-password",
+    "/auth/reactivate",  # Driver clicks emailed reactivation link (not logged in); JWT in body
     "/auth/admin/login",
     "/auth/admin/verify-invite",
     "/auth/admin/register",
