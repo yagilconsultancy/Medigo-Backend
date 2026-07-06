@@ -256,13 +256,14 @@ async def verify_driver_invite(
     auth_service: AuthService = Depends(_get_auth_service),
 ):
     result = await auth_service.verify_driver_invite(request.invite_token)
+    valid = bool(result.get("valid", True))
     return StandardResponse(
         data=InviteVerifyResponse(
-            valid=True,
+            valid=valid,
             fleet_name=result.get("fleet_name"),
             email=result.get("email"),
         ),
-        message="Invitation is valid",
+        message="Invitation is valid" if valid else "Invitation is invalid",
     )
 
 
@@ -310,13 +311,14 @@ async def verify_admin_invite(
     auth_service: AuthService = Depends(_get_auth_service),
 ):
     result = await auth_service.verify_admin_invite(request.invite_token)
+    valid = bool(result.get("valid", True))
     return StandardResponse(
         data=InviteVerifyResponse(
-            valid=True,
+            valid=valid,
             fleet_name=result.get("role_display_name"),  # Reuse fleet_name field for role display
             email=result.get("email"),
         ),
-        message="Invitation is valid",
+        message="Invitation is valid" if valid else "Invitation is invalid",
     )
 
 

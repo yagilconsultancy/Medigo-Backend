@@ -321,9 +321,8 @@ class AdminDriverService:
                         invitation_id=invitation.id,
                         business_id=request.fleet_id,
                         fleet_name=fleet_name,
-                        email=request.email,
+                        # email=request.email,
                         invite_token=token,
-                        temporary_password=default_password,
                     ).model_dump(mode="json"),
                 )
 

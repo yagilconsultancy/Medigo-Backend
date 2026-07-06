@@ -523,6 +523,8 @@ class AuthService:
 
         channel = "email" if credential.email else "sms"
         otp_code = await self.otp_service.generate_otp(user_id, purpose, channel)
+        # TODO: Consider removing the OTP code from logs in production for security reasons
+        print(f"Resending OTP for user {user_id}, purpose={purpose}, channel={channel}, otp_code={otp_code}")
         await self._publish_otp_requested(
             user_id=user_id,
             purpose=purpose,
@@ -616,9 +618,12 @@ class AuthService:
         # Check if user already exists (admin-created driver)
         existing = await self.credential_repo.get_by_email_or_phone(email, None)
         if existing:
-            # Credential was pre-created by admin — verify password and log in
-            if not verify_password(password, existing.password_hash):
-                raise AuthenticationError("Email or password is not correct")
+            validate_password_strength(password)
+
+            # Credential was pre-created by admin — update the password from the invitee
+            await self.credential_repo.update_password(
+                existing.id, hash_password(password)
+            )
 
             # Accept the invitation in user-service
             await self.user_service_client.accept_invitation(
@@ -629,7 +634,7 @@ class AuthService:
             if not existing.is_verified:
                 await self.credential_repo.update_verified(existing.id, True)
 
-            # Create tokens (login)
+            # Create tokens for the registered driver
             token_pair = self.jwt_handler.create_token_pair(
                 user_id=str(existing.id),
                 role=existing.role,
@@ -645,7 +650,7 @@ class AuthService:
             )
             await self.token_repo.create(refresh_token_record)
 
-            logger.info(f"Admin-created driver logged in via register: {existing.id}")
+            logger.info(f"Admin-created driver password updated via register: {existing.id}")
             return token_pair
 
         validate_password_strength(password)

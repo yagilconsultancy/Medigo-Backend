@@ -166,9 +166,7 @@ _SWAGGER_HTML = """
             dom_id: '#swagger-ui',
             presets: [
                 SwaggerUIBundle.presets.apis,
-                SwaggerUIBundle.SwaggerUIStandalonePreset
             ],
-            layout: "StandaloneLayout",
             deepLinking: true,
             persistAuthorization: true,
             filter: true,
