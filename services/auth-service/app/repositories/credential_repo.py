@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user_credential import UserCredential
@@ -68,6 +68,12 @@ class CredentialRepository:
             .where(UserCredential.id == user_id)
             .values(password_hash=password_hash)
         )
+
+    async def delete(self, user_id: UUID) -> None:
+        await self.session.execute(
+            delete(UserCredential).where(UserCredential.id == user_id)
+        )
+        await self.session.flush()
 
     async def increment_failed_attempts(self, user_id: UUID) -> None:
         credential = await self.get_by_id(user_id)

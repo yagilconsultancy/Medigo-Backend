@@ -321,8 +321,9 @@ class AdminDriverService:
                         invitation_id=invitation.id,
                         business_id=request.fleet_id,
                         fleet_name=fleet_name,
-                        # email=request.email,
+                        email=request.email,
                         invite_token=token,
+                        temporary_password=default_password,
                     ).model_dump(mode="json"),
                 )
 
@@ -630,38 +631,22 @@ class AdminDriverService:
         logger.info(f"Admin reactivated driver: {driver_user_id}")
         return await self.get_driver_detail(driver_user_id)
 
-    async def deactivate_driver(
-        self, driver_user_id: UUID, admin_id: UUID
-    ) -> AdminDriverDetailResponse:
+    async def delete_driver(self, driver_user_id: UUID, admin_id: UUID) -> dict:
         detail = await self.repo.get_driver_detail(driver_user_id)
         if not detail:
             raise NotFoundError("Driver not found")
 
-        await self.repo.update_driver_profile(
-            driver_user_id,
-            account_status="deactivated",
-            is_approved=False,
-            is_online=False,
-            deactivated_at=utc_now(),
-        )
-
-        await self.repo.create_suspension_log(
-            driver_id=driver_user_id,
-            action="deactivated",
-            reason=None,
-            performed_by=admin_id,
-        )
-
-        await self.auth_client.deactivate_account(driver_user_id)
+        await self.repo.delete_driver_account(driver_user_id)
+        await self.auth_client.delete_account(driver_user_id)
 
         await self.publisher.publish(
             Exchanges.USERS,
             RoutingKeys.DRIVER_DEACTIVATED,
-            {"driver_id": str(driver_user_id), "deactivated_by": str(admin_id)},
+            {"driver_id": str(driver_user_id), "deleted_by": str(admin_id)},
         )
 
-        logger.info(f"Admin deactivated driver: {driver_user_id}")
-        return await self.get_driver_detail(driver_user_id)
+        logger.info(f"Admin deleted driver: {driver_user_id}")
+        return {"deleted": True, "driver_id": str(driver_user_id)}
 
     async def reassign_fleet(
         self, driver_user_id: UUID, fleet_id: UUID

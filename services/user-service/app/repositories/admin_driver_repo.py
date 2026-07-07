@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.driver_document import DriverDocument
@@ -409,6 +409,24 @@ class AdminDriverRepository:
         self.session.add(log)
         await self.session.flush()
         return log
+
+    async def delete_driver_account(self, driver_user_id: UUID) -> None:
+        await self.session.execute(
+            delete(DriverSuspensionLog).where(DriverSuspensionLog.driver_id == driver_user_id)
+        )
+        await self.session.execute(
+            delete(DriverDocument).where(DriverDocument.user_id == driver_user_id)
+        )
+        await self.session.execute(
+            delete(Vehicle).where(Vehicle.driver_profile_id == driver_user_id)
+        )
+        await self.session.execute(
+            delete(DriverProfile).where(DriverProfile.user_id == driver_user_id)
+        )
+        await self.session.execute(
+            delete(User).where(User.id == driver_user_id, User.role == "driver")
+        )
+        await self.session.flush()
 
     async def get_suspension_history(self, driver_id: UUID) -> list[dict]:
         result = await self.session.execute(

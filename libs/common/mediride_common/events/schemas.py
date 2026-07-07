@@ -52,9 +52,9 @@ class DriverInviteSentPayload(BaseModel):
     invitation_id: UUID
     business_id: UUID
     fleet_name: str
-    # email: str
+    email: str
     invite_token: str
-    # temporary_password: str | None = None
+    temporary_password: str | None = None
 
 
 class DriverEmailChangedPayload(BaseModel):

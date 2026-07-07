@@ -147,6 +147,24 @@ async def create_admin_credential(
     }
 
 
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Delete a user auth credential. Called by user-service when a driver is removed."""
+    repo = CredentialRepository(session)
+    credential = await repo.get_by_id(user_id)
+    if not credential:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await repo.delete(user_id)
+
+    logger.info(f"User credential deleted internally: {user_id}")
+    return {"deleted": True, "user_id": str(user_id)}
+
+
 @router.put("/users/{user_id}/deactivate")
 async def deactivate_user(
     user_id: UUID,

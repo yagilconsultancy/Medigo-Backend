@@ -209,15 +209,15 @@ async def update_driver(
     return StandardResponse(data=result, message="Driver updated successfully")
 
 
-@router.delete("/{driver_id}", response_model=StandardResponse[AdminDriverDetailResponse])
-async def deactivate_driver(
+@router.delete("/{driver_id}", response_model=StandardResponse[dict])
+async def delete_driver(
     driver_id: UUID,
     admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: AdminDriverService = Depends(_get_service),
 ):
-    """Deactivate a driver account."""
-    result = await service.deactivate_driver(driver_id, admin.id)
-    return StandardResponse(data=result, message="Driver deactivated")
+    """Delete a driver account permanently."""
+    result = await service.delete_driver(driver_id, admin.id)
+    return StandardResponse(data=result, message="Driver deleted")
 
 
 # --- Actions ---

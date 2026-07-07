@@ -93,6 +93,18 @@ class AuthServiceClient:
             logger.error(f"Auth service deactivate error: {e}")
             return False
 
+    async def delete_account(self, user_id: UUID) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.delete(
+                    f"{self.base_url}/internal/users/{user_id}",
+                    headers=HEADERS,
+                )
+                return resp.status_code == 200
+        except httpx.RequestError as e:
+            logger.error(f"Auth service delete error: {e}")
+            return False
+
     async def reactivate_account(self, user_id: UUID) -> bool:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
