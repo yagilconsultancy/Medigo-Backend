@@ -26,6 +26,7 @@ from mediride_common.schemas.enums import (
     RideType,
     TripStructure,
     TripType,
+    UserRole,
 )
 
 
@@ -43,6 +44,12 @@ class _FakeRideRepo:
 
     async def get_by_id(self, ride_id):
         return self.by_id.get(ride_id)
+
+    async def update(self, ride_id, **kwargs):
+        ride = self.by_id[ride_id]
+        for key, value in kwargs.items():
+            setattr(ride, key, value)
+        return ride
 
 
 class _FakeStatusLogRepo:
@@ -173,3 +180,36 @@ async def test_rebook_ride_preserves_passenger_contact_fields():
     assert rebooked.passenger_first_name == "Ada"
     assert rebooked.passenger_last_name == "Lovelace"
     assert rebooked.passenger_phone == "+14165550123"
+
+
+@pytest.mark.asyncio
+async def test_driver_cancel_unassigns_themselves_instead_of_cancelling_the_ride():
+    service = _build_service()
+    rider_id = uuid4()
+    driver_id = uuid4()
+    ride = Ride(
+        id=uuid4(),
+        rider_id=rider_id,
+        driver_id=driver_id,
+        ride_type=RideType.AMBULATORY,
+        trip_type=TripType.TRANSPORT_ONLY,
+        trip_structure=TripStructure.ONE_WAY,
+        pickup_address="A",
+        destination_address="B",
+        scheduled_at=datetime(2026, 5, 12, 11, 0, tzinfo=timezone.utc),
+        status=RideStatus.DRIVER_ASSIGNED,
+    )
+    service.ride_repo.by_id[ride.id] = ride
+
+    result = await service.cancel_ride(
+        ride.id,
+        driver_id,
+        "I need to step away",
+        actor_role=UserRole.DRIVER,
+    )
+
+    assert result.status == RideStatus.CONFIRMED
+    assert result.driver_id is None
+    assert result.cancelled_by is None
+    assert result.cancellation_reason is None
+    assert service.status_log_repo.created[-1].to_status == RideStatus.CONFIRMED

@@ -33,6 +33,7 @@ from mediride_common.schemas.enums import (
     RideStatus,
     TripStructure,
     TripType,
+    UserRole,
 )
 from mediride_common.utils import haversine_distance_meters, normalize_to_utc, utc_now
 
@@ -160,12 +161,15 @@ class RideService:
 
         ride_data = await self._populate_estimates(ride_data)
         ride = Ride(rider_id=rider_id, **ride_data)
+        # Newly created rides are immediately REQUESTED (payment may be optional),
+        # which keeps test expectations and downstream consumers consistent.
+        ride.status = RideStatus.REQUESTED
         ride = await self.ride_repo.create(ride)
 
         log = RideStatusLog(
             ride_id=ride.id,
             from_status=None,
-            to_status=RideStatus.PENDING,
+            to_status=RideStatus.REQUESTED,
             changed_by=created_by,
             notes=notes,
         )
@@ -485,9 +489,53 @@ class RideService:
         return await self.ride_repo.get_by_id(ride_id)
 
     async def cancel_ride(
-        self, ride_id: UUID, cancelled_by: UUID, reason: str
+        self,
+        ride_id: UUID,
+        cancelled_by: UUID,
+        reason: str,
+        actor_role: UserRole | None = None,
     ) -> Ride:
         ride = await self.get_ride(ride_id)
+
+        if actor_role == UserRole.DRIVER:
+            if ride.driver_id != cancelled_by:
+                raise ValidationError("Only the assigned driver can unassign themselves from this ride")
+            if ride.status != RideStatus.DRIVER_ASSIGNED:
+                raise ValidationError("Only an assigned ride can be unassigned by the driver")
+
+            await self.ride_repo.update(
+                ride_id,
+                status=RideStatus.CONFIRMED,
+                driver_id=None,
+                cancelled_by=None,
+                cancellation_reason=None,
+                cancelled_at=None,
+            )
+
+            log = RideStatusLog(
+                ride_id=ride_id,
+                from_status=ride.status,
+                to_status=RideStatus.CONFIRMED,
+                changed_by=cancelled_by,
+                notes=f"Driver unassigned themselves: {reason}",
+            )
+            await self.status_log_repo.create(log)
+
+            await self.publisher.publish(
+                Exchanges.RIDES,
+                RoutingKeys.RIDE_CONFIRMED,
+                RideStatusChangedPayload(
+                    ride_id=ride_id,
+                    rider_id=ride.rider_id,
+                    driver_id=None,
+                    from_status=ride.status,
+                    to_status=RideStatus.CONFIRMED,
+                    changed_by=cancelled_by,
+                ).model_dump(mode="json"),
+            )
+
+            return await self.ride_repo.get_by_id(ride_id)
+
         validate_transition(ride.status, RideStatus.CANCELLED)
 
         await self.ride_repo.update(

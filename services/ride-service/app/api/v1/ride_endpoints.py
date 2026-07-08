@@ -277,8 +277,14 @@ async def cancel_ride(
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
-    ride = await service.cancel_ride(ride_id, user.id, request.reason)
+    ride = await service.cancel_ride(
+        ride_id,
+        user.id,
+        request.reason,
+        actor_role=user.role,
+    )
+    message = "Driver unassigned from ride" if user.role == UserRole.DRIVER else "Ride cancelled"
     return StandardResponse(
         data=RideResponse.model_validate(ride),
-        message="Ride cancelled",
+        message=message,
     )

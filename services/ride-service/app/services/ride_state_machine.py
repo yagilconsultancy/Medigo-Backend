@@ -12,7 +12,7 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
         RideStatus.CANCELLED,
     ],
     RideStatus.CONFIRMED: [RideStatus.DRIVER_ASSIGNED, RideStatus.CANCELLED],
-    RideStatus.DRIVER_ASSIGNED: [RideStatus.DRIVER_EN_ROUTE, RideStatus.CANCELLED],
+    RideStatus.DRIVER_ASSIGNED: [RideStatus.DRIVER_EN_ROUTE, RideStatus.CANCELLED, RideStatus.CONFIRMED],
     RideStatus.DRIVER_EN_ROUTE: [RideStatus.DRIVER_ARRIVED, RideStatus.CANCELLED],
     RideStatus.DRIVER_ARRIVED: [RideStatus.IN_PROGRESS, RideStatus.NO_SHOW, RideStatus.CANCELLED],
     RideStatus.IN_PROGRESS: [RideStatus.COMPLETED, RideStatus.CANCELLED],
