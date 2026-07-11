@@ -8,6 +8,7 @@ from app.repositories.fleet_document_repo import FleetDocumentRepository
 from app.repositories.fleet_repo import FleetRepository
 from app.schemas.fleet_application import FleetApplicationPublicResponse
 from app.services.fleet_application_service import FleetApplicationService
+from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.schemas.responses import StandardResponse
 from mediride_common.storage.s3_client import S3StorageClient
@@ -86,6 +87,7 @@ async def submit_fleet_application(
 
     # Create the application
     application = await service.create_public_application(
+        publish_created_event=False,
         company_name=company_name,
         business_registration_number=business_registration_number,
         years_in_operation=years_in_operation,
@@ -148,6 +150,18 @@ async def submit_fleet_application(
             file_size=len(file_data),
             mime_type=file.content_type or "application/octet-stream",
         )
+
+    # Trigger applicant confirmation email once submission finishes successfully.
+    await service.publisher.publish(
+        exchange_name=Exchanges.USERS,
+        routing_key=RoutingKeys.FLEET_APPLICATION_CREATED,
+        payload={
+            "application_id": str(application.id),
+            "company_name": application.company_name,
+            "email": application.email,
+            "created_by": "public",
+        },
+    )
 
     return StandardResponse(
         data=FleetApplicationPublicResponse.model_validate(application),

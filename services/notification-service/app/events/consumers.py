@@ -15,7 +15,9 @@ from app.services.email_service import (
     send_account_reactivation_email,
     send_admin_invite_email,
     send_driver_invite_email,
+    send_fleet_application_approved_email,
     send_fleet_application_received_email,
+    send_fleet_application_rejected_email,
     send_fleet_info_request_email,
     send_otp_email,
     send_password_reset_email,
@@ -30,9 +32,11 @@ from mediride_common.events.schemas import (
     AdminInviteSentPayload,
     DriverEmailChangedPayload,
     DriverInviteSentPayload,
+    FleetApplicationApprovedPayload,
     EventEnvelope,
     FleetApplicationCreatedPayload,
     FleetApplicationInfoRequestedPayload,
+    FleetApplicationRejectedPayload,
     PasswordResetRequestedPayload,
     PaymentCompletedPayload,
     RideCreatedPayload,
@@ -557,6 +561,43 @@ class FleetEventConsumer(BaseEventConsumer):
                     payload.email,
                 )
 
+        elif envelope.event_type == RoutingKeys.FLEET_APPLICATION_APPROVED:
+            payload = FleetApplicationApprovedPayload(**envelope.payload)
+            sent = await send_fleet_application_approved_email(
+                to=payload.email,
+                company_name=payload.company_name,
+            )
+            if sent:
+                logger.info(
+                    "Fleet application approved email sent to %s for application %s",
+                    payload.email,
+                    payload.application_id,
+                )
+            else:
+                logger.error(
+                    "Fleet application approved email failed for %s",
+                    payload.email,
+                )
+
+        elif envelope.event_type == RoutingKeys.FLEET_APPLICATION_REJECTED:
+            payload = FleetApplicationRejectedPayload(**envelope.payload)
+            sent = await send_fleet_application_rejected_email(
+                to=payload.email,
+                company_name=payload.company_name,
+                reason=payload.reason,
+            )
+            if sent:
+                logger.info(
+                    "Fleet application rejected email sent to %s for application %s",
+                    payload.email,
+                    payload.application_id,
+                )
+            else:
+                logger.error(
+                    "Fleet application rejected email failed for %s",
+                    payload.email,
+                )
+
 
 class ChatConversationConsumer(BaseEventConsumer):
     """Auto-creates a chat conversation when a driver is assigned to a ride."""
@@ -652,6 +693,8 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
         exchange_name=Exchanges.USERS,
         routing_keys=[
             RoutingKeys.FLEET_APPLICATION_CREATED,
+            RoutingKeys.FLEET_APPLICATION_APPROVED,
+            RoutingKeys.FLEET_APPLICATION_REJECTED,
             RoutingKeys.FLEET_APPLICATION_INFO_REQUESTED,
         ],
     )

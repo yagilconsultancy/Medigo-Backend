@@ -401,6 +401,83 @@ async def send_fleet_info_request_email(
     return await send_email(to, "MediGo - Additional Information Required for Your Fleet Application", html)
 
 
+async def send_fleet_application_approved_email(to: str, company_name: str) -> bool:
+    """Send email to fleet applicant when the application is approved."""
+    subject = "MediGo - Fleet Application Approved"
+    sender = settings.PARTNERS_EMAIL_FROM
+    reply_to = settings.PARTNERS_EMAIL_REPLY_TO
+    smtp_username = settings.PARTNERS_SMTP_USERNAME or settings.SMTP_USERNAME
+    smtp_password = settings.PARTNERS_SMTP_PASSWORD or settings.SMTP_PASSWORD
+
+    try:
+        template = _template_env.get_template("fleet_application_approved.html")
+        html = template.render(company_name=company_name)
+    except Exception as e:
+        logger.exception("Failed to render fleet application approved email for %s: %s", to, e)
+        html = f"""
+        <html>
+        <body>
+            <p>Hello {company_name},</p>
+            <p>Great news. Your MediGo fleet application has been approved.</p>
+            <p>Our operations team will contact you shortly with onboarding steps and next actions.</p>
+            <p>Thank you for partnering with MediGo.</p>
+            <p>Warm regards,<br>MediGo Operations Team</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(
+        to=to,
+        subject=subject,
+        html_body=html,
+        from_email=sender,
+        reply_to=reply_to,
+        smtp_username=smtp_username,
+        smtp_password=smtp_password,
+    )
+
+
+async def send_fleet_application_rejected_email(
+    to: str,
+    company_name: str,
+    reason: str,
+) -> bool:
+    """Send email to fleet applicant when the application is rejected."""
+    subject = "MediGo - Fleet Application Update"
+    sender = settings.PARTNERS_EMAIL_FROM
+    reply_to = settings.PARTNERS_EMAIL_REPLY_TO
+    smtp_username = settings.PARTNERS_SMTP_USERNAME or settings.SMTP_USERNAME
+    smtp_password = settings.PARTNERS_SMTP_PASSWORD or settings.SMTP_PASSWORD
+
+    try:
+        template = _template_env.get_template("fleet_application_rejected.html")
+        html = template.render(company_name=company_name, reason=reason)
+    except Exception as e:
+        logger.exception("Failed to render fleet application rejected email for %s: %s", to, e)
+        html = f"""
+        <html>
+        <body>
+            <p>Hello {company_name},</p>
+            <p>Thank you for applying to partner with MediGo.</p>
+            <p>After review, we are unable to proceed with your application at this time.</p>
+            <p><strong>Reason:</strong> {reason}</p>
+            <p>You may submit a new application after addressing the item above.</p>
+            <p>Warm regards,<br>MediGo Operations Team</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(
+        to=to,
+        subject=subject,
+        html_body=html,
+        from_email=sender,
+        reply_to=reply_to,
+        smtp_username=smtp_username,
+        smtp_password=smtp_password,
+    )
+
+
 async def send_payment_receipt_email(
     to: str,
     name: str,

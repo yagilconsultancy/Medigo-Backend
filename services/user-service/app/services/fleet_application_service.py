@@ -47,21 +47,26 @@ class FleetApplicationService:
         logger.info(f"Fleet application created: {application.id}")
         return application
 
-    async def create_public_application(self, **kwargs) -> FleetApplication:
+    async def create_public_application(
+        self,
+        publish_created_event: bool = True,
+        **kwargs,
+    ) -> FleetApplication:
         """Create a fleet application from a public (unauthenticated) submission."""
         application = FleetApplication(**kwargs)
         application = await self.app_repo.create(application)
 
-        await self.publisher.publish(
-            exchange_name=Exchanges.USERS,
-            routing_key=RoutingKeys.FLEET_APPLICATION_CREATED,
-            payload={
-                "application_id": str(application.id),
-                "company_name": application.company_name,
-                "email": application.email,
-                "created_by": "public",
-            },
-        )
+        if publish_created_event:
+            await self.publisher.publish(
+                exchange_name=Exchanges.USERS,
+                routing_key=RoutingKeys.FLEET_APPLICATION_CREATED,
+                payload={
+                    "application_id": str(application.id),
+                    "company_name": application.company_name,
+                    "email": application.email,
+                    "created_by": "public",
+                },
+            )
 
         logger.info(f"Public fleet application created: {application.id}")
         return application
@@ -135,6 +140,7 @@ class FleetApplicationService:
                 "application_id": str(app_id),
                 "fleet_id": str(fleet.id),
                 "company_name": application.company_name,
+                "email": application.email,
                 "approved_by": str(admin_id),
             },
         )
@@ -170,6 +176,7 @@ class FleetApplicationService:
             payload={
                 "application_id": str(app_id),
                 "company_name": application.company_name,
+                "email": application.email,
                 "rejected_by": str(admin_id),
                 "reason": reason,
             },

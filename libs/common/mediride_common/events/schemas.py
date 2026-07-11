@@ -108,6 +108,22 @@ class FleetApplicationInfoRequestedPayload(BaseModel):
     requested_by: UUID
 
 
+class FleetApplicationApprovedPayload(BaseModel):
+    application_id: UUID
+    fleet_id: UUID
+    company_name: str
+    email: str
+    approved_by: UUID
+
+
+class FleetApplicationRejectedPayload(BaseModel):
+    application_id: UUID
+    company_name: str
+    email: str
+    rejected_by: UUID
+    reason: str
+
+
 class FleetCreatedPayload(BaseModel):
     fleet_id: UUID
     name: str
