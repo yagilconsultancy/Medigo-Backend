@@ -26,6 +26,9 @@ class ReceiptService:
             raise NotFoundError("Ride not found")
 
         breakdown = await self.fare_repo.get_by_ride_id(ride_id)
+        viewer_is_driver = str(user_id) == str(ride_data.get("driver_id"))
+        total_fare = float(breakdown.total_fare) if breakdown else float(ride_data.get("final_fare") or 0)
+        driver_earnings = float(breakdown.driver_earnings) if breakdown else None
 
         trip_number = f"TRIP-{str(ride_id)[:6].upper()}"
 
@@ -51,8 +54,8 @@ class ReceiptService:
             "insurance_gateway_fee": float(breakdown.insurance_gateway_fee) if breakdown and breakdown.insurance_gateway_fee else None,
             "flat_surcharge": float(breakdown.flat_surcharge) if breakdown and breakdown.flat_surcharge else None,
             "platform_fee": float(breakdown.platform_fee) if breakdown else None,
-            "total_fare": float(breakdown.total_fare) if breakdown else float(ride_data.get("final_fare") or 0),
-            "driver_earnings": float(breakdown.driver_earnings) if breakdown else None,
+            "total_fare": driver_earnings if viewer_is_driver and driver_earnings is not None else total_fare,
+            "driver_earnings": driver_earnings,
             "is_dialysis_rate": breakdown.is_dialysis_rate if breakdown else None,
             "rate_card_version": breakdown.rate_card_version if breakdown else None,
             "currency": "CAD",
@@ -62,7 +65,7 @@ class ReceiptService:
         }
 
         # Get payment method info
-        methods = await self.pm_repo.get_by_user(user_id)
+        methods = await self.pm_repo.get_by_user(user_id) if not viewer_is_driver else []
         if methods:
             default = next((m for m in methods if m.is_default), methods[0])
             receipt["payment_method_type"] = default.method_type

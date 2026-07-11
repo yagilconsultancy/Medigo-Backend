@@ -1,4 +1,5 @@
 import logging
+from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -11,6 +12,8 @@ from mediride_common.exceptions import RetryableError, ServiceUnavailableError
 
 logger = logging.getLogger(__name__)
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
+_EMAIL_LOGO_PATH = _TEMPLATE_DIR / "email_logo.png"
+_EMAIL_LOGO_CID = "medigo-logo"
 
 # Template engine
 _template_env = Environment(
@@ -48,13 +51,23 @@ async def send_email(
             f"SMTP is not fully configured: missing {', '.join(missing_fields)}"
         )
 
-    message = MIMEMultipart("alternative")
+    message = MIMEMultipart("related")
     message["From"] = sender
     message["To"] = to
     message["Subject"] = subject
     if reply_to:
         message["Reply-To"] = reply_to
-    message.attach(MIMEText(html_body, "html"))
+
+    alternative_message = MIMEMultipart("alternative")
+    alternative_message.attach(MIMEText(html_body, "html"))
+    message.attach(alternative_message)
+
+    if f"cid:{_EMAIL_LOGO_CID}" in html_body and _EMAIL_LOGO_PATH.exists():
+        with _EMAIL_LOGO_PATH.open("rb") as logo_file:
+            logo_part = MIMEImage(logo_file.read(), _subtype="png")
+        logo_part.add_header("Content-ID", f"<{_EMAIL_LOGO_CID}>")
+        logo_part.add_header("Content-Disposition", "inline", filename=_EMAIL_LOGO_PATH.name)
+        message.attach(logo_part)
 
     use_tls = settings.SMTP_USE_TLS or settings.SMTP_PORT == 465
     start_tls = settings.SMTP_STARTTLS and not use_tls

@@ -493,12 +493,22 @@ async def accept_invitation(
 ):
     """Mark an invitation as accepted. Called by auth-service after driver registration."""
     invitation_repo = InvitationRepository(session)
+    user_repo = UserRepository(session)
 
     invitation = await invitation_repo.get_by_token(request.token)
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
     await invitation_repo.mark_accepted(invitation.id)
+
+    user = await user_repo.get_by_id(UUID(request.user_id))
+    if user and str(user.role) == str(UserRole.DRIVER):
+        await user_repo.update(
+            user.id,
+            onboarding_step=5,
+            onboarding_completed=True,
+        )
+
     logger.info(
         f"Invitation {invitation.id} accepted by user {request.user_id}"
     )

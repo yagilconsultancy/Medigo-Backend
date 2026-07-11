@@ -32,6 +32,7 @@ class UserService:
         is_guest: bool = False,
     ) -> User:
         """Create initial user profile from auth registration event."""
+        is_driver = str(role) == str(UserRole.DRIVER)
         user = User(
             id=user_id,
             email=email,
@@ -41,6 +42,8 @@ class UserService:
             role=role,
             business_id=business_id,
             is_guest=is_guest,
+            onboarding_step=5 if is_driver else 1,
+            onboarding_completed=is_driver,
         )
         await self.user_repo.create(user)
         logger.info(f"Created profile for user {user_id}")
