@@ -40,3 +40,9 @@ class FleetDocumentRepository:
             for key, value in kwargs.items():
                 setattr(doc, key, value)
             await self.session.flush()
+
+    async def delete(self, doc_id: UUID) -> None:
+        doc = await self.get_by_id(doc_id)
+        if doc:
+            await self.session.delete(doc)
+            await self.session.flush()

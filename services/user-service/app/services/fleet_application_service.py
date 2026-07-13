@@ -220,6 +220,29 @@ class FleetApplicationService:
         logger.info(f"Fleet application {app_id} - more info requested")
         return await self.get_application(app_id)
 
+    async def delete_application(self, app_id: UUID, admin_id: UUID) -> list[str]:
+        """Delete a fleet application and its owned documents.
+
+        Documents that were transferred to a fleet on approval (``business_id``
+        set) are detached from the application rather than deleted, so the
+        fleet's records stay intact. Returns the S3 file keys of the documents
+        that were actually deleted, so the caller can clean up object storage.
+        """
+        application = await self.get_application(app_id)
+
+        deleted_file_keys: list[str] = []
+        for doc in list(application.documents):
+            if doc.business_id is not None:
+                await self.doc_repo.update(doc.id, application_id=None)
+            else:
+                deleted_file_keys.append(doc.file_key)
+                await self.doc_repo.delete(doc.id)
+
+        await self.app_repo.delete(app_id)
+
+        logger.info(f"Fleet application {app_id} deleted by {admin_id}")
+        return deleted_file_keys
+
     async def upload_document(
         self,
         app_id: UUID,

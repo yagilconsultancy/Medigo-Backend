@@ -22,7 +22,7 @@ class NotificationSettings(BaseServiceSettings):
     SMTP_HOST: str = "smtp.mailgun.org"
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = Field(
-        default="noreply@mail.getmedigo.com",
+        default="",
         validation_alias=AliasChoices("SMTP_USERNAME", "SMTP_USER", "SMTP_LOGIN"),
     )
     SMTP_PASSWORD: str = Field(default="", validation_alias=AliasChoices("SMTP_PASSWORD", "SMTP_PASS"))
@@ -33,7 +33,7 @@ class NotificationSettings(BaseServiceSettings):
     PARTNERS_EMAIL_FROM: str = "partners@mail.getmedigo.com"
     PARTNERS_EMAIL_REPLY_TO: str = "partners@mail.getmedigo.com"
     PARTNERS_SMTP_USERNAME: str = Field(
-        default="partners@mail.getmedigo.com",
+        default="",
         validation_alias=AliasChoices("PARTNERS_SMTP_USERNAME", "PARTNERS_SMTP_USER", "PARTNERS_SMTP_LOGIN"),
     )
     PARTNERS_SMTP_PASSWORD: str = Field(

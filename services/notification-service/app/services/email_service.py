@@ -86,8 +86,18 @@ async def send_email(
         logger.info("Email sent to %s: %s", to, subject)
         return True
     except Exception as e:
-        logger.exception("Failed to send email to %s: %s", to, e)
-        raise RetryableError(f"SMTP delivery failed for {to}") from e
+        logger.exception(
+            "Failed SMTP send to %s via %s:%s (start_tls=%s, use_tls=%s): %s",
+            to,
+            settings.SMTP_HOST,
+            settings.SMTP_PORT,
+            start_tls,
+            use_tls,
+            e,
+        )
+        raise RetryableError(
+            f"SMTP delivery failed for {to} ({type(e).__name__}: {e})"
+        ) from e
 
 
 async def send_fleet_application_received_email(to: str, company_name: str) -> bool:

@@ -62,6 +62,12 @@ class FleetApplicationRepository:
                 setattr(app, key, value)
             await self.session.flush()
 
+    async def delete(self, app_id: UUID) -> None:
+        app = await self.get_by_id(app_id)
+        if app:
+            await self.session.delete(app)
+            await self.session.flush()
+
     async def get_kpis(self) -> dict:
         result = await self.session.execute(
             select(

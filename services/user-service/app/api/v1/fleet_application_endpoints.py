@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
@@ -24,6 +25,8 @@ from mediride_common.events.publisher import EventPublisher
 from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import PaginatedResponse, StandardResponse
 from mediride_common.storage.s3_client import S3StorageClient
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -115,6 +118,32 @@ async def get_application(
     return StandardResponse(
         data=FleetApplicationResponse.model_validate(application),
     )
+
+
+@router.delete(
+    "/admin/fleet/applications/{app_id}",
+    response_model=StandardResponse[None],
+)
+async def delete_application(
+    app_id: UUID,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: FleetApplicationService = Depends(_get_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
+):
+    deleted_file_keys = await service.delete_application(
+        app_id=app_id,
+        admin_id=user.id,
+    )
+
+    # Best-effort cleanup of the documents' object storage. DB deletion has
+    # already committed conceptually, so S3 failures shouldn't fail the request.
+    for file_key in deleted_file_keys:
+        try:
+            await s3_client.delete_file(settings.S3_BUCKET_DOCUMENTS, file_key)
+        except Exception:
+            logger.warning("Failed to delete S3 object %s", file_key, exc_info=True)
+
+    return StandardResponse(message="Application deleted")
 
 
 @router.put(

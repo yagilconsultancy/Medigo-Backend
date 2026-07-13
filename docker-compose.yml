@@ -271,15 +271,15 @@ services:
       SES_CONFIGURATION_SET: ${SES_CONFIGURATION_SET:-}
       SMTP_HOST: ${SMTP_HOST:-smtp.mailgun.org}
       SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-noreply@mail.getmedigo.com}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
       SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-30}
-      EMAIL_FROM: ${EMAIL_FROM:-noreply@mail.getmedigo.com}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@getmedigo.com}
       PARTNERS_EMAIL_FROM: ${PARTNERS_EMAIL_FROM:-partners@mail.getmedigo.com}
       PARTNERS_EMAIL_REPLY_TO: ${PARTNERS_EMAIL_REPLY_TO:-partners@mail.getmedigo.com}
-      PARTNERS_SMTP_USERNAME: ${PARTNERS_SMTP_USERNAME:-partners@mail.getmedigo.com}
+      PARTNERS_SMTP_USERNAME: ${PARTNERS_SMTP_USERNAME:-}
       PARTNERS_SMTP_PASSWORD: ${PARTNERS_SMTP_PASSWORD:-}
     depends_on:
       postgres-notifications:
