@@ -211,3 +211,33 @@ def test_urgent_note_flags_imminent_and_past_pickups():
     assert email_service._urgent_note(later) is None
     assert "already passed" in email_service._urgent_note(past)
 
+
+
+@pytest.mark.asyncio
+async def test_partners_email_never_mixes_username_and_password(monkeypatch):
+    """A partners username without its password must not borrow the default password.
+
+    Mixing them authenticates as partners@ with noreply@'s password; the SMTP
+    server rejects the login and drops the connection mid-AUTH.
+    """
+    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_USERNAME", "partners@mail.getmedigo.com")
+    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_PASSWORD", "")
+
+    await email_service.send_fleet_application_received_email(
+        to="fleet@example.com", company_name="Acme Fleet"
+    )
+
+    call = _send_calls[0]
+    assert call["username"] == "noreply@mail.getmedigo.com"
+    assert call["password"] == "secret"
+
+
+@pytest.mark.asyncio
+async def test_partners_email_uses_partners_login_when_fully_configured():
+    await email_service.send_fleet_application_received_email(
+        to="fleet@example.com", company_name="Acme Fleet"
+    )
+
+    call = _send_calls[0]
+    assert call["username"] == "partners@mail.getmedigo.com"
+    assert call["password"] == "partners-secret"

@@ -11,6 +11,7 @@ from app.repositories.fleet_document_repo import FleetDocumentRepository
 from app.schemas.fleet_application import FleetApplicationKPIs
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
+from mediride_common.exceptions import ConflictError, NotFoundError
 from mediride_common.schemas.enums import FleetApplicationStatus
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ class FleetApplicationService:
     async def get_application(self, app_id: UUID) -> FleetApplication:
         application = await self.app_repo.get_by_id(app_id)
         if not application:
-            raise ValueError(f"Application {app_id} not found")
+            raise NotFoundError(f"Fleet application {app_id} not found")
         return application
 
     async def get_kpis(self) -> FleetApplicationKPIs:
@@ -102,8 +103,9 @@ class FleetApplicationService:
             FleetApplicationStatus.PENDING,
             FleetApplicationStatus.MORE_INFO_REQUESTED,
         ):
-            raise ValueError(
-                f"Cannot approve application with status '{application.status}'"
+            raise ConflictError(
+                f"Cannot approve an application that is already "
+                f"'{application.status}'. Only pending applications can be approved."
             )
 
         # Create Fleet entity from application data
@@ -157,8 +159,9 @@ class FleetApplicationService:
             FleetApplicationStatus.PENDING,
             FleetApplicationStatus.MORE_INFO_REQUESTED,
         ):
-            raise ValueError(
-                f"Cannot reject application with status '{application.status}'"
+            raise ConflictError(
+                f"Cannot reject an application that is already "
+                f"'{application.status}'. Only pending applications can be rejected."
             )
 
         now = datetime.now(timezone.utc)
@@ -194,8 +197,9 @@ class FleetApplicationService:
             FleetApplicationStatus.PENDING,
             FleetApplicationStatus.MORE_INFO_REQUESTED,
         ):
-            raise ValueError(
-                f"Cannot request info for application with status '{application.status}'"
+            raise ConflictError(
+                f"Cannot request more info for an application that is already "
+                f"'{application.status}'. Only pending applications can be updated."
             )
 
         await self.app_repo.update(

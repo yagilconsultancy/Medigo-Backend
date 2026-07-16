@@ -267,7 +267,9 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:-noreply@mail.getmedigo.com}
       PARTNERS_EMAIL_FROM: ${PARTNERS_EMAIL_FROM:-partners@mail.getmedigo.com}
       PARTNERS_EMAIL_REPLY_TO: ${PARTNERS_EMAIL_REPLY_TO:-partners@mail.getmedigo.com}
-      PARTNERS_SMTP_USERNAME: ${PARTNERS_SMTP_USERNAME:-partners@mail.getmedigo.com}
+      # Both halves or neither: a username without its password authenticates
+      # with the default account's password and the SMTP server drops the login.
+      PARTNERS_SMTP_USERNAME: ${PARTNERS_SMTP_USERNAME:-}
       PARTNERS_SMTP_PASSWORD: ${PARTNERS_SMTP_PASSWORD:-}
       ADMIN_BOOKING_ALERT_EMAILS: ${ADMIN_BOOKING_ALERT_EMAILS:-admin@getmedigo.com}
       BACKOFFICE_URL: ${BACKOFFICE_URL:-https://backoffice.getmedigo.com}
