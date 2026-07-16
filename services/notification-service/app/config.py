@@ -30,16 +30,10 @@ class NotificationSettings(BaseServiceSettings):
     SMTP_USE_TLS: bool = False
     SMTP_TIMEOUT_SECONDS: int = 30
     EMAIL_FROM: str = "noreply@mail.getmedigo.com"
-    PARTNERS_EMAIL_FROM: str = "partners@mail.getmedigo.com"
+    # Partner (fleet) emails send through the same SMTP account as every other
+    # email; only the Reply-To differs so applicant replies reach the partners
+    # inbox. No separate partner SMTP login.
     PARTNERS_EMAIL_REPLY_TO: str = "partners@mail.getmedigo.com"
-    PARTNERS_SMTP_USERNAME: str = Field(
-        default="",
-        validation_alias=AliasChoices("PARTNERS_SMTP_USERNAME", "PARTNERS_SMTP_USER", "PARTNERS_SMTP_LOGIN"),
-    )
-    PARTNERS_SMTP_PASSWORD: str = Field(
-        default="",
-        validation_alias=AliasChoices("PARTNERS_SMTP_PASSWORD", "PARTNERS_SMTP_PASS"),
-    )
 
     # Ops alerts: who gets notified when a new ride is booked.
     # Comma-separated; set to an empty string to disable the alert.

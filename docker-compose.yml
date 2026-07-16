@@ -277,10 +277,7 @@ services:
       SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
       SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-30}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@getmedigo.com}
-      PARTNERS_EMAIL_FROM: ${PARTNERS_EMAIL_FROM:-partners@mail.getmedigo.com}
       PARTNERS_EMAIL_REPLY_TO: ${PARTNERS_EMAIL_REPLY_TO:-partners@mail.getmedigo.com}
-      PARTNERS_SMTP_USERNAME: ${PARTNERS_SMTP_USERNAME:-}
-      PARTNERS_SMTP_PASSWORD: ${PARTNERS_SMTP_PASSWORD:-}
       ADMIN_BOOKING_ALERT_EMAILS: ${ADMIN_BOOKING_ALERT_EMAILS:-admin@getmedigo.com}
       BACKOFFICE_URL: ${BACKOFFICE_URL:-https://backoffice.getmedigo.com}
     depends_on:

@@ -47,10 +47,7 @@ def _reset_settings(monkeypatch):
     monkeypatch.setattr(email_service.settings, "SMTP_USE_TLS", False)
     monkeypatch.setattr(email_service.settings, "SMTP_TIMEOUT_SECONDS", 30)
     monkeypatch.setattr(email_service.settings, "EMAIL_FROM", "noreply@mail.getmedigo.com")
-    monkeypatch.setattr(email_service.settings, "PARTNERS_EMAIL_FROM", "partners@mail.getmedigo.com")
     monkeypatch.setattr(email_service.settings, "PARTNERS_EMAIL_REPLY_TO", "partners@mail.getmedigo.com")
-    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_USERNAME", "partners@mail.getmedigo.com")
-    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_PASSWORD", "partners-secret")
     monkeypatch.setattr(email_service.settings, "BACKOFFICE_URL", "https://backoffice.getmedigo.com")
 
 
@@ -107,7 +104,9 @@ async def test_send_payment_receipt_email_formats_receipt_contents():
 
 
 @pytest.mark.asyncio
-async def test_send_fleet_application_received_email_uses_partners_sender():
+async def test_fleet_application_email_uses_default_smtp_account():
+    """Fleet emails must send through the same SMTP account as every other
+    email (the one that already works), only setting Reply-To to partners."""
     sent = await email_service.send_fleet_application_received_email(
         to="fleet@example.com",
         company_name="Acme Fleet",
@@ -115,12 +114,15 @@ async def test_send_fleet_application_received_email_uses_partners_sender():
 
     assert sent is True
     assert len(_send_calls) == 1
-    assert _send_calls[0]["message"]["To"] == "fleet@example.com"
-    assert _send_calls[0]["message"]["From"] == "partners@mail.getmedigo.com"
-    assert _send_calls[0]["message"]["Reply-To"] == "partners@mail.getmedigo.com"
-    assert _send_calls[0]["username"] == "partners@mail.getmedigo.com"
-    assert _send_calls[0]["password"] == "partners-secret"
-    assert _send_calls[0]["message"]["Subject"] == "MediGo - Fleet Application Received"
+    call = _send_calls[0]
+    assert call["message"]["To"] == "fleet@example.com"
+    assert call["message"]["Subject"] == "MediGo - Fleet Application Received"
+    # Same login and sender as the working default route — no separate account.
+    assert call["username"] == "noreply@mail.getmedigo.com"
+    assert call["password"] == "secret"
+    assert call["message"]["From"] == "noreply@mail.getmedigo.com"
+    # Reply-To still points partners' way so applicant replies land right.
+    assert call["message"]["Reply-To"] == "partners@mail.getmedigo.com"
 
 
 def _html_body(message):
@@ -212,32 +214,18 @@ def test_urgent_note_flags_imminent_and_past_pickups():
     assert "already passed" in email_service._urgent_note(past)
 
 
-
 @pytest.mark.asyncio
-async def test_partners_email_never_mixes_username_and_password(monkeypatch):
-    """A partners username without its password must not borrow the default password.
-
-    Mixing them authenticates as partners@ with noreply@'s password; the SMTP
-    server rejects the login and drops the connection mid-AUTH.
-    """
-    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_USERNAME", "partners@mail.getmedigo.com")
-    monkeypatch.setattr(email_service.settings, "PARTNERS_SMTP_PASSWORD", "")
-
-    await email_service.send_fleet_application_received_email(
+async def test_all_fleet_emails_use_the_default_smtp_account():
+    """Approved and rejected fleet emails also go through the default account."""
+    await email_service.send_fleet_application_approved_email(
         to="fleet@example.com", company_name="Acme Fleet"
     )
-
-    call = _send_calls[0]
-    assert call["username"] == "noreply@mail.getmedigo.com"
-    assert call["password"] == "secret"
-
-
-@pytest.mark.asyncio
-async def test_partners_email_uses_partners_login_when_fully_configured():
-    await email_service.send_fleet_application_received_email(
-        to="fleet@example.com", company_name="Acme Fleet"
+    await email_service.send_fleet_application_rejected_email(
+        to="fleet@example.com", company_name="Acme Fleet", reason="Incomplete docs"
     )
 
-    call = _send_calls[0]
-    assert call["username"] == "partners@mail.getmedigo.com"
-    assert call["password"] == "partners-secret"
+    assert len(_send_calls) == 2
+    for call in _send_calls:
+        assert call["username"] == "noreply@mail.getmedigo.com"
+        assert call["password"] == "secret"
+        assert call["message"]["From"] == "noreply@mail.getmedigo.com"

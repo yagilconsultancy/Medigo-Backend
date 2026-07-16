@@ -102,32 +102,9 @@ async def send_email(
         ) from e
 
 
-def _partners_smtp_credentials() -> tuple[str, str]:
-    """Return the partners SMTP login as a pair.
-
-    Username and password must never be mixed across accounts: authenticating
-    as partners@ with the default account's password is rejected by the SMTP
-    server, which shows up as a connection drop during AUTH. Only use the
-    partners login when both halves are configured.
-    """
-    if settings.PARTNERS_SMTP_USERNAME and settings.PARTNERS_SMTP_PASSWORD:
-        return settings.PARTNERS_SMTP_USERNAME, settings.PARTNERS_SMTP_PASSWORD
-    if settings.PARTNERS_SMTP_USERNAME or settings.PARTNERS_SMTP_PASSWORD:
-        logger.warning(
-            "Partners SMTP login is half-configured (username=%s, password=%s); "
-            "falling back to the default SMTP account",
-            "set" if settings.PARTNERS_SMTP_USERNAME else "missing",
-            "set" if settings.PARTNERS_SMTP_PASSWORD else "missing",
-        )
-    return settings.SMTP_USERNAME, settings.SMTP_PASSWORD
-
-
 async def send_fleet_application_received_email(to: str, company_name: str) -> bool:
     """Send fleet application submission confirmation email."""
     subject = "MediGo - Fleet Application Received"
-    sender = settings.PARTNERS_EMAIL_FROM
-    reply_to = settings.PARTNERS_EMAIL_REPLY_TO
-    smtp_username, smtp_password = _partners_smtp_credentials()
 
     try:
         template = _template_env.get_template("fleet_application_received.html")
@@ -164,10 +141,7 @@ async def send_fleet_application_received_email(to: str, company_name: str) -> b
         to=to,
         subject=subject,
         html_body=html,
-        from_email=sender,
-        reply_to=reply_to,
-        smtp_username=smtp_username,
-        smtp_password=smtp_password,
+        reply_to=settings.PARTNERS_EMAIL_REPLY_TO or None,
     )
 
 
@@ -435,9 +409,6 @@ async def send_fleet_info_request_email(
 async def send_fleet_application_approved_email(to: str, company_name: str) -> bool:
     """Send email to fleet applicant when the application is approved."""
     subject = "MediGo - Fleet Application Approved"
-    sender = settings.PARTNERS_EMAIL_FROM
-    reply_to = settings.PARTNERS_EMAIL_REPLY_TO
-    smtp_username, smtp_password = _partners_smtp_credentials()
 
     try:
         template = _template_env.get_template("fleet_application_approved.html")
@@ -460,10 +431,7 @@ async def send_fleet_application_approved_email(to: str, company_name: str) -> b
         to=to,
         subject=subject,
         html_body=html,
-        from_email=sender,
-        reply_to=reply_to,
-        smtp_username=smtp_username,
-        smtp_password=smtp_password,
+        reply_to=settings.PARTNERS_EMAIL_REPLY_TO or None,
     )
 
 
@@ -474,9 +442,6 @@ async def send_fleet_application_rejected_email(
 ) -> bool:
     """Send email to fleet applicant when the application is rejected."""
     subject = "MediGo - Fleet Application Update"
-    sender = settings.PARTNERS_EMAIL_FROM
-    reply_to = settings.PARTNERS_EMAIL_REPLY_TO
-    smtp_username, smtp_password = _partners_smtp_credentials()
 
     try:
         template = _template_env.get_template("fleet_application_rejected.html")
@@ -500,10 +465,7 @@ async def send_fleet_application_rejected_email(
         to=to,
         subject=subject,
         html_body=html,
-        from_email=sender,
-        reply_to=reply_to,
-        smtp_username=smtp_username,
-        smtp_password=smtp_password,
+        reply_to=settings.PARTNERS_EMAIL_REPLY_TO or None,
     )
 
 
