@@ -154,6 +154,7 @@ class RideService:
         ride_data: dict,
         created_by: UUID,
         notes: str | None = None,
+        is_recurring_occurrence: bool = False,
     ) -> Ride:
         if ride_data.get("guest_session_id"):
             ride_data.setdefault("booking_channel", "website_guest")
@@ -186,6 +187,31 @@ class RideService:
                 destination_address=ride.destination_address,
                 scheduled_at=ride.scheduled_at,
                 estimated_cost=float(ride.estimated_fare) if ride.estimated_fare else None,
+                trip_type=ride.trip_type,
+                trip_structure=ride.trip_structure,
+                booking_channel=ride.booking_channel,
+                visit_type=ride.visit_type,
+                facility_name=ride.facility_name,
+                appointment_time=ride.appointment_time,
+                special_instructions=ride.special_instructions,
+                is_dialysis_trip=ride.is_dialysis_trip,
+                passenger_first_name=ride.passenger_first_name,
+                passenger_last_name=ride.passenger_last_name,
+                passenger_phone=ride.passenger_phone,
+                mobility_level=ride.mobility_level,
+                assistance_level=ride.assistance_level,
+                estimated_distance_miles=(
+                    float(ride.estimated_distance_miles)
+                    if ride.estimated_distance_miles is not None
+                    else None
+                ),
+                estimated_duration_minutes=ride.estimated_duration_minutes,
+                currency=(ride.fare_estimate_details or {}).get("currency"),
+                # Not ride.created_at: it is a server default and reading it here
+                # can trigger a lazy refresh. The ride was just created anyway.
+                created_at=utc_now(),
+                recurring_ride_id=ride.recurring_ride_id,
+                is_recurring_occurrence=is_recurring_occurrence,
             ).model_dump(mode="json"),
         )
 
@@ -321,6 +347,7 @@ class RideService:
                     ride_data=future_payload,
                     created_by=rider_id,
                     notes=f"Generated from recurring series {recurring_ride.id}",
+                    is_recurring_occurrence=True,
                 )
 
         return ride

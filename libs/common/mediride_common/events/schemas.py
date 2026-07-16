@@ -147,6 +147,30 @@ class RideCreatedPayload(BaseModel):
     scheduled_at: datetime
     estimated_cost: float | None = None
 
+    # Optional booking context, used to build the admin booking alert.
+    # All optional so older publishers keep validating.
+    trip_type: str | None = None
+    trip_structure: str | None = None
+    booking_channel: str | None = None
+    visit_type: str | None = None
+    facility_name: str | None = None
+    appointment_time: datetime | None = None
+    special_instructions: str | None = None
+    is_dialysis_trip: bool | None = None
+    passenger_first_name: str | None = None
+    passenger_last_name: str | None = None
+    passenger_phone: str | None = None
+    mobility_level: str | None = None
+    assistance_level: str | None = None
+    estimated_distance_miles: float | None = None
+    estimated_duration_minutes: int | None = None
+    currency: str | None = None
+    created_at: datetime | None = None
+    recurring_ride_id: UUID | None = None
+    # True for the future occurrences auto-generated from a recurring series,
+    # so consumers can act on the booking once instead of once per occurrence.
+    is_recurring_occurrence: bool = False
+
 
 class RideStatusChangedPayload(BaseModel):
     ride_id: UUID

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        .headline { text-align: center; color: #333; margin: 0 0 8px; }
+        .subhead { text-align: center; color: #777; font-size: 14px; margin: 0 0 4px; }
+        .ref { text-align: center; color: #3B5998; font-size: 18px; font-weight: bold; letter-spacing: 1px; margin: 0 0 24px; }
+        .summary { color: #555; line-height: 1.6; }
+        .flag { background: #fff6e5; border-left: 4px solid #f0a500; padding: 12px 16px; border-radius: 4px; margin: 16px 0; color: #7a5200; font-size: 14px; }
+        .instructions { background: #f0f4ff; border-left: 4px solid #3B5998; padding: 12px 16px; border-radius: 4px; margin: 16px 0; color: #333; }
+        .section-title { color: #3B5998; font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin: 28px 0 10px; }
+        .card { background: #f7f8fa; border-radius: 8px; padding: 8px 20px; }
+        table.rows { width: 100%; border-collapse: collapse; }
+        table.rows td { padding: 10px 0; vertical-align: top; border-bottom: 1px solid #e8eaee; font-size: 14px; }
+        table.rows tr:last-child td { border-bottom: none; }
+        td.label { color: #777; width: 40%; }
+        td.value { color: #222; font-weight: bold; }
+        .fare { font-size: 22px; font-weight: bold; color: #3B5998; }
+        .fare-note { color: #999; font-size: 12px; font-weight: normal; }
+        .cta { text-align: center; margin: 32px 0 8px; }
+        .cta a { background: #3B5998; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 15px; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% include "_email_logo.html" %}
+
+        <h2 class="headline">New Ride Booking</h2>
+        <p class="subhead">Booking reference</p>
+        <p class="ref">{{ booking_ref }}</p>
+
+        <p class="summary">
+            <strong>{{ booked_by_name }}</strong> booked a new ride{% if booked_at %} on {{ booked_at }}{% endif %}.
+            The pickup is scheduled for <strong>{{ scheduled_at }}</strong>.
+            This booking is waiting for your team to review and approve it.
+        </p>
+
+        {% if urgent_note %}
+        <div class="flag">⏰ {{ urgent_note }}</div>
+        {% endif %}
+
+        {% if is_dialysis_trip %}
+        <div class="flag">🩺 This is a dialysis trip and may need priority scheduling.</div>
+        {% endif %}
+
+        {% if is_recurring %}
+        <div class="flag">
+            🔁 This is a repeating booking. The details below are for the first trip &mdash;
+            the rest of the series has been added to the schedule automatically.
+        </div>
+        {% endif %}
+
+        <div class="section-title">Passenger</div>
+        <div class="card">
+            <table class="rows">
+                <tr>
+                    <td class="label">Name</td>
+                    <td class="value">{{ passenger_name }}</td>
+                </tr>
+                {% if passenger_phone %}
+                <tr>
+                    <td class="label">Phone</td>
+                    <td class="value">{{ passenger_phone }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td class="label">Mobility</td>
+                    <td class="value">{{ mobility_label }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Help needed</td>
+                    <td class="value">{{ assistance_label }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="section-title">Trip details</div>
+        <div class="card">
+            <table class="rows">
+                <tr>
+                    <td class="label">Pick up from</td>
+                    <td class="value">{{ pickup_address }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Drop off at</td>
+                    <td class="value">{{ destination_address }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Pickup time</td>
+                    <td class="value">{{ scheduled_at }}</td>
+                </tr>
+                {% if appointment_time %}
+                <tr>
+                    <td class="label">Appointment time</td>
+                    <td class="value">{{ appointment_time }}</td>
+                </tr>
+                {% endif %}
+                {% if facility_name %}
+                <tr>
+                    <td class="label">Facility</td>
+                    <td class="value">{{ facility_name }}</td>
+                </tr>
+                {% endif %}
+                {% if visit_type_label %}
+                <tr>
+                    <td class="label">Reason for visit</td>
+                    <td class="value">{{ visit_type_label }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td class="label">Vehicle needed</td>
+                    <td class="value">{{ ride_type_label }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Trip type</td>
+                    <td class="value">{{ trip_structure_label }}{% if trip_type_label %} &middot; {{ trip_type_label }}{% endif %}</td>
+                </tr>
+                {% if distance_label or duration_label %}
+                <tr>
+                    <td class="label">Estimated journey</td>
+                    <td class="value">
+                        {{ distance_label }}{% if distance_label and duration_label %} &middot; {% endif %}{{ duration_label }}
+                    </td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+
+        {% if special_instructions %}
+        <div class="section-title">Special instructions from the customer</div>
+        <div class="instructions">{{ special_instructions }}</div>
+        {% endif %}
+
+        <div class="section-title">Booking &amp; cost</div>
+        <div class="card">
+            <table class="rows">
+                <tr>
+                    <td class="label">Booked by</td>
+                    <td class="value">{{ booked_by_name }}</td>
+                </tr>
+                {% if booked_by_email %}
+                <tr>
+                    <td class="label">Contact email</td>
+                    <td class="value">{{ booked_by_email }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td class="label">Booked through</td>
+                    <td class="value">{{ booking_channel_label }}</td>
+                </tr>
+                {% if booked_at %}
+                <tr>
+                    <td class="label">Booked on</td>
+                    <td class="value">{{ booked_at }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td class="label">Estimated fare</td>
+                    <td class="value">
+                        <span class="fare">{{ estimated_fare }}</span>
+                        {% if has_fare_estimate %}
+                        <br><span class="fare-note">Estimate only &mdash; the final amount may change.</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+        {% if backoffice_link %}
+        <div class="cta">
+            <a href="{{ backoffice_link }}">Review pending bookings</a>
+        </div>
+        <p style="text-align: center; color: #999; font-size: 12px; margin: 4px 0 0;">
+            Find it in the list using reference {{ booking_ref }}.
+        </p>
+        {% endif %}
+
+        <div class="footer">
+            <p>You are receiving this because you manage bookings for MediGo.</p>
+            <p>&copy; 2026 MediGo. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>

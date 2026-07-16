@@ -41,5 +41,18 @@ class NotificationSettings(BaseServiceSettings):
         validation_alias=AliasChoices("PARTNERS_SMTP_PASSWORD", "PARTNERS_SMTP_PASS"),
     )
 
+    # Ops alerts: who gets notified when a new ride is booked.
+    # Comma-separated; set to an empty string to disable the alert.
+    ADMIN_BOOKING_ALERT_EMAILS: str = "admin@getmedigo.com"
+    BACKOFFICE_URL: str = "https://backoffice.getmedigo.com"
+
+    @property
+    def admin_booking_alert_recipients(self) -> list[str]:
+        return [
+            email.strip()
+            for email in self.ADMIN_BOOKING_ALERT_EMAILS.split(",")
+            if email.strip()
+        ]
+
 
 settings = NotificationSettings()

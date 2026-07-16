@@ -14,6 +14,7 @@ from app.config import settings
 from app.services.email_service import (
     send_account_reactivation_email,
     send_admin_invite_email,
+    send_admin_ride_booking_email,
     send_driver_invite_email,
     send_fleet_application_approved_email,
     send_fleet_application_received_email,
@@ -203,6 +204,43 @@ class RideEventConsumer(BaseEventConsumer):
                 ride_details=ride_details,
             )
 
+    async def _send_admin_booking_alert(self, payload: RideCreatedPayload) -> None:
+        """Email the ops team about a new booking.
+
+        Never raises: a failed admin alert must not requeue the event and
+        re-send the rider's confirmation.
+        """
+        recipients = settings.admin_booking_alert_recipients
+        if not recipients:
+            return
+
+        # A recurring booking creates one ride per occurrence. Alert on the
+        # booking itself only, or a long series would flood the inbox.
+        if payload.is_recurring_occurrence:
+            logger.debug(
+                "Skipping admin booking alert for generated occurrence of ride %s",
+                payload.ride_id,
+            )
+            return
+
+        try:
+            booking = payload.model_dump()
+            rider_info = await self.user_client.get_user_email(payload.rider_id)
+            if rider_info:
+                booking["booked_by_name"] = rider_info.get("name")
+                booking["booked_by_email"] = rider_info.get("email")
+
+            await send_admin_ride_booking_email(to=recipients, booking=booking)
+            logger.info(
+                "Admin booking alert sent to %s for ride %s",
+                ", ".join(recipients),
+                payload.ride_id,
+            )
+        except Exception:
+            logger.exception(
+                "Admin booking alert failed for ride %s", payload.ride_id
+            )
+
     async def handle(self, envelope: EventEnvelope) -> None:
         async with self.session_factory() as session:
             try:
@@ -225,6 +263,8 @@ class RideEventConsumer(BaseEventConsumer):
                         data={"ride_id": str(payload.ride_id), "screen": "ride_detail"},
                         ride_details=ride_details,
                     )
+                    # Notify the ops team so the booking gets reviewed
+                    await self._send_admin_booking_alert(payload)
 
                 # RIDE UPDATED - Admin edits the booking details
                 elif envelope.event_type == RoutingKeys.RIDE_UPDATED:

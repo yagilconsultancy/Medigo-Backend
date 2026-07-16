@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -9,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.config import settings
 from mediride_common.exceptions import RetryableError, ServiceUnavailableError
+from mediride_common.utils import app_timezone, utc_now
 
 logger = logging.getLogger(__name__)
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -486,6 +488,210 @@ async def send_fleet_application_rejected_email(
         smtp_username=smtp_username,
         smtp_password=smtp_password,
     )
+
+
+_RIDE_TYPE_LABELS = {
+    "ambulatory": "Ambulatory (walks on their own)",
+    "standard": "Ambulatory (walks on their own)",
+    "wheelchair": "Wheelchair accessible vehicle",
+    "stretcher": "Stretcher vehicle",
+}
+_MOBILITY_LABELS = {
+    "ambulatory": "Walks on their own",
+    "wheelchair": "Uses a wheelchair",
+    "stretcher": "Needs a stretcher",
+}
+_ASSISTANCE_LABELS = {
+    "none": "No assistance needed",
+    "minimal": "A little assistance",
+    "moderate": "Moderate assistance",
+    "full": "Full assistance needed",
+}
+_TRIP_TYPE_LABELS = {
+    "transport_only": "Transport only",
+    "transport_care_assistant": "Transport with a care assistant",
+    "transport_escort": "Transport with a care assistant",
+}
+_TRIP_STRUCTURE_LABELS = {
+    "one_way": "One way",
+    "round_trip": "Round trip",
+}
+_BOOKING_CHANNEL_LABELS = {
+    "mobile_app": "Mobile app",
+    "website_client": "Website",
+    "website_guest": "Website (guest booking)",
+    "website_facility": "Website (facility booking)",
+    "admin_panel": "Back office (booked by staff)",
+}
+_VISIT_TYPE_LABELS = {
+    "mobile": "Mobile visit",
+    "checkup": "Check-up",
+    "therapy": "Therapy",
+    "lab_ride": "Lab visit",
+    "surgery": "Surgery",
+}
+
+
+def _humanize(value: str | None, labels: dict[str, str], default: str = "Not specified") -> str:
+    """Map a raw enum value to wording an ops coordinator can read at a glance."""
+    if not value:
+        return default
+    return labels.get(str(value).lower(), str(value).replace("_", " ").capitalize())
+
+
+def _format_datetime(value: datetime | str | None) -> str | None:
+    """Render a timestamp in local time, e.g. 'Thursday, July 16, 2026 at 2:30 PM EDT'."""
+    if not value:
+        return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return str(value)
+    local_dt = value.astimezone(app_timezone()) if value.tzinfo else value
+    hour = local_dt.strftime("%I").lstrip("0") or "12"
+    return (
+        f"{local_dt.strftime('%A, %B')} {local_dt.day}, {local_dt.year} "
+        f"at {hour}:{local_dt.strftime('%M %p')} {local_dt.strftime('%Z')}".strip()
+    )
+
+
+def _format_duration(minutes: int | None) -> str | None:
+    if not minutes:
+        return None
+    hours, mins = divmod(int(minutes), 60)
+    if hours and mins:
+        return f"about {hours} hr {mins} min"
+    if hours:
+        return f"about {hours} hr"
+    return f"about {mins} min"
+
+
+def _urgent_note(scheduled_at: datetime | str | None) -> str | None:
+    """Warn when the pickup is close, so the booking gets triaged first."""
+    if not scheduled_at:
+        return None
+    if isinstance(scheduled_at, str):
+        try:
+            scheduled_at = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if scheduled_at.tzinfo is None:
+        return None
+    remaining = scheduled_at - utc_now()
+    if remaining <= timedelta(0):
+        return "The scheduled pickup time has already passed. Please review this booking now."
+    if remaining <= timedelta(hours=24):
+        hours = int(remaining.total_seconds() // 3600)
+        when = "less than an hour" if hours < 1 else f"about {hours} hour{'s' if hours != 1 else ''}"
+        return f"This pickup is in {when}. It needs to be reviewed and assigned soon."
+    return None
+
+
+async def send_admin_ride_booking_email(
+    to: list[str],
+    booking: dict,
+) -> bool:
+    """Alert the ops team that a rider booked a new ride and it needs review."""
+    if not to:
+        logger.info("No admin booking alert recipients configured; skipping")
+        return False
+
+    ride_id = str(booking.get("ride_id") or "")
+    booking_ref = f"BK-{ride_id[:8].upper()}" if ride_id else "BK-UNKNOWN"
+
+    passenger_name = " ".join(
+        part
+        for part in (
+            booking.get("passenger_first_name"),
+            booking.get("passenger_last_name"),
+        )
+        if part
+    ).strip()
+    booked_by_name = booking.get("booked_by_name") or "A rider"
+
+    estimated_cost = booking.get("estimated_cost")
+    currency = booking.get("currency") or "CAD"
+    estimated_fare = (
+        f"{currency} ${float(estimated_cost):.2f}"
+        if estimated_cost is not None
+        else "Not yet estimated"
+    )
+
+    distance = booking.get("estimated_distance_miles")
+    scheduled_at = booking.get("scheduled_at")
+    # The back office has no per-ride page, so link to the pending queue
+    # where a newly booked ride lands. The booking ref identifies the row.
+    backoffice_link = (
+        f"{settings.BACKOFFICE_URL.rstrip('/')}/bookings/pending"
+        if settings.BACKOFFICE_URL
+        else None
+    )
+
+    context = {
+        "booking_ref": booking_ref,
+        "booked_by_name": booked_by_name,
+        "booked_by_email": booking.get("booked_by_email"),
+        "booked_at": _format_datetime(booking.get("created_at")),
+        "scheduled_at": _format_datetime(scheduled_at) or "Not specified",
+        "appointment_time": _format_datetime(booking.get("appointment_time")),
+        "urgent_note": _urgent_note(scheduled_at),
+        "is_dialysis_trip": bool(booking.get("is_dialysis_trip")),
+        "is_recurring": bool(booking.get("recurring_ride_id")),
+        "passenger_name": passenger_name or booked_by_name,
+        "passenger_phone": booking.get("passenger_phone"),
+        "mobility_label": _humanize(booking.get("mobility_level"), _MOBILITY_LABELS),
+        "assistance_label": _humanize(booking.get("assistance_level"), _ASSISTANCE_LABELS),
+        "pickup_address": booking.get("pickup_address") or "Not specified",
+        "destination_address": booking.get("destination_address") or "Not specified",
+        "facility_name": booking.get("facility_name"),
+        "visit_type_label": (
+            _humanize(booking.get("visit_type"), _VISIT_TYPE_LABELS, default="")
+            or None
+        ),
+        "ride_type_label": _humanize(booking.get("ride_type"), _RIDE_TYPE_LABELS),
+        "trip_type_label": (
+            _humanize(booking.get("trip_type"), _TRIP_TYPE_LABELS, default="") or None
+        ),
+        "trip_structure_label": _humanize(
+            booking.get("trip_structure"), _TRIP_STRUCTURE_LABELS, default="One way"
+        ),
+        "distance_label": f"{float(distance):.1f} miles" if distance else None,
+        "duration_label": _format_duration(booking.get("estimated_duration_minutes")),
+        "special_instructions": booking.get("special_instructions"),
+        "booking_channel_label": _humanize(
+            booking.get("booking_channel"), _BOOKING_CHANNEL_LABELS, default="Not specified"
+        ),
+        "estimated_fare": estimated_fare,
+        "has_fare_estimate": estimated_cost is not None,
+        "backoffice_link": backoffice_link,
+    }
+
+    subject = f"MediGo - New Ride Booking {booking_ref} for {context['scheduled_at']}"
+
+    try:
+        template = _template_env.get_template("admin_ride_booking.html")
+        html = template.render(**context)
+    except Exception as e:
+        logger.exception("Failed to render admin ride booking email for %s: %s", booking_ref, e)
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - New Ride Booking</h2>
+            <p><strong>Booking reference:</strong> {context['booking_ref']}</p>
+            <p><strong>Booked by:</strong> {context['booked_by_name']}</p>
+            <p><strong>Passenger:</strong> {context['passenger_name']}</p>
+            <p><strong>Pick up from:</strong> {context['pickup_address']}</p>
+            <p><strong>Drop off at:</strong> {context['destination_address']}</p>
+            <p><strong>Pickup time:</strong> {context['scheduled_at']}</p>
+            <p><strong>Vehicle needed:</strong> {context['ride_type_label']}</p>
+            <p><strong>Estimated fare:</strong> {context['estimated_fare']}</p>
+            <p>This booking is waiting for review in the back office.</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(", ".join(to), subject, html)
 
 
 async def send_payment_receipt_email(
