@@ -621,6 +621,26 @@ class AdminBookingService:
         )
         return ride
 
+    # ==================== Delete Booking ====================
+
+    async def delete_booking(self, ride_id: UUID, admin_id: UUID) -> None:
+        """Soft-delete a cancelled booking.
+
+        Sets ``deleted_at`` so the ride disappears from all admin views
+        (every query filters ``deleted_at IS NULL``) while remaining
+        recoverable in the database. Only cancelled / no-show bookings
+        may be deleted.
+        """
+        ride = await self.ride_repo.get_by_id(ride_id)
+        if ride is None:
+            raise NotFoundError("Booking not found")
+
+        if ride.status not in (RideStatus.CANCELLED, RideStatus.NO_SHOW):
+            raise ValidationError("Only cancelled bookings can be deleted")
+
+        await self.ride_repo.update(ride_id, deleted_at=utc_now())
+        await self._create_system_note(ride_id, admin_id, "Booking deleted by admin")
+
     # ==================== Available Drivers ====================
 
     async def get_available_drivers(self, ride_id: UUID) -> list[AvailableDriverResponse]:

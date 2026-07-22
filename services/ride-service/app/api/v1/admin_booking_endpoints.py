@@ -387,6 +387,19 @@ async def cancel_trip(
     )
 
 
+@router.delete("/bookings/{ride_id}", response_model=StandardResponse[None])
+async def delete_booking(
+    ride_id: UUID,
+    user: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminBookingService = Depends(_get_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Admin soft-delete a cancelled booking."""
+    await service.delete_booking(ride_id, user.id)
+    await session.commit()
+    return StandardResponse(data=None, message="Booking deleted")
+
+
 # ---- Admin Notes ----
 
 @router.get(
