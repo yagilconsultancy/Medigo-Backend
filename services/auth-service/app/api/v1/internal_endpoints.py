@@ -197,6 +197,8 @@ async def reactivate_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     credential.is_active = True
+    # A reactivated account is always verified so login is never left blocked.
+    credential.is_verified = True
     credential.locked_until = None
     credential.failed_attempts = 0
     await session.flush()

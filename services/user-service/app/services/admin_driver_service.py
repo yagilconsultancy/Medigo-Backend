@@ -154,12 +154,25 @@ class AdminDriverService:
         suspension_logs = await self.repo.get_suspension_history(driver_user_id)
         suspension_history = [SuspensionLogItem(**log) for log in suspension_logs]
 
-        # Get trip stats, ratings (ride-service) and login active-state (auth) in parallel
+        # Get trip stats, ratings (ride-service) and login active-state (auth) in parallel.
+        # These are best-effort reads from other services: a hiccup in any of them must
+        # never propagate out and roll back the caller's transaction (e.g. driver creation
+        # emails an invite before this runs), so failures degrade to empty/unknown values.
         trip_stats_data, ratings_data, is_active = await asyncio.gather(
             self.ride_client.get_driver_stats(driver_user_id),
             self.ride_client.get_driver_ratings(driver_user_id),
             self.auth_client.get_is_active(driver_user_id),
+            return_exceptions=True,
         )
+        if isinstance(trip_stats_data, BaseException):
+            logger.warning(f"Failed to load trip stats for {driver_user_id}: {trip_stats_data}")
+            trip_stats_data = None
+        if isinstance(ratings_data, BaseException):
+            logger.warning(f"Failed to load ratings for {driver_user_id}: {ratings_data}")
+            ratings_data = None
+        if isinstance(is_active, BaseException):
+            logger.warning(f"Failed to load login state for {driver_user_id}: {is_active}")
+            is_active = None
 
         # Deactivated login while the profile is otherwise active/pending => the driver
         # changed-email flow is awaiting the reactivation link (suspended/deactivated excluded).
@@ -286,51 +299,61 @@ class AdminDriverService:
                         f"Failed to upload {doc_type} for driver {user_id}: {e}"
                     )
 
+        account_created_payload = {
+            "driver_id": str(user_id),
+            "email": request.email,
+            "fleet_id": str(request.fleet_id),
+            "created_by": str(admin_id),
+        }
+
+        # Build the driver invitation as part of the SAME transaction as the driver
+        # record. This is intentionally NOT wrapped in try/except: if the invite cannot
+        # be persisted (e.g. FK violation), the whole creation must fail loudly rather
+        # than report success while the driver holds a token that has no matching row.
+        invite_token: str | None = None
+        invite_payload: dict | None = None
+        if self.invitation_repo and self.fleet_repo:
+            fleet = await self.fleet_repo.get_by_id(request.fleet_id)
+            fleet_name = fleet.name if fleet else "MediRide"
+
+            token = secrets.token_urlsafe(5)
+            invitation = DriverInvitation(
+                business_id=request.fleet_id,
+                email=request.email,
+                invited_by=admin_id,
+                token=token,
+                expires_at=utc_now() + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS),
+            )
+            await self.invitation_repo.create(invitation)
+            invite_token = token
+            # Capture the payload now, while attributes are loaded and before commit
+            # expires the ORM object, so we never touch the session after publishing.
+            invite_payload = DriverInviteSentPayload(
+                invitation_id=invitation.id,
+                business_id=request.fleet_id,
+                fleet_name=fleet_name,
+                email=request.email,
+                invite_token=token,
+                temporary_password=default_password,
+            ).model_dump(mode="json")
+
+        # Commit user + profile + documents + invitation atomically BEFORE emitting any
+        # events. Events (esp. the invite email) are non-transactional side effects, so a
+        # later failure must never leave a token emailed to a driver with no persisted row.
+        await self.repo.session.commit()
+
         await self.publisher.publish(
             Exchanges.USERS,
             RoutingKeys.DRIVER_ACCOUNT_CREATED,
-            {
-                "driver_id": str(user_id),
-                "email": request.email,
-                "fleet_id": str(request.fleet_id),
-                "created_by": str(admin_id),
-            },
+            account_created_payload,
         )
-
-        # Create invitation and send email to driver
-        invite_token = None
-        if self.invitation_repo and self.fleet_repo:
-            try:
-                fleet = await self.fleet_repo.get_by_id(request.fleet_id)
-                fleet_name = fleet.name if fleet else "MediRide"
-
-                token = secrets.token_urlsafe(5)
-                invitation = DriverInvitation(
-                    business_id=request.fleet_id,
-                    email=request.email,
-                    invited_by=admin_id,
-                    token=token,
-                    expires_at=utc_now() + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS),
-                )
-                await self.invitation_repo.create(invitation)
-
-                await self.publisher.publish(
-                    Exchanges.AUTH,
-                    RoutingKeys.DRIVER_INVITE_SENT,
-                    DriverInviteSentPayload(
-                        invitation_id=invitation.id,
-                        business_id=request.fleet_id,
-                        fleet_name=fleet_name,
-                        email=request.email,
-                        invite_token=token,
-                        temporary_password=default_password,
-                    ).model_dump(mode="json"),
-                )
-
-                invite_token = token
-                logger.info(f"Driver invitation created for {request.email}")
-            except Exception as e:
-                logger.warning(f"Failed to create driver invitation: {e}")
+        if invite_payload is not None:
+            await self.publisher.publish(
+                Exchanges.AUTH,
+                RoutingKeys.DRIVER_INVITE_SENT,
+                invite_payload,
+            )
+            logger.info(f"Driver invitation created for {request.email}")
 
         logger.info(f"Admin created driver: {user_id}")
         detail = await self.get_driver_detail(user_id)
@@ -365,18 +388,23 @@ class AdminDriverService:
             expires_at=utc_now() + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS),
         )
         await self.invitation_repo.create(invitation)
+        invite_payload = DriverInviteSentPayload(
+            invitation_id=invitation.id,
+            business_id=fleet_id,
+            fleet_name=fleet_name,
+            email=email,
+            invite_token=token,
+        ).model_dump(mode="json")
 
-        # Publish event to send email
+        # Commit the revoke + new invitation before emailing, so the token in the
+        # driver's inbox always corresponds to a durable, verifiable row.
+        await self.repo.session.commit()
+
+        # Publish event to send email (non-transactional side effect, post-commit)
         await self.publisher.publish(
             Exchanges.AUTH,
             RoutingKeys.DRIVER_INVITE_SENT,
-            DriverInviteSentPayload(
-                invitation_id=invitation.id,
-                business_id=fleet_id,
-                fleet_name=fleet_name,
-                email=email,
-                invite_token=token,
-            ).model_dump(mode="json"),
+            invite_payload,
         )
 
         logger.info(f"Resent invitation for driver {driver_user_id} to {email}")

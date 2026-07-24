@@ -385,6 +385,9 @@ async def reactivate_account(
         raise HTTPException(status_code=404, detail="Account not found")
 
     credential.is_active = True
+    # Clicking the emailed reactivation link proves ownership of the address,
+    # so an activated account is always verified (otherwise login stays blocked).
+    credential.is_verified = True
     credential.locked_until = None
     credential.failed_attempts = 0
     await session.flush()

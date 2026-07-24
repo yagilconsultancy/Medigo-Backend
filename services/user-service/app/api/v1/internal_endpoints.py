@@ -499,7 +499,12 @@ async def accept_invitation(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
-    await invitation_repo.mark_accepted(invitation.id)
+    # Capture before any write: user_repo.update() calls session.expire_all(), which
+    # expires this ORM object. Touching invitation.id afterwards would trigger a sync
+    # lazy reload and raise MissingGreenlet in the async session.
+    invitation_id = invitation.id
+
+    await invitation_repo.mark_accepted(invitation_id)
 
     user = await user_repo.get_by_id(UUID(request.user_id))
     if user and str(user.role) == str(UserRole.DRIVER):
@@ -510,10 +515,10 @@ async def accept_invitation(
         )
 
     logger.info(
-        f"Invitation {invitation.id} accepted by user {request.user_id}"
+        f"Invitation {invitation_id} accepted by user {request.user_id}"
     )
 
-    return {"accepted": True, "invitation_id": str(invitation.id)}
+    return {"accepted": True, "invitation_id": str(invitation_id)}
 
 
 @router.get("/admin-invitations/verify")
