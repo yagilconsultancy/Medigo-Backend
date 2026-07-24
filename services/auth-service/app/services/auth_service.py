@@ -655,29 +655,16 @@ class AuthService:
 
         validate_password_strength(password)
 
-        # Create credential
+        # Create credential — a valid invite token is proof of identity, so the
+        # driver is verified on activation (no separate email-OTP step).
         credential = UserCredential(
             email=email,
             password_hash=hash_password(password),
             role=UserRole.DRIVER,
             business_id=business_id,
-            is_verified=False,
+            is_verified=True,
         )
         await self.credential_repo.create(credential)
-
-        # Generate OTP
-        otp_code = await self.otp_service.generate_otp(
-            credential.id, "registration", "email"
-        )
-
-        await self._publish_otp_requested(
-            user_id=credential.id,
-            purpose="registration",
-            channel="email",
-            otp_code=otp_code,
-            email=email,
-            phone=None,
-        )
 
         # Accept the invitation in user-service
         await self.user_service_client.accept_invitation(
@@ -697,10 +684,26 @@ class AuthService:
             ).model_dump(mode="json"),
         )
 
-        logger.info(
-            f"Driver registered: {credential.id}, business={business_id}"
+        # Log the driver straight in — activation completes verification.
+        token_pair = self.jwt_handler.create_token_pair(
+            user_id=str(credential.id),
+            role=credential.role,
+            business_id=str(credential.business_id) if credential.business_id else None,
+            email=credential.email,
         )
-        return credential.id, otp_code
+        token_pair.role = credential.role
+        refresh_token_record = RefreshToken(
+            user_id=credential.id,
+            token_hash=hash_token(token_pair.refresh_token),
+            expires_at=utc_now()
+            + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS),
+        )
+        await self.token_repo.create(refresh_token_record)
+
+        logger.info(
+            f"Driver registered and verified: {credential.id}, business={business_id}"
+        )
+        return token_pair
 
     async def verify_admin_invite(self, invite_token: str) -> dict:
         """Verify an admin invitation token via user-service."""
