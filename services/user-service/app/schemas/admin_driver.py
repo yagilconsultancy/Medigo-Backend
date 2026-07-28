@@ -31,6 +31,7 @@ class AdminDriverListItem(BaseModel):
     fleet_name: str | None = None
     account_status: str
     is_online: bool
+    is_on_trip: bool = False
     is_approved: bool
     rating: float
     total_trips: int
@@ -97,6 +98,7 @@ class AdminDriverDetailResponse(BaseModel):
     fleet_name: str | None = None
     account_status: str
     is_online: bool
+    is_on_trip: bool = False
     is_approved: bool
     # True when the login is deactivated pending reactivation after an email change
     # (i.e. account_status is not suspended/deactivated but the credential is inactive).

@@ -86,35 +86,28 @@ class RideRatingConsumer(BaseEventConsumer):
         async for session in get_db():
             driver_repo = DriverRepository(session)
             driver = await driver_repo.get_by_user_id(payload.rated_user_id)
-            if not driver:
-                logger.warning(f"Driver {payload.rated_user_id} not found for rating update")
-                return
-
-            # Update total trips and recalculate rating as running average
-            new_total = driver.total_trips + 1
-            current_rating = float(driver.rating)
-            new_rating = round(
-                (current_rating * driver.total_trips + payload.rating) / new_total, 2
-            )
-
-            await driver_repo.update(
-                payload.rated_user_id,
-                total_trips=new_total,
-                rating=new_rating,
-            )
-            logger.info(
-                f"Driver {payload.rated_user_id} stats updated: "
-                f"trips={new_total}, rating={new_rating}"
-            )
+            if driver:
+                # Rating only — the completed-trip counter is owned by
+                # RideLifecycleConsumer, since most trips are never rated.
+                await driver_repo.record_rating(payload.rated_user_id, payload.rating)
+                logger.info(
+                    f"Driver {payload.rated_user_id} rating updated with "
+                    f"{payload.rating} (ratings={driver.total_ratings + 1})"
+                )
+            else:
+                logger.warning(
+                    f"Driver {payload.rated_user_id} not found for rating update"
+                )
 
 
 class RideLifecycleConsumer(BaseEventConsumer):
     """
-    Consumes ride lifecycle events to manage driver trip status.
+    Consumes ride lifecycle events to manage driver trip status and trip count.
 
     When a driver goes en-route (RIDE_DRIVER_EN_ROUTE), sets is_on_trip = True.
     This keeps drivers assigned to future scheduled rides available until the ride starts.
     When a ride ends (RIDE_COMPLETED, RIDE_CANCELLED, RIDE_NO_SHOW), sets is_on_trip = False.
+    RIDE_COMPLETED additionally credits the driver with a trip.
     """
 
     async def handle(self, envelope: EventEnvelope) -> None:
@@ -171,6 +164,16 @@ class RideLifecycleConsumer(BaseEventConsumer):
             ):
                 # Ride ended - mark driver as available
                 await driver_repo.set_trip_status(driver_id, is_on_trip=False)
+
+                # Only a completed ride counts as a trip. Cancellations and
+                # no-shows free the driver up but earn no credit.
+                if envelope.event_type == RoutingKeys.RIDE_COMPLETED:
+                    await driver_repo.increment_total_trips(driver_id)
+                    logger.info(
+                        f"Driver {driver_id} trip count incremented for "
+                        f"completed ride {ride_id}"
+                    )
+
                 logger.info(
                     f"Driver {driver_id} marked as available after ride {ride_id} "
                     f"ended ({envelope.event_type})"

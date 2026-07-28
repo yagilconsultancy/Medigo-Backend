@@ -253,7 +253,14 @@ async def update_driver_stats_internal(
     _service: str = Depends(_require_internal_service),
     session: AsyncSession = Depends(get_db),
 ):
-    """Update driver stats. Called by ride-service after rating/trip completion."""
+    """
+    Overwrite driver stats.
+
+    Note: nothing calls this in the normal flow. Trip counts are maintained by
+    the ride lifecycle consumer (ride.completed) and ratings by the rating
+    consumer; see app/events/consumers.py. Kept as an operational escape hatch
+    for correcting a drifted profile.
+    """
     from app.repositories.driver_repo import DriverRepository
 
     driver_repo = DriverRepository(session)

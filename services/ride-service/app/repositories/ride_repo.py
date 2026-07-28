@@ -267,6 +267,25 @@ class RideRepository:
             "average_earnings": round(float(avg_fare), 2),
         }
 
+    async def get_batch_driver_trip_counts(
+        self, driver_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        """Completed-ride counts keyed by driver, zero-filled for the misses."""
+        if not driver_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(Ride.driver_id, func.count())
+            .where(
+                Ride.driver_id.in_(driver_ids),
+                Ride.status == RideStatus.COMPLETED,
+                Ride.deleted_at.is_(None),
+            )
+            .group_by(Ride.driver_id)
+        )
+        counts = {row[0]: row[1] for row in result.all()}
+        return {driver_id: counts.get(driver_id, 0) for driver_id in driver_ids}
+
     async def get_driver_rides_in_period(
         self, driver_id: UUID, start: datetime, end: datetime
     ) -> list[Ride]:

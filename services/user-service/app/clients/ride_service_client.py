@@ -50,13 +50,16 @@ class RideServiceClient:
             return None
 
     async def get_driver_completed_rides(
-        self, driver_id: UUID, page: int = 1, limit: int = 20
+        self, driver_id: UUID, page: int = 1, limit: int = 20, status: str | None = None
     ) -> dict | None:
         try:
+            params: dict = {"page": page, "limit": limit}
+            if status:
+                params["status"] = status
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/rides/driver/{driver_id}/completed",
-                    params={"page": page, "limit": limit},
+                    params=params,
                     headers=HEADERS,
                 )
                 if resp.status_code == 200:
@@ -125,6 +128,29 @@ class RideServiceClient:
         except httpx.RequestError as e:
             logger.error(f"Ride service batch driver ratings error: {e}")
             return []
+
+    async def get_batch_driver_trip_counts(
+        self, driver_ids: list[UUID]
+    ) -> dict[str, int]:
+        """Completed-ride count per driver, keyed by driver id string."""
+        if not driver_ids:
+            return {}
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/internal/drivers/batch-trip-counts",
+                    json={"driver_ids": [str(did) for did in driver_ids]},
+                    headers=HEADERS,
+                )
+                if resp.status_code == 200:
+                    return resp.json().get("trip_counts", {})
+                logger.warning(
+                    f"Ride service batch driver trip counts returned {resp.status_code}"
+                )
+                return {}
+        except httpx.RequestError as e:
+            logger.error(f"Ride service batch driver trip counts error: {e}")
+            return {}
 
     # --- Rider methods ---
 

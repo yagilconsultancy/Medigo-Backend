@@ -80,6 +80,35 @@ class DriverRepository:
         """Update driver's trip status (called by ride events)."""
         await self.update(user_id, is_on_trip=is_on_trip)
 
+    async def increment_total_trips(self, user_id: UUID) -> None:
+        """Bump the completed-trip counter (called on ride.completed)."""
+        await self.session.execute(
+            update(DriverProfile)
+            .where(DriverProfile.user_id == user_id)
+            .values(total_trips=DriverProfile.total_trips + 1)
+        )
+
+    async def record_rating(self, user_id: UUID, rating: int) -> None:
+        """
+        Fold a new rider->driver rating into the driver's running average.
+
+        Weighted by total_ratings rather than total_trips: unrated completed
+        trips must not dilute the average.
+        """
+        await self.session.execute(
+            update(DriverProfile)
+            .where(DriverProfile.user_id == user_id)
+            .values(
+                rating=func.round(
+                    (
+                        DriverProfile.rating * DriverProfile.total_ratings + rating
+                    ) / (DriverProfile.total_ratings + 1),
+                    2,
+                ),
+                total_ratings=DriverProfile.total_ratings + 1,
+            )
+        )
+
     async def get_all_with_specialty(self) -> list[DriverProfile]:
         """Get all drivers with a specialty (caregivers)."""
         result = await self.session.execute(

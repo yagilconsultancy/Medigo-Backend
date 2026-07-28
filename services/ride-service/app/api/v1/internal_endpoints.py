@@ -116,12 +116,16 @@ async def get_driver_completed_rides(
     driver_id: UUID,
     page: int = 1,
     limit: int = 50,
+    status: str | None = None,
     _service: str = Depends(_require_internal_service),
     session: AsyncSession = Depends(get_db),
 ):
     repo = RideRepository(session)
     offset = (page - 1) * limit
-    rides, total = await repo.get_by_driver(driver_id, "completed", offset, limit)
+    # Defaults to completed rides for existing callers; "all" drops the status
+    # filter so admins can see past, current and upcoming assignments together.
+    status_filter = None if status == "all" else (status or "completed")
+    rides, total = await repo.get_by_driver(driver_id, status_filter, offset, limit)
     return {
         "rides": [RideResponse.model_validate(r).model_dump(mode="json") for r in rides],
         "total": total,
@@ -262,6 +266,28 @@ async def get_batch_rider_activity_internal(
     repo = RideRepository(session)
     result = await repo.get_batch_rider_activity(body.rider_ids)
     return result
+
+
+class BatchDriverTripCountsRequest(BaseModel):
+    driver_ids: List[UUID]
+
+
+@router.post("/drivers/batch-trip-counts")
+async def get_batch_driver_trip_counts_internal(
+    body: BatchDriverTripCountsRequest,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Completed-ride count per driver. Called by user-service's
+    reconcile_driver_trips script to resync the denormalized total_trips
+    counter against this service's authoritative ride table.
+
+    Drivers with no completed rides are returned with a count of 0.
+    """
+    repo = RideRepository(session)
+    counts = await repo.get_batch_driver_trip_counts(body.driver_ids)
+    return {"trip_counts": {str(k): v for k, v in counts.items()}}
 
 
 # ---- Driver Dashboard Stats (for admin service provider page) ----

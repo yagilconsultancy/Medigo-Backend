@@ -317,12 +317,20 @@ async def get_driver_trips(
     driver_id: UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+    status: str | None = Query(
+        None,
+        description=(
+            "Ride status filter. 'all' returns past, current and upcoming "
+            "assignments; also accepts 'upcoming', 'completed', 'cancelled' or a "
+            "concrete ride status. Defaults to completed."
+        ),
+    ),
     _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: AdminDriverService = Depends(_get_service),
 ):
     """Get a driver's trip history from ride-service."""
     result = await service.ride_client.get_driver_completed_rides(
-        driver_id, page=page, limit=limit
+        driver_id, page=page, limit=limit, status=status
     )
     return StandardResponse(data=result or {"rides": [], "total": 0})
 
