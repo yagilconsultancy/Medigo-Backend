@@ -1,7 +1,9 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from mediride_common.schemas.enums import IDType, KYCStatus
 
 
 # --- KPIs ---
@@ -30,6 +32,7 @@ class AdminRiderListItem(BaseModel):
     frequency: str = "N/A"
     open_tickets: int = 0
     status: str
+    kyc_status: str = KYCStatus.NOT_STARTED
 
 
 class AdminRiderListResponse(BaseModel):
@@ -71,6 +74,36 @@ class RiderRideHistoryItem(BaseModel):
     fare: float | None = None
 
 
+class RiderKYCInfo(BaseModel):
+    """Identity verification state for a rider."""
+
+    kyc_status: KYCStatus = KYCStatus.NOT_STARTED
+    id_type: str | None = None
+    id_number: str | None = None
+    id_issuing_country: str | None = None
+    id_issuing_authority: str | None = None
+    id_expiry: date | None = None
+    dob_verified: bool = False
+    submitted_at: datetime | None = None
+    verified_at: datetime | None = None
+    verified_by: UUID | None = None
+    rejection_reason: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class RiderDocumentInfo(BaseModel):
+    id: UUID
+    document_type: str
+    file_name: str | None = None
+    verification_status: str = "pending"
+    rejection_reason: str | None = None
+    expires_at: date | None = None
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class AdminRiderDetailResponse(BaseModel):
     user_id: UUID
     first_name: str
@@ -81,9 +114,16 @@ class AdminRiderDetailResponse(BaseModel):
     date_of_birth: date | None = None
     gender: str | None = None
     home_address: str | None = None
+    city: str | None = None
+    province: str | None = None
+    postal_code: str | None = None
+    country: str | None = None
     medical_notes: str | None = None
     insurance_provider: str | None = None
     insurance_policy_number: str | None = None
+    insurance_group_number: str | None = None
+    insurance_member_id: str | None = None
+    insurance_expiry: date | None = None
     status: str
     suspension_reason: str | None = None
     suspended_at: datetime | None = None
@@ -91,6 +131,58 @@ class AdminRiderDetailResponse(BaseModel):
     trip_stats: RiderTripStats = RiderTripStats()
     emergency_contacts: list[RiderEmergencyContactInfo] = []
     payment_methods: list[RiderPaymentMethodInfo] = []
+    kyc: RiderKYCInfo = RiderKYCInfo()
+    documents: list[RiderDocumentInfo] = []
+
+
+# --- Update / KYC actions ---
+
+
+class UpdateRiderRequest(BaseModel):
+    """Partial update — only fields explicitly sent are written.
+
+    Lengths mirror the DB columns so over-long input returns 422 rather than
+    reaching Postgres.
+    """
+
+    first_name: str | None = Field(None, max_length=100)
+    last_name: str | None = Field(None, max_length=100)
+    phone: str | None = Field(None, max_length=20)
+    date_of_birth: date | None = None
+    gender: str | None = Field(None, max_length=20)
+    home_address: str | None = Field(None, max_length=500)
+    city: str | None = Field(None, max_length=100)
+    province: str | None = Field(None, max_length=50)
+    postal_code: str | None = Field(None, max_length=20)
+    country: str | None = Field(None, max_length=100)
+    medical_notes: str | None = None
+    insurance_provider: str | None = Field(None, max_length=255)
+    insurance_policy_number: str | None = Field(None, max_length=100)
+    insurance_group_number: str | None = Field(None, max_length=100)
+    insurance_member_id: str | None = Field(None, max_length=100)
+    insurance_expiry: date | None = None
+    # KYC identity block; verification state is changed via the approve/reject
+    # actions rather than written directly here.
+    id_type: IDType | None = None
+    id_number: str | None = Field(None, max_length=100)
+    id_issuing_country: str | None = Field(None, max_length=100)
+    id_issuing_authority: str | None = Field(None, max_length=255)
+    id_expiry: date | None = None
+    dob_verified: bool | None = None
+
+
+class RejectRiderKYCRequest(BaseModel):
+    rejection_reason: str = Field(..., min_length=1, max_length=500)
+
+
+class SubmitRiderKYCRequest(BaseModel):
+    """Rider-facing KYC submission."""
+
+    id_type: IDType
+    id_number: str = Field(..., min_length=1, max_length=100)
+    id_issuing_country: str | None = Field(None, max_length=100)
+    id_issuing_authority: str | None = Field(None, max_length=255)
+    id_expiry: date | None = None
 
 
 # --- Profiles (card grid) ---

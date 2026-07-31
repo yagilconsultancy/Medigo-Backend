@@ -197,6 +197,36 @@ async def batch_get_users_internal(
     }
 
 
+@router.get("/users/search")
+async def search_users_internal(
+    q: str = "",
+    role: str | None = None,
+    limit: int = 500,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+):
+    """Resolve a free-text query to matching user IDs.
+
+    Lets other services filter their own tables by person without duplicating
+    name matching. ride-service uses it so an admin can search bookings by
+    client name, which is not a column on rides.
+    """
+    from app.models.user import User
+    from app.repositories.user_repo import user_search_filter
+
+    if not q.strip():
+        return {"user_ids": []}
+
+    query = select(User.id).where(
+        User.deleted_at.is_(None), user_search_filter(q.strip())
+    )
+    if role:
+        query = query.where(User.role == role)
+
+    result = await session.execute(query.limit(limit))
+    return {"user_ids": [str(row) for row in result.scalars().all()]}
+
+
 @router.get("/drivers/{driver_id}/profile")
 async def get_driver_profile_internal(
     driver_id: UUID,

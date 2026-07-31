@@ -428,6 +428,12 @@ async def add_booking_note(
     session: AsyncSession = Depends(get_db),
 ):
     """Add an admin note to a booking."""
-    note = await service.add_note(ride_id, user.id, body.content, body.author_type)
+    note = await service.add_note(
+        ride_id,
+        user.id,
+        body.content,
+        body.author_type,
+        is_driver_visible=body.is_driver_visible,
+    )
     await session.commit()
     return StandardResponse(data=note, message="Note added")

@@ -284,6 +284,67 @@ class RideEventConsumer(BaseEventConsumer):
                         body="Your booking details have been updated by our team.",
                         data={"ride_id": str(ride_id), "screen": "ride_detail"},
                     )
+                    # The assigned driver is working off these details, so they
+                    # need to know they changed too.
+                    driver_id = data.get("driver_id")
+                    if driver_id:
+                        changed = data.get("changed_fields") or []
+                        await self._send_notification(
+                            svc=svc,
+                            user_id=UUID(str(driver_id)),
+                            title="Ride Details Updated",
+                            body=(
+                                "A ride assigned to you has been updated. "
+                                "Check the latest details before pickup."
+                            ),
+                            data={
+                                "ride_id": str(ride_id),
+                                "changed_fields": changed,
+                                "screen": "ride_detail",
+                            },
+                        )
+
+                # RIDE NOTE ADDED - Admin left a note for the assigned driver
+                elif envelope.event_type == RoutingKeys.RIDE_NOTE_ADDED:
+                    data = dict(envelope.payload or {})
+                    ride_id = data.get("ride_id")
+                    driver_id = data.get("driver_id")
+                    if not ride_id or not driver_id:
+                        logger.warning(
+                            "Skipping ride note notification: missing ride_id or driver_id",
+                            extra={"payload_keys": sorted(data.keys())},
+                        )
+                        return
+                    await self._send_notification(
+                        svc=svc,
+                        user_id=UUID(str(driver_id)),
+                        title="New Note From Dispatch",
+                        body="Dispatch added a note to one of your rides.",
+                        data={
+                            "ride_id": str(ride_id),
+                            "note_id": str(data.get("note_id") or ""),
+                            "screen": "ride_detail",
+                        },
+                    )
+
+                # DRIVER UNASSIGNED - Ride was taken off this driver
+                elif envelope.event_type == RoutingKeys.RIDE_DRIVER_UNASSIGNED:
+                    data = dict(envelope.payload or {})
+                    ride_id = data.get("ride_id")
+                    driver_id = data.get("driver_id")
+                    if not ride_id or not driver_id:
+                        logger.warning(
+                            "Skipping driver unassigned notification: missing ride_id or driver_id",
+                            extra={"payload_keys": sorted(data.keys())},
+                        )
+                        return
+                    await self._send_notification(
+                        svc=svc,
+                        user_id=UUID(str(driver_id)),
+                        title="Ride Reassigned",
+                        body="A ride previously assigned to you has been reassigned.",
+                        data={"ride_id": str(ride_id), "screen": "ride_history"},
+                    )
 
                 # RIDE CONFIRMED - Admin approves the ride
                 elif envelope.event_type == RoutingKeys.RIDE_CONFIRMED:
@@ -705,8 +766,10 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
         routing_keys=[
             RoutingKeys.RIDE_CREATED,  # When rider books a ride
             RoutingKeys.RIDE_UPDATED,  # When admin edits booking details
+            RoutingKeys.RIDE_NOTE_ADDED,  # Admin note flagged for the driver
             RoutingKeys.RIDE_CONFIRMED,  # When admin approves
             RoutingKeys.RIDE_DRIVER_ASSIGNED,  # When driver is assigned
+            RoutingKeys.RIDE_DRIVER_UNASSIGNED,  # Ride taken off a driver
             RoutingKeys.RIDE_DRIVER_EN_ROUTE,  # Driver on the way
             RoutingKeys.RIDE_DRIVER_ARRIVED,  # Driver arrived at pickup
             RoutingKeys.RIDE_IN_PROGRESS,  # Ride started

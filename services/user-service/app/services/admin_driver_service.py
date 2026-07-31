@@ -422,17 +422,28 @@ class AdminDriverService:
         # Email changes go through the auth credential + reactivation flow, not here.
         new_email = update_data.pop("email", None)
 
-        # Handle vehicle assignment separately
-        vehicle_id = update_data.pop("vehicle_id", None)
-        if vehicle_id and self.vehicle_repo:
-            # Unassign any current vehicle, then assign new one
-            await self.vehicle_repo.unassign_driver_from_all(driver_user_id)
-            await self.vehicle_repo.update(vehicle_id, driver_profile_id=driver_user_id)
+        # Vehicle assignment lives on the vehicles table, not driver_profiles.
+        # `in update_data` rather than a truthiness check: an explicit null is a
+        # request to unassign, which a falsy check would silently drop.
+        vehicle_sync: dict = {}
+        if "vehicle_id" in update_data:
+            vehicle_id = update_data.pop("vehicle_id")
+            if self.vehicle_repo:
+                await self.vehicle_repo.unassign_driver_from_all(driver_user_id)
+                if vehicle_id:
+                    await self.vehicle_repo.update(
+                        vehicle_id, driver_profile_id=driver_user_id
+                    )
+                # Mirror the vehicle onto driver_profiles. Without this the
+                # admin list/detail keep showing the previous vehicle's details
+                # while the vehicles table says otherwise.
+                vehicle_sync = await self._vehicle_snapshot(vehicle_id)
 
         # Split user fields vs driver profile fields
         user_fields = {}
         driver_fields = {}
-        user_field_names = {"first_name", "last_name", "phone"}
+        # gender lives on users, not driver_profiles.
+        user_field_names = {"first_name", "last_name", "phone", "gender"}
 
         for key, value in update_data.items():
             if key in user_field_names:
@@ -441,6 +452,11 @@ class AdminDriverService:
                 driver_fields["business_id"] = value
             else:
                 driver_fields[key] = value
+
+        # Explicit vehicle_* edits win over the synced snapshot, so an admin can
+        # still correct a driver whose vehicle isn't in the fleet yet.
+        if vehicle_sync:
+            driver_fields = {**vehicle_sync, **driver_fields}
 
         if user_fields:
             await self.repo.update_user(driver_user_id, **user_fields)
@@ -459,6 +475,40 @@ class AdminDriverService:
 
         logger.info(f"Admin updated driver: {driver_user_id}")
         return await self.get_driver_detail(driver_user_id)
+
+    async def _vehicle_snapshot(self, vehicle_id: UUID | None) -> dict:
+        """Denormalized vehicle columns to copy onto driver_profiles.
+
+        Clearing the assignment blanks them rather than leaving the old
+        vehicle's details stranded on the driver.
+        """
+        blank = {
+            "vehicle_type": None,
+            "vehicle_make": None,
+            "vehicle_model": None,
+            "vehicle_year": None,
+            "vehicle_plate": None,
+            "vehicle_color": None,
+            "vehicle_vin": None,
+            "vehicle_photo_url": None,
+        }
+        if not vehicle_id or not self.vehicle_repo:
+            return blank
+
+        vehicle = await self.vehicle_repo.get_by_id(vehicle_id)
+        if not vehicle:
+            return blank
+
+        return {
+            "vehicle_type": vehicle.category,
+            "vehicle_make": vehicle.make,
+            "vehicle_model": vehicle.model,
+            "vehicle_year": vehicle.year,
+            "vehicle_plate": vehicle.plate_number,
+            "vehicle_color": vehicle.color,
+            "vehicle_vin": vehicle.vin,
+            "vehicle_photo_url": vehicle.photo_url,
+        }
 
     async def _handle_email_change(
         self,

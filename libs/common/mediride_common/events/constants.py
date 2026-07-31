@@ -34,6 +34,7 @@ class RoutingKeys:
     # Ride events
     RIDE_CREATED = "ride.created"
     RIDE_UPDATED = "ride.updated"
+    RIDE_NOTE_ADDED = "ride.note_added"
     RIDE_CONFIRMED = "ride.confirmed"
     RIDE_DRIVER_ASSIGNED = "ride.driver_assigned"
     RIDE_DRIVER_UNASSIGNED = "ride.driver_unassigned"

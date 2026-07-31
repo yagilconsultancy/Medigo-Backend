@@ -1,12 +1,13 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db, get_publisher, get_s3_client
 from app.config import settings
 from app.repositories.document_repo import DocumentRepository
 from app.schemas.document import (
+    RIDER_DOCUMENT_TYPES,
     DocumentResponse,
     DocumentType,
     DocumentUploadResponse,
@@ -43,10 +44,24 @@ def _get_document_service(
 async def upload_document(
     document_type: str = Form(...),
     file: UploadFile = File(...),
-    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER])),
     service: DocumentService = Depends(_get_document_service),
 ):
-    """Upload a driver document (ID front/back, license, etc.)."""
+    """Upload an identity or credential document.
+
+    Drivers upload their licence and vehicle paperwork; riders upload identity
+    documents for KYC. Riders are limited to the identity types — the vehicle
+    and transport-certification types are meaningless for them.
+    """
+    if user.role == UserRole.RIDER and document_type not in {
+        t.value for t in RIDER_DOCUMENT_TYPES
+    }:
+        allowed = ", ".join(sorted(t.value for t in RIDER_DOCUMENT_TYPES))
+        raise HTTPException(
+            status_code=422,
+            detail=f"Riders may only upload identity documents: {allowed}",
+        )
+
     file_data = await file.read()
     document = await service.upload_document(
         user_id=user.id,
@@ -74,10 +89,10 @@ async def upload_document(
     response_model=StandardResponse[list[DocumentUploadResponse]],
 )
 async def list_my_documents(
-    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER])),
     service: DocumentService = Depends(_get_document_service),
 ):
-    """List all documents for the current driver."""
+    """List all documents belonging to the current user."""
     documents = await service.list_documents(user.id)
     return StandardResponse(
         data=[
@@ -101,7 +116,7 @@ async def list_my_documents(
 )
 async def get_my_document(
     document_id: UUID,
-    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER])),
     service: DocumentService = Depends(_get_document_service),
 ):
     """Get a specific document with a presigned download URL."""

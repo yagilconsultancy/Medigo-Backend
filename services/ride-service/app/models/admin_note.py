@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, false, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,6 +24,11 @@ class AdminNote(Base):
         String(20), nullable=False, default="admin"
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Admin notes are internal by default; flagging one surfaces it to the
+    # assigned driver on the ride detail they already fetch.
+    is_driver_visible: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=false(), default=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

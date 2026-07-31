@@ -9,6 +9,7 @@ from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_publisher
 from app.repositories.admin_rider_repo import AdminRiderRepository
+from app.repositories.document_repo import DocumentRepository
 from app.repositories.rider_issue_repo import RiderIssueRepository
 from app.schemas.admin_rider import (
     AddIssueNoteRequest,
@@ -17,10 +18,12 @@ from app.schemas.admin_rider import (
     AdminRiderListResponse,
     AdminRiderProfileCard,
     CreateRiderIssueRequest,
+    RejectRiderKYCRequest,
     RiderIssueDetailResponse,
     RiderIssueListResponse,
     SuspendRiderRequest,
     UpdateIssueStatusRequest,
+    UpdateRiderRequest,
 )
 from app.services.admin_rider_service import AdminRiderService
 from mediride_common.auth.dependencies import require_role
@@ -43,6 +46,7 @@ def _get_service(
         payment_client=PaymentServiceClient(settings.PAYMENT_SERVICE_URL),
         auth_client=AuthServiceClient(settings.AUTH_SERVICE_URL),
         publisher=publisher,
+        document_repo=DocumentRepository(session),
     )
 
 
@@ -176,15 +180,21 @@ async def add_rider_issue_note(
 async def list_riders(
     search: str | None = Query(None),
     status: str | None = Query(None),
+    kyc_status: str | None = Query(None),
     sort_by: str = Query("created_at", pattern="^(created_at|name)$"),
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: AdminRiderService = Depends(_get_service),
 ):
-    """List all riders with KPIs, search, status filter, and pagination."""
+    """List all riders with KPIs, search, status filters, and pagination."""
     result = await service.list_riders(
-        search=search, status=status, sort_by=sort_by, page=page, limit=limit
+        search=search,
+        status=status,
+        kyc_status=kyc_status,
+        sort_by=sort_by,
+        page=page,
+        limit=limit,
     )
     return StandardResponse(data=result)
 
@@ -201,6 +211,58 @@ async def get_rider_detail(
         return StandardResponse(data=result)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/{rider_id}", response_model=StandardResponse[AdminRiderDetailResponse])
+async def update_rider(
+    rider_id: UUID,
+    body: UpdateRiderRequest,
+    admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminRiderService = Depends(_get_service),
+):
+    """Update a rider's profile and KYC identity details (partial)."""
+    try:
+        result = await service.update_rider(rider_id, body, admin.id)
+        return StandardResponse(data=result, message="Rider updated")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put(
+    "/{rider_id}/kyc/approve",
+    response_model=StandardResponse[AdminRiderDetailResponse],
+)
+async def approve_rider_kyc(
+    rider_id: UUID,
+    admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminRiderService = Depends(_get_service),
+):
+    """Mark a rider's identity as verified."""
+    try:
+        result = await service.approve_rider_kyc(rider_id, admin.id)
+        return StandardResponse(data=result, message="Rider KYC verified")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put(
+    "/{rider_id}/kyc/reject",
+    response_model=StandardResponse[AdminRiderDetailResponse],
+)
+async def reject_rider_kyc(
+    rider_id: UUID,
+    body: RejectRiderKYCRequest,
+    admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminRiderService = Depends(_get_service),
+):
+    """Reject a rider's KYC submission with a reason."""
+    try:
+        result = await service.reject_rider_kyc(
+            rider_id, admin.id, body.rejection_reason
+        )
+        return StandardResponse(data=result, message="Rider KYC rejected")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.put(

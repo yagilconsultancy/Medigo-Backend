@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.auth_service_client import AuthServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_s3_client
+from app.repositories.admin_rider_repo import AdminRiderRepository
 from app.repositories.user_repo import UserRepository
 from app.repositories.emergency_contact_repo import EmergencyContactRepository
 from app.models.emergency_contact import EmergencyContact
+from app.schemas.admin_rider import RiderKYCInfo, SubmitRiderKYCRequest
 from app.schemas.user import (
     ConsentResponse,
     EmergencyContactCreate,
@@ -20,10 +22,12 @@ from app.schemas.user import (
     UpdateProfileRequest,
     UserProfileResponse,
 )
+from app.services.rider_kyc_service import RiderKYCService
 from app.services.user_service import UserService
-from mediride_common.auth.dependencies import get_current_user
+from mediride_common.auth.dependencies import get_current_user, require_role
 from mediride_common.auth.models import UserClaims
 from mediride_common.exceptions import AuthorizationError, ValidationError
+from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import StandardResponse
 from mediride_common.storage.s3_client import S3StorageClient
 
@@ -161,6 +165,41 @@ async def update_my_profile_json(
     return StandardResponse(
         data=data,
         message="Profile updated",
+    )
+
+
+# Rider KYC (self-service)
+def _rider_kyc_service(session: AsyncSession) -> RiderKYCService:
+    return RiderKYCService(AdminRiderRepository(session))
+
+
+@router.get("/me/kyc", response_model=StandardResponse[RiderKYCInfo])
+async def get_my_kyc(
+    user: UserClaims = Depends(require_role([UserRole.RIDER])),
+    session: AsyncSession = Depends(get_db),
+):
+    """The rider's own identity-verification status.
+
+    A rider who has never submitted has no rider_kyc row, which reads as
+    not_started rather than a 404.
+    """
+    record = await _rider_kyc_service(session).get_status(user.id)
+    return StandardResponse(
+        data=RiderKYCInfo.model_validate(record) if record else RiderKYCInfo()
+    )
+
+
+@router.post("/me/kyc", response_model=StandardResponse[RiderKYCInfo])
+async def submit_my_kyc(
+    request: SubmitRiderKYCRequest,
+    user: UserClaims = Depends(require_role([UserRole.RIDER])),
+    session: AsyncSession = Depends(get_db),
+):
+    """Submit identity details for admin review."""
+    record = await _rider_kyc_service(session).submit(user.id, request)
+    return StandardResponse(
+        data=RiderKYCInfo.model_validate(record),
+        message="Identity details submitted for review",
     )
 
 

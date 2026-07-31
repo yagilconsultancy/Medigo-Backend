@@ -206,6 +206,37 @@ class UserServiceClient:
             logger.error(f"Error batch fetching users: {e}")
             return []
 
+    async def search_user_ids(
+        self, query: str, role: str | None = None
+    ) -> list[UUID] | None:
+        """Resolve a free-text person query to user IDs.
+
+        Returns ``None`` — not ``[]`` — when the lookup itself fails, so callers
+        can tell "user-service is down, search on my own columns only" apart from
+        "nobody matched that name".
+        """
+        if not query.strip():
+            return []
+        try:
+            params: dict[str, str] = {"q": query.strip()}
+            if role:
+                params["role"] = role
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.base_url}/internal/users/search",
+                    params=params,
+                    headers={"X-Internal-Service": "ride-service"},
+                )
+                if resp.status_code == 200:
+                    return [
+                        UUID(uid) for uid in resp.json().get("user_ids", [])
+                    ]
+                logger.warning(f"Failed to search users: {resp.status_code}")
+                return None
+        except (httpx.RequestError, ValueError) as e:
+            logger.error(f"Error searching users: {e}")
+            return None
+
     async def get_drivers_with_details(self, driver_ids: list[UUID]) -> list[dict]:
         """Batch get driver details with fleet info."""
         if not driver_ids:

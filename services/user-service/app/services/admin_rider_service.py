@@ -10,6 +10,7 @@ from app.clients.ride_service_client import RideServiceClient
 from app.models.rider_issue import RiderIssue
 from app.models.rider_issue_note import RiderIssueNote
 from app.repositories.admin_rider_repo import AdminRiderRepository
+from app.repositories.document_repo import DocumentRepository
 from app.repositories.rider_issue_repo import RiderIssueRepository
 from app.schemas.admin_rider import (
     AddIssueNoteRequest,
@@ -27,14 +28,27 @@ from app.schemas.admin_rider import (
     RiderIssueKPIs,
     RiderIssueListItem,
     RiderIssueListResponse,
+    RiderDocumentInfo,
     RiderIssueNoteResponse,
+    RiderKYCInfo,
     RiderPaymentMethodInfo,
     RiderTripStats,
+    UpdateRiderRequest,
 )
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
+from mediride_common.schemas.enums import KYCStatus
 
 logger = logging.getLogger(__name__)
+
+
+def _to_kyc_info(kyc) -> RiderKYCInfo:
+    """Normalise a RiderKYC row (or the not-started placeholder dict) to a schema."""
+    if kyc is None:
+        return RiderKYCInfo()
+    if isinstance(kyc, dict):
+        return RiderKYCInfo(**kyc)
+    return RiderKYCInfo.model_validate(kyc)
 
 
 class AdminRiderService:
@@ -46,6 +60,7 @@ class AdminRiderService:
         payment_client: PaymentServiceClient,
         auth_client: AuthServiceClient,
         publisher: EventPublisher,
+        document_repo: "DocumentRepository | None" = None,
     ):
         self.repo = repo
         self.issue_repo = issue_repo
@@ -53,6 +68,9 @@ class AdminRiderService:
         self.payment_client = payment_client
         self.auth_client = auth_client
         self.publisher = publisher
+        # Optional so existing callers and unit-test fakes keep working; the
+        # detail response simply reports no documents without it.
+        self.document_repo = document_repo
 
     # --- Helpers ---
 
@@ -84,6 +102,7 @@ class AdminRiderService:
         self,
         search: str | None = None,
         status: str | None = None,
+        kyc_status: str | None = None,
         sort_by: str = "created_at",
         page: int = 1,
         limit: int = 20,
@@ -93,7 +112,12 @@ class AdminRiderService:
         # Get KPIs and riders in sequence (same DB session)
         kpis_data = await self.repo.get_rider_kpis()
         riders_data, total = await self.repo.list_riders_for_admin(
-            search=search, status=status, sort_by=sort_by, offset=offset, limit=limit
+            search=search,
+            status=status,
+            kyc_status=kyc_status,
+            sort_by=sort_by,
+            offset=offset,
+            limit=limit,
         )
 
         # Get open ticket counts
@@ -127,6 +151,7 @@ class AdminRiderService:
                 frequency=self._classify_frequency(trips_7d, trips_30d),
                 open_tickets=ticket_counts.get(r["user_id"], 0),
                 status=r["status"],
+                kyc_status=r.get("kyc_status", KYCStatus.NOT_STARTED),
             ))
 
         return AdminRiderListResponse(
@@ -179,6 +204,14 @@ class AdminRiderService:
             for pm in (payment_methods or [])
         ]
 
+        # Identity documents the rider uploaded for KYC review.
+        doc_list: list[RiderDocumentInfo] = []
+        if self.document_repo:
+            documents = await self.document_repo.list_by_user(rider_id)
+            doc_list = [
+                RiderDocumentInfo.model_validate(doc) for doc in documents
+            ]
+
         return AdminRiderDetailResponse(
             user_id=detail["user_id"],
             first_name=detail["first_name"],
@@ -189,9 +222,16 @@ class AdminRiderService:
             date_of_birth=detail.get("date_of_birth"),
             gender=detail.get("gender"),
             home_address=detail.get("home_address"),
+            city=detail.get("city"),
+            province=detail.get("province"),
+            postal_code=detail.get("postal_code"),
+            country=detail.get("country"),
             medical_notes=detail.get("medical_notes"),
             insurance_provider=detail.get("insurance_provider"),
             insurance_policy_number=detail.get("insurance_policy_number"),
+            insurance_group_number=detail.get("insurance_group_number"),
+            insurance_member_id=detail.get("insurance_member_id"),
+            insurance_expiry=detail.get("insurance_expiry"),
             status=detail["status"],
             suspension_reason=detail.get("suspension_reason"),
             suspended_at=detail.get("suspended_at"),
@@ -199,6 +239,8 @@ class AdminRiderService:
             trip_stats=trip_stats,
             emergency_contacts=ec_list,
             payment_methods=pm_list,
+            kyc=_to_kyc_info(detail.get("kyc")),
+            documents=doc_list,
         )
 
     # --- Suspend / Reinstate ---
@@ -252,6 +294,84 @@ class AdminRiderService:
             },
         )
 
+        return await self.get_rider_detail(rider_id)
+
+    # --- Rider profile & KYC ---
+
+    # Fields that live on rider_kyc rather than users.
+    _KYC_FIELDS = {
+        "id_type",
+        "id_number",
+        "id_issuing_country",
+        "id_issuing_authority",
+        "id_expiry",
+        "dob_verified",
+    }
+
+    async def update_rider(
+        self, rider_id: UUID, request: UpdateRiderRequest, admin_id: UUID
+    ) -> AdminRiderDetailResponse:
+        detail = await self.repo.get_rider_detail(rider_id)
+        if not detail:
+            raise ValueError("Rider not found")
+
+        updates = request.model_dump(exclude_unset=True)
+        user_fields = {k: v for k, v in updates.items() if k not in self._KYC_FIELDS}
+        kyc_fields = {k: v for k, v in updates.items() if k in self._KYC_FIELDS}
+
+        if user_fields:
+            await self.repo.update_user(rider_id, **user_fields)
+        if kyc_fields:
+            await self.repo.upsert_kyc(rider_id, **kyc_fields)
+
+        logger.info(f"Admin {admin_id} updated rider {rider_id}")
+        return await self.get_rider_detail(rider_id)
+
+    # Rider-initiated submission lives in RiderKYCService — it is the rider
+    # acting on their own record and needs none of the clients this service holds.
+
+    async def approve_rider_kyc(
+        self, rider_id: UUID, admin_id: UUID
+    ) -> AdminRiderDetailResponse:
+        detail = await self.repo.get_rider_detail(rider_id)
+        if not detail:
+            raise ValueError("Rider not found")
+
+        record = await self.repo.get_kyc(rider_id)
+        if record is None or record.kyc_status == KYCStatus.NOT_STARTED:
+            raise ValueError("Rider has not submitted KYC details")
+        if record.kyc_status == KYCStatus.VERIFIED:
+            raise ValueError("Rider KYC is already verified")
+
+        await self.repo.upsert_kyc(
+            rider_id,
+            kyc_status=KYCStatus.VERIFIED,
+            verified_at=datetime.now(timezone.utc),
+            verified_by=admin_id,
+            rejection_reason=None,
+        )
+        logger.info(f"Admin {admin_id} verified KYC for rider {rider_id}")
+        return await self.get_rider_detail(rider_id)
+
+    async def reject_rider_kyc(
+        self, rider_id: UUID, admin_id: UUID, reason: str
+    ) -> AdminRiderDetailResponse:
+        detail = await self.repo.get_rider_detail(rider_id)
+        if not detail:
+            raise ValueError("Rider not found")
+
+        record = await self.repo.get_kyc(rider_id)
+        if record is None or record.kyc_status == KYCStatus.NOT_STARTED:
+            raise ValueError("Rider has not submitted KYC details")
+
+        await self.repo.upsert_kyc(
+            rider_id,
+            kyc_status=KYCStatus.REJECTED,
+            rejection_reason=reason,
+            verified_at=None,
+            verified_by=admin_id,
+        )
+        logger.info(f"Admin {admin_id} rejected KYC for rider {rider_id}")
         return await self.get_rider_detail(rider_id)
 
     # --- Rider Profiles ---

@@ -1,10 +1,28 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+
+
+def user_search_filter(search: str):
+    """ILIKE predicate matching a user by name, email or phone.
+
+    Shared by the admin rider list and the internal user-search endpoint so an
+    operator's query means the same thing wherever they type it. The concat
+    clause is what makes a full "First Last" query match, since neither name
+    column contains the whole string on its own.
+    """
+    pattern = f"%{search}%"
+    return or_(
+        User.first_name.ilike(pattern),
+        User.last_name.ilike(pattern),
+        User.email.ilike(pattern),
+        User.phone.ilike(pattern),
+        func.concat(User.first_name, " ", User.last_name).ilike(pattern),
+    )
 
 
 class UserRepository:

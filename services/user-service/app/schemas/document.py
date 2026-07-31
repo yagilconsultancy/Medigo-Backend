@@ -19,6 +19,15 @@ class DocumentType(str, Enum):
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "application/pdf"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
+# Identity documents a rider may upload for KYC. The vehicle and transport
+# certification types are driver-only and are rejected for riders.
+RIDER_DOCUMENT_TYPES = {
+    DocumentType.GOVERNMENT_ID_FRONT,
+    DocumentType.GOVERNMENT_ID_BACK,
+    DocumentType.DRIVERS_LICENSE_FRONT,
+    DocumentType.DRIVERS_LICENSE_BACK,
+}
+
 
 class DocumentUploadResponse(BaseModel):
     id: UUID

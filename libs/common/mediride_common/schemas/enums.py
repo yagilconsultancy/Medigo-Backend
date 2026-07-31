@@ -285,6 +285,38 @@ class RiderIssuePriority(StrEnum):
     HIGH = "high"
 
 
+# ── Rider KYC ──
+
+
+class KYCStatus(StrEnum):
+    NOT_STARTED = "not_started"
+    SUBMITTED = "submitted"
+    UNDER_REVIEW = "under_review"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
+class IDType(StrEnum):
+    DRIVERS_LICENSE = "drivers_license"
+    PASSPORT = "passport"
+    PROVINCIAL_ID = "provincial_id"
+    HEALTH_CARD = "health_card"
+    PERMANENT_RESIDENT_CARD = "permanent_resident_card"
+    OTHER = "other"
+
+
+class DocumentVerificationStatus(StrEnum):
+    """Status of an uploaded identity/credential document.
+
+    These values were already being written as bare strings; this just gives
+    them a single definition.
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 # ── Phase 12: Safety & Incidents + Admin Notifications ──
 
 

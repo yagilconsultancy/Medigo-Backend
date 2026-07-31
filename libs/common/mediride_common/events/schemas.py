@@ -181,6 +181,25 @@ class RideStatusChangedPayload(BaseModel):
     changed_by: UUID | None = None
 
 
+# Admin edited a booking's details (no status change)
+class RideUpdatedPayload(BaseModel):
+    ride_id: UUID
+    rider_id: UUID
+    # Needed so the assigned driver can be notified, not just the rider.
+    driver_id: UUID | None = None
+    updated_by: UUID | None = None
+    changed_fields: list[str] = []
+
+
+# Admin left a note on a booking that the driver is meant to see
+class RideNoteAddedPayload(BaseModel):
+    ride_id: UUID
+    rider_id: UUID
+    driver_id: UUID | None = None
+    note_id: UUID
+    author_id: UUID | None = None
+
+
 # Ride request payload
 class RideRequestPayload(BaseModel):
     ride_id: UUID

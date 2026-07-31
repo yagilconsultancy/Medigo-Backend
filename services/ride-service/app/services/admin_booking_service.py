@@ -27,6 +27,7 @@ from app.schemas.admin_booking import (
 from app.services.ride_service import RideService
 from app.services.ride_state_machine import VALID_TRANSITIONS
 from mediride_common.events.constants import Exchanges, RoutingKeys
+from mediride_common.events.schemas import RideNoteAddedPayload, RideUpdatedPayload
 from mediride_common.exceptions import NotFoundError, ValidationError
 from mediride_common.schemas.enums import RideStatus
 from mediride_common.utils import utc_now
@@ -66,10 +67,23 @@ class AdminBookingService:
         limit: int,
     ) -> tuple[list[dict], int]:
         """Get all bookings with rider names enriched."""
+        # Client name lives in user-service, not on rides, so resolve the query to
+        # rider ids first. A None result means the lookup failed rather than
+        # matched nothing — degrade to searching ride columns only instead of
+        # failing the whole list.
+        matched_rider_ids: list[UUID] | None = None
+        if search:
+            matched_rider_ids = await self.user_client.search_user_ids(search)
+            if matched_rider_ids is None:
+                logger.warning(
+                    "Rider name lookup unavailable; searching ride columns only"
+                )
+
         rides, total = await self.booking_repo.get_all_bookings(
             status_filter=status_filter,
             ride_type_filter=ride_type_filter,
             search=search,
+            rider_ids=matched_rider_ids or None,
             offset=offset,
             limit=limit,
         )
@@ -318,6 +332,7 @@ class AdminBookingService:
                 author_id=n.author_id,
                 author_type=n.author_type,
                 content=n.content,
+                is_driver_visible=n.is_driver_visible,
                 created_at=n.created_at,
             )
             for n in notes
@@ -470,16 +485,18 @@ class AdminBookingService:
             ride_id, admin_id, f"Booking edited by admin. Fields: {', '.join(changed_keys)}"
         )
 
-        # Notify the rider that their booking details changed.
+        # Notify the rider *and* the assigned driver that details changed. The
+        # driver_id is what lets the consumer reach the driver at all.
         await self.publisher.publish(
             Exchanges.RIDES,
             RoutingKeys.RIDE_UPDATED,
-            {
-                "ride_id": str(ride_id),
-                "rider_id": str(ride.rider_id),
-                "updated_by": str(admin_id),
-                "changed_fields": changed_keys,
-            },
+            RideUpdatedPayload(
+                ride_id=ride_id,
+                rider_id=ride.rider_id,
+                driver_id=ride.driver_id,
+                updated_by=admin_id,
+                changed_fields=changed_keys,
+            ).model_dump(mode="json"),
         )
 
         updated = await self.ride_repo.get_by_id(ride_id)
@@ -669,7 +686,12 @@ class AdminBookingService:
     # ==================== Admin Notes ====================
 
     async def add_note(
-        self, ride_id: UUID, admin_id: UUID, content: str, author_type: str = "admin"
+        self,
+        ride_id: UUID,
+        admin_id: UUID,
+        content: str,
+        author_type: str = "admin",
+        is_driver_visible: bool = False,
     ) -> AdminNoteResponse:
         # Verify ride exists
         ride = await self.ride_repo.get_by_id(ride_id)
@@ -681,14 +703,31 @@ class AdminBookingService:
             author_id=admin_id,
             author_type=author_type,
             content=content,
+            is_driver_visible=is_driver_visible,
         )
         note = await self.note_repo.create(note)
+
+        # Only ping the driver for notes actually meant for them.
+        if is_driver_visible and ride.driver_id:
+            await self.publisher.publish(
+                Exchanges.RIDES,
+                RoutingKeys.RIDE_NOTE_ADDED,
+                RideNoteAddedPayload(
+                    ride_id=ride_id,
+                    rider_id=ride.rider_id,
+                    driver_id=ride.driver_id,
+                    note_id=note.id,
+                    author_id=admin_id,
+                ).model_dump(mode="json"),
+            )
+
         return AdminNoteResponse(
             id=note.id,
             ride_id=note.ride_id,
             author_id=note.author_id,
             author_type=note.author_type,
             content=note.content,
+            is_driver_visible=note.is_driver_visible,
             created_at=note.created_at,
         )
 
@@ -705,6 +744,7 @@ class AdminBookingService:
                 author_id=n.author_id,
                 author_type=n.author_type,
                 content=n.content,
+                is_driver_visible=n.is_driver_visible,
                 created_at=n.created_at,
             )
             for n in notes

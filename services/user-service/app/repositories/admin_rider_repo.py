@@ -5,7 +5,10 @@ from uuid import UUID
 from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.rider_kyc import RiderKYC
 from app.models.user import User
+from app.repositories.user_repo import user_search_filter
+from mediride_common.schemas.enums import KYCStatus
 
 
 class AdminRiderRepository:
@@ -56,6 +59,7 @@ class AdminRiderRepository:
         self,
         search: str | None = None,
         status: str | None = None,
+        kyc_status: str | None = None,
         sort_by: str = "created_at",
         offset: int = 0,
         limit: int = 20,
@@ -63,15 +67,29 @@ class AdminRiderRepository:
         query = select(User).where(User.role == "rider", User.deleted_at.is_(None))
 
         if search:
-            pattern = f"%{search}%"
-            query = query.where(
-                or_(
-                    User.first_name.ilike(pattern),
-                    User.last_name.ilike(pattern),
-                    User.email.ilike(pattern),
-                    User.phone.ilike(pattern),
+            query = query.where(user_search_filter(search))
+
+        if kyc_status:
+            if kyc_status == KYCStatus.NOT_STARTED:
+                # Riders with no rider_kyc row have not started verification.
+                query = query.where(
+                    or_(
+                        User.id.notin_(select(RiderKYC.user_id)),
+                        User.id.in_(
+                            select(RiderKYC.user_id).where(
+                                RiderKYC.kyc_status == KYCStatus.NOT_STARTED
+                            )
+                        ),
+                    )
                 )
-            )
+            else:
+                query = query.where(
+                    User.id.in_(
+                        select(RiderKYC.user_id).where(
+                            RiderKYC.kyc_status == kyc_status
+                        )
+                    )
+                )
 
         if status == "active":
             query = query.where(User.is_active.is_(True), User.suspended_at.is_(None))
@@ -105,6 +123,9 @@ class AdminRiderRepository:
                 "avatar_url": user.avatar_url,
                 "joined_at": user.created_at,
                 "status": self._compute_status(user),
+                "kyc_status": (
+                    user.kyc.kyc_status if user.kyc else KYCStatus.NOT_STARTED
+                ),
             })
 
         return riders, total
@@ -138,14 +159,23 @@ class AdminRiderRepository:
             "date_of_birth": user.date_of_birth,
             "gender": user.gender,
             "home_address": user.home_address,
+            "city": user.city,
+            "province": user.province,
+            "postal_code": user.postal_code,
+            "country": user.country,
             "medical_notes": user.medical_notes,
             "insurance_provider": user.insurance_provider,
             "insurance_policy_number": user.insurance_policy_number,
+            "insurance_group_number": user.insurance_group_number,
+            "insurance_member_id": user.insurance_member_id,
+            "insurance_expiry": user.insurance_expiry,
             "status": self._compute_status(user),
             "suspension_reason": user.suspension_reason,
             "suspended_at": user.suspended_at,
             "created_at": user.created_at,
             "emergency_contacts": emergency_contacts,
+            # A rider with no record simply hasn't started verification.
+            "kyc": user.kyc or {"kyc_status": KYCStatus.NOT_STARTED},
         }
 
     async def get_rider_ids(self, offset: int = 0, limit: int = 20) -> tuple[list[dict], int]:
@@ -210,3 +240,32 @@ class AdminRiderRepository:
                 is_active=True,
             )
         )
+
+    # ==================== Rider profile & KYC ====================
+
+    async def update_user(self, rider_id: UUID, **kwargs) -> None:
+        if not kwargs:
+            return
+        await self.session.execute(
+            update(User).where(User.id == rider_id).values(**kwargs)
+        )
+
+    async def get_kyc(self, rider_id: UUID) -> RiderKYC | None:
+        result = await self.session.execute(
+            select(RiderKYC).where(RiderKYC.user_id == rider_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def upsert_kyc(self, rider_id: UUID, **kwargs) -> RiderKYC:
+        """Create the rider's KYC row on first write, then update in place."""
+        record = await self.get_kyc(rider_id)
+        if record is None:
+            record = RiderKYC(user_id=rider_id, **kwargs)
+            self.session.add(record)
+            await self.session.flush()
+            return record
+
+        for key, value in kwargs.items():
+            setattr(record, key, value)
+        await self.session.flush()
+        return record

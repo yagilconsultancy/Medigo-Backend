@@ -18,6 +18,7 @@ from app.models.vehicle_category_config import VehicleCategoryConfig
 from app.models.vehicle_document import VehicleDocument
 from app.models.rider_issue import RiderIssue
 from app.models.rider_issue_note import RiderIssueNote
+from app.models.rider_kyc import RiderKYC
 from app.models.vehicle_maintenance_log import VehicleMaintenanceLog
 
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     "FleetDocument",
     "RiderIssue",
     "RiderIssueNote",
+    "RiderKYC",
     "Vehicle",
     "VehicleCategoryConfig",
     "VehicleDocument",

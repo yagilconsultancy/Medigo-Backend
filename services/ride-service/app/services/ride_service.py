@@ -13,6 +13,7 @@ from app.models.ride import Ride
 from app.models.ride_rating import RideRating
 from app.models.ride_status_log import RideStatusLog
 from app.models.recurring_ride import RecurringRide
+from app.repositories.admin_note_repo import AdminNoteRepository
 from app.repositories.rating_repo import RatingRepository
 from app.repositories.recurring_ride_repo import RecurringRideRepository
 from app.repositories.ride_repo import RideRepository
@@ -56,12 +57,16 @@ class RideService:
         user_client: UserServiceClient,
         payment_client: PaymentServiceClient | None = None,
         tracking_client: TrackingServiceClient | None = None,
+        admin_note_repo: AdminNoteRepository | None = None,
     ):
         self.ride_repo = ride_repo
         self.request_repo = request_repo
         self.status_log_repo = status_log_repo
         self.rating_repo = rating_repo
         self.recurring_ride_repo = recurring_ride_repo
+        # Optional so existing callers and unit-test fakes keep working; ride
+        # detail simply reports no driver notes when it is absent.
+        self.admin_note_repo = admin_note_repo
         self.publisher = publisher
         self.user_client = user_client
         self.payment_client = payment_client or PaymentServiceClient(
@@ -384,6 +389,14 @@ class RideService:
         # Get timeline
         timeline = await self.status_log_repo.get_by_ride(ride_id)
 
+        # Notes an admin flagged for the driver. Internal notes are never
+        # fetched here, so they cannot leak into a driver-facing response.
+        driver_notes = []
+        if self.admin_note_repo:
+            driver_notes = await self.admin_note_repo.get_driver_visible_by_ride(
+                ride_id
+            )
+
         return {
             "ride": ride,
             "rider_name": rider_name,
@@ -392,6 +405,7 @@ class RideService:
             "driver_rating": driver_rating,
             "rider_rating_given": rider_rating_given,
             "timeline": timeline,
+            "driver_notes": driver_notes,
         }
 
     # ---- Status Transitions ----

@@ -22,6 +22,12 @@ class User(Base):
     gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     home_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Structured address alongside the free-text home_address. Drivers already
+    # get these on driver_profiles; riders only had the single line.
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    province: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
     medical_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     business_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -33,6 +39,9 @@ class User(Base):
     # Insurance (rider)
     insurance_provider: Mapped[str | None] = mapped_column(String(255), nullable=True)
     insurance_policy_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    insurance_group_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    insurance_member_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    insurance_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Suspension (rider)
     suspended_at: Mapped[datetime | None] = mapped_column(
@@ -77,3 +86,6 @@ class User(Base):
         "EmergencyContact", back_populates="user", lazy="selectin"
     )
     passengers = relationship("Passenger", back_populates="user", lazy="selectin")
+    kyc = relationship(
+        "RiderKYC", back_populates="user", uselist=False, lazy="selectin"
+    )

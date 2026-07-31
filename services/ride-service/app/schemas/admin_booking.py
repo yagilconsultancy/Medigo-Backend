@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 class CreateAdminNoteRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
     author_type: str = "admin"
+    # Internal by default — the admin has to opt in to showing the driver.
+    is_driver_visible: bool = False
 
 
 class ApproveBookingRequest(BaseModel):
@@ -83,6 +85,7 @@ class AdminNoteResponse(BaseModel):
     author_type: str
     author_name: str | None = None
     content: str
+    is_driver_visible: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}

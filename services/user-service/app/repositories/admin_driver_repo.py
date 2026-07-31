@@ -175,6 +175,17 @@ class AdminDriverRepository:
             return None
 
         user, driver, fleet_name = row
+
+        # The driver↔vehicle link lives on vehicles.driver_profile_id, so the
+        # id has to be looked up rather than read off driver_profiles.
+        vehicle_result = await self.session.execute(
+            select(Vehicle.id).where(
+                Vehicle.driver_profile_id == driver_user_id,
+                Vehicle.deleted_at.is_(None),
+            )
+        )
+        assigned_vehicle_id = vehicle_result.scalars().first()
+
         return {
             "user_id": user.id,
             "first_name": user.first_name,
@@ -192,6 +203,8 @@ class AdminDriverRepository:
             "total_trips": driver.total_trips,
             "specialty": driver.specialty,
             "service_capabilities": driver.service_capabilities or [],
+            # The assigned vehicles row, so an edit form can preselect it.
+            "vehicle_id": assigned_vehicle_id,
             "vehicle_type": driver.vehicle_type,
             "vehicle_make": driver.vehicle_make,
             "vehicle_model": driver.vehicle_model,
@@ -204,6 +217,7 @@ class AdminDriverRepository:
             "license_expiry": driver.license_expiry,
             "medical_transport_certification": driver.medical_transport_certification,
             "date_of_birth": driver.date_of_birth,
+            "gender": user.gender,
             "address": driver.address,
             "city": driver.city,
             "province": driver.province,

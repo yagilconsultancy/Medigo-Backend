@@ -27,6 +27,7 @@ class AdminBookingRepository:
         status_filter: str | None = None,
         ride_type_filter: str | None = None,
         search: str | None = None,
+        rider_ids: list[UUID] | None = None,
         offset: int = 0,
         limit: int = 20,
     ) -> tuple[list[Ride], int]:
@@ -55,13 +56,22 @@ class AdminBookingRepository:
 
         if search:
             pattern = f"%{search}%"
-            conditions.append(
-                or_(
-                    Ride.pickup_address.ilike(pattern),
-                    Ride.destination_address.ilike(pattern),
-                    Ride.facility_name.ilike(pattern),
-                )
-            )
+            search_clauses = [
+                Ride.pickup_address.ilike(pattern),
+                Ride.destination_address.ilike(pattern),
+                Ride.facility_name.ilike(pattern),
+                # The UI shows a truncated booking id (first 7 chars), so match
+                # anywhere in the uuid text rather than requiring the whole thing.
+                cast(Ride.id, String).ilike(pattern),
+                Ride.passenger_first_name.ilike(pattern),
+                Ride.passenger_last_name.ilike(pattern),
+                Ride.passenger_phone.ilike(pattern),
+            ]
+            # rider_name is enriched from user-service after this query, so the
+            # only way to search by client name is with ids resolved upstream.
+            if rider_ids:
+                search_clauses.append(Ride.rider_id.in_(rider_ids))
+            conditions.append(or_(*search_clauses))
 
         base_query = select(Ride).where(*conditions)
         count_result = await self.session.execute(

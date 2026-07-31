@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.user_service_client import UserServiceClient
 from app.config import settings
 from app.dependencies import get_db, get_publisher
+from app.repositories.admin_note_repo import AdminNoteRepository
 from app.repositories.rating_repo import RatingRepository
 from app.repositories.recurring_ride_repo import RecurringRideRepository
 from app.repositories.ride_repo import RideRepository
@@ -15,6 +16,7 @@ from app.schemas.rating import RatingResponse
 from app.schemas.ride import (
     CancelRideRequest,
     CreateRideRequest,
+    DriverVisibleNoteResponse,
     RideDetailResponse,
     RideResponse,
     StatusLogResponse,
@@ -42,6 +44,7 @@ def _get_ride_service(
         recurring_ride_repo=RecurringRideRepository(session),
         publisher=publisher,
         user_client=UserServiceClient(settings.USER_SERVICE_URL),
+        admin_note_repo=AdminNoteRepository(session),
     )
 
 
@@ -238,6 +241,10 @@ async def get_ride_detail(
             driver_rating=RatingResponse.model_validate(detail["driver_rating"]) if detail["driver_rating"] else None,
             rider_rating_given=RatingResponse.model_validate(detail["rider_rating_given"]) if detail["rider_rating_given"] else None,
             timeline=[StatusLogResponse.model_validate(l) for l in detail["timeline"]],
+            driver_notes=[
+                DriverVisibleNoteResponse.model_validate(n)
+                for n in detail["driver_notes"]
+            ],
         ),
     )
 

@@ -102,6 +102,9 @@ class RideResponse(BaseModel):
     final_fare: float | None = None
     fare_estimate_details: dict | None = None
     special_instructions: str | None = None
+    # Admin-editable, so the driver's list views need them to reflect edits.
+    mobility_level: str | None = None
+    assistance_level: str | None = None
     visit_type: str | None = None
     facility_name: str | None = None
     booking_channel: str = "mobile_app"
@@ -182,6 +185,22 @@ class RideDetailResponse(BaseModel):
     driver_rating: "RatingResponse | None" = None
     rider_rating_given: "RatingResponse | None" = None
     timeline: list["StatusLogResponse"] = []
+    # Only notes an admin flagged for the driver — internal notes never appear here.
+    driver_notes: list["DriverVisibleNoteResponse"] = []
+
+    model_config = {"from_attributes": True}
+
+
+class DriverVisibleNoteResponse(BaseModel):
+    """An admin note the driver is allowed to see.
+
+    Deliberately narrower than AdminNoteResponse: no author identity, so
+    internal attribution stays out of driver-facing payloads.
+    """
+
+    id: UUID
+    content: str
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 

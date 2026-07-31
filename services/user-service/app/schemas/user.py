@@ -14,7 +14,16 @@ class UserProfileResponse(BaseModel):
     gender: str | None = None
     avatar_url: str | None = None
     home_address: str | None = None
+    city: str | None = None
+    province: str | None = None
+    postal_code: str | None = None
+    country: str | None = None
     medical_notes: str | None = None
+    insurance_provider: str | None = None
+    insurance_policy_number: str | None = None
+    insurance_group_number: str | None = None
+    insurance_member_id: str | None = None
+    insurance_expiry: date | None = None
     role: str
     business_id: UUID | None = None
     is_active: bool
@@ -37,7 +46,19 @@ class UpdateProfileRequest(BaseModel):
     gender: str | None = Field(None, max_length=20)
     avatar_url: str | None = Field(None, max_length=500)
     home_address: str | None = Field(None, max_length=500)
+    # Structured address, alongside the free-text home_address.
+    city: str | None = Field(None, max_length=100)
+    province: str | None = Field(None, max_length=50)
+    postal_code: str | None = Field(None, max_length=20)
+    country: str | None = Field(None, max_length=100)
     medical_notes: str | None = None
+    # Insurance was previously settable by nobody — not by the rider and not by
+    # an admin — despite being stored and displayed.
+    insurance_provider: str | None = Field(None, max_length=255)
+    insurance_policy_number: str | None = Field(None, max_length=100)
+    insurance_group_number: str | None = Field(None, max_length=100)
+    insurance_member_id: str | None = Field(None, max_length=100)
+    insurance_expiry: date | None = None
 
 
 class UpdateConsentRequest(BaseModel):
