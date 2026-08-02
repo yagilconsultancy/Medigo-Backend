@@ -19,6 +19,18 @@ _PM_DISPLAY_NAMES = {
 }
 
 
+def _booking_ref(ride_id) -> str | None:
+    """Display reference for a ride, e.g. "BK-3F2A9C41".
+
+    Derived from the ride id so it is stable across processes and restarts, and
+    matches the format ride-service and notification-service already show to
+    admins and riders.
+    """
+    if not ride_id:
+        return None
+    return f"BK-{str(ride_id)[:8].upper()}"
+
+
 def _format_payment_method(pm) -> str | None:
     if not pm:
         return None
@@ -188,16 +200,14 @@ class AdminTransactionService:
                 parts.append(f"{float(fb.distance_km)} km")
             ride_description = " - ".join(parts)
 
-        # Route addresses from ride-service
+        # Route addresses from ride-service. The booking ref comes off the ride id
+        # we already hold, so it survives ride-service being unreachable.
         pickup_address = None
         destination_address = None
-        booking_ref = None
         if ride_data:
             pickup_address = ride_data.get("pickup_address")
             destination_address = ride_data.get("destination_address")
-            ride_id_str = str(ride_data.get("id", tx.ride_id or ""))
-            if ride_id_str:
-                booking_ref = f"BK-{abs(hash(ride_id_str)) % 100000:05d}"
+        booking_ref = _booking_ref(tx.ride_id)
 
         return {
             "id": tx.id,
