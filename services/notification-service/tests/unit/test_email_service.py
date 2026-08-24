@@ -202,6 +202,55 @@ def test_format_duration_reads_as_plain_english():
     assert email_service._format_duration(None) is None
 
 
+def test_format_datetime_renders_eastern_and_labels_the_zone():
+    """A 1 PM Eastern pickup must read as 1 PM in the email, summer or winter."""
+    from datetime import UTC, datetime
+
+    # 17:00Z is 1 PM EDT; 18:00Z is 1 PM EST.
+    assert "at 1:00 PM EDT" in email_service._format_datetime(
+        datetime(2026, 8, 7, 17, 0, tzinfo=UTC)
+    )
+    assert "at 1:00 PM EST" in email_service._format_datetime(
+        datetime(2026, 1, 15, 18, 0, tzinfo=UTC)
+    )
+
+
+def test_format_datetime_treats_naive_values_as_utc():
+    """Naive timestamps are UTC that lost tzinfo, not local wall-clock time."""
+    from datetime import UTC, datetime
+
+    aware = email_service._format_datetime(datetime(2026, 8, 7, 17, 0, tzinfo=UTC))
+    naive = email_service._format_datetime(datetime(2026, 8, 7, 17, 0))
+    assert naive == aware
+    assert "at 1:00 PM EDT" in naive
+
+
+def test_format_datetime_accepts_iso_strings_from_the_event_payload():
+    assert "at 1:00 PM EDT" in email_service._format_datetime("2026-08-07T17:00:00Z")
+    assert "at 1:00 PM EDT" in email_service._format_datetime(
+        "2026-08-07T17:00:00+00:00"
+    )
+
+
+def test_format_datetime_is_exported_for_event_consumers():
+    """The rider email template prints scheduled_at verbatim, so the consumer
+    must have a public renderer to reach for instead of str()."""
+    from datetime import UTC, datetime
+
+    assert email_service.format_datetime is email_service._format_datetime
+    rendered = email_service.format_datetime(datetime(2026, 8, 7, 17, 0, tzinfo=UTC))
+    assert "at 1:00 PM EDT" in rendered
+    # The old behaviour leaked the raw UTC clock into the rider's inbox.
+    assert "17:00" not in rendered
+
+
+def test_urgent_note_reads_naive_pickups_as_utc():
+    from datetime import UTC, datetime, timedelta
+
+    soon = (datetime.now(UTC) + timedelta(hours=3, minutes=1)).replace(tzinfo=None)
+    assert "about 3 hours" in email_service._urgent_note(soon)
+
+
 def test_urgent_note_flags_imminent_and_past_pickups():
     from datetime import UTC, datetime, timedelta
 

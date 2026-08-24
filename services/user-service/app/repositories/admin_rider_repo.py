@@ -241,6 +241,23 @@ class AdminRiderRepository:
             )
         )
 
+    async def delete_rider(self, rider_id: UUID) -> None:
+        """Soft-delete the rider so every admin rider query stops returning them.
+
+        Kept soft on purpose: rides, payments and issues in other services still
+        reference this user id, so the row has to survive the removal.
+        """
+        await self.session.execute(
+            update(User)
+            .where(
+                User.id == rider_id,
+                User.role == "rider",
+                User.deleted_at.is_(None),
+            )
+            .values(deleted_at=datetime.now(timezone.utc), is_active=False)
+        )
+        await self.session.flush()
+
     # ==================== Rider profile & KYC ====================
 
     async def update_user(self, rider_id: UUID, **kwargs) -> None:

@@ -11,7 +11,7 @@ x-service-defaults: &service-defaults
 x-service-env: &service-env
   ENVIRONMENT: production
   LOG_LEVEL: ${LOG_LEVEL:-WARNING}
-  DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Canada/Eastern}
+  DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-America/Toronto}
   RABBITMQ_URL: amqp://mediride:${RABBITMQ_PASSWORD}@rabbitmq:5672/mediride
   REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
 

@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+import csv
+import io
+
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
@@ -6,7 +10,6 @@ from app.schemas.activity_log import (
     ActivityLogItem,
     ActivityLogKPIs,
     ActivityLogListResponse,
-    CreateActivityLogRequest,
 )
 from app.services.activity_log_service import ActivityLogService
 from mediride_common.auth.dependencies import require_role
@@ -47,16 +50,45 @@ async def list_activity_logs(
     return StandardResponse(data=ActivityLogListResponse(**result))
 
 
-@router.get("/activity-logs/export", response_model=StandardResponse[ActivityLogListResponse])
+@router.get("/activity-logs/export")
 async def export_activity_logs(
     severity: str | None = Query(None),
     category: str | None = Query(None),
     search: str | None = Query(None),
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: ActivityLogService = Depends(_get_service),
-):
+) -> StreamingResponse:
+    """Export activity logs as CSV.
+
+    The client requests this as a blob and saves it with a .csv extension, so
+    it must be real CSV -- it previously returned the ordinary JSON list
+    response, giving users a JSON file named .csv.
+    """
     severity_filter = severity if severity and severity != "all" else None
     result = await service.list_logs(
-        severity=severity_filter, category=category, search=search, page=1, page_size=1000
+        severity=severity_filter, category=category, search=search, page=1, page_size=10000
     )
-    return StandardResponse(data=ActivityLogListResponse(**result))
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([
+        "Action", "Description", "Category", "Severity", "Admin", "Timestamp",
+    ])
+    for item in result["items"]:
+        writer.writerow([
+            item["action_title"],
+            item["action_description"],
+            item["category"],
+            item["severity"],
+            item["admin_name"],
+            item["created_at"].isoformat() if item["created_at"] else "",
+        ])
+    buffer.seek(0)
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="activity-logs.csv"'
+        },
+    )

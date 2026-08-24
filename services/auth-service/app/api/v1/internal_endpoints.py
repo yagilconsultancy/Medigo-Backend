@@ -7,7 +7,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from jose import jwt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.exc import IntegrityError
@@ -18,9 +18,11 @@ from app.dependencies import get_db
 from app.models.user_credential import UserCredential
 from app.normalization import normalize_email, normalize_phone
 from app.repositories.credential_repo import CredentialRepository
+from app.repositories.security_settings_repo import SecuritySettingsRepository
 from app.schemas.activity_log import CreateActivityLogRequest
 from app.services.activity_log_service import ActivityLogService
 from app.services.password_service import hash_password, validate_password_strength
+from app.services.security_policy_cache import get_password_policy
 from mediride_common.schemas.enums import UserRole
 
 # Reactivation tokens are self-contained signed JWTs (no DB storage needed).
@@ -85,7 +87,9 @@ async def create_driver_credential(
             raise HTTPException(status_code=409, detail="Account with this email already exists")
         raise HTTPException(status_code=409, detail="Account with this phone number already exists")
 
-    validate_password_strength(request.password)
+    validate_password_strength(
+        request.password, await get_password_policy(session)
+    )
 
     credential = UserCredential(
         email=normalized_email,
@@ -126,7 +130,9 @@ async def create_admin_credential(
     if existing:
         raise HTTPException(status_code=409, detail="Account with this email already exists")
 
-    validate_password_strength(request.password)
+    validate_password_strength(
+        request.password, await get_password_policy(session)
+    )
 
     credential = UserCredential(
         email=normalized_email,
@@ -295,7 +301,16 @@ async def create_activity_log(
     _service: str = Depends(_require_internal_service),
     session: AsyncSession = Depends(get_db),
 ):
-    """Create an activity log entry. Called by other services to record admin actions."""
+    """Create an activity log entry. Called by other services to record admin actions.
+
+    The gateway cannot read the auth database, so the audit_logging_enabled
+    toggle in Security Settings is enforced here -- this is what makes that
+    switch actually do something.
+    """
+    security_settings = await SecuritySettingsRepository(session).get_active()
+    if security_settings and not security_settings.audit_logging_enabled:
+        return Response(status_code=204)
+
     service = ActivityLogService(session)
     log = await service.create_log(
         admin_id=request.admin_id,
@@ -307,6 +322,7 @@ async def create_activity_log(
         severity=request.severity,
         target_entity_id=request.target_entity_id,
         target_entity_type=request.target_entity_type,
+        ip_address=request.ip_address,
     )
     logger.info(f"Activity log created internally: {log.id}")
     return {"id": str(log.id), "log_number": log.log_number}

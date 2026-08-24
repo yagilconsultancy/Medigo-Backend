@@ -1,4 +1,8 @@
+import csv
+import io
+
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
@@ -49,13 +53,19 @@ async def list_login_history(
     return StandardResponse(data=LoginHistoryListResponse(**result))
 
 
-@router.get("/login-history/export", response_model=StandardResponse[LoginHistoryListResponse])
+@router.get("/login-history/export")
 async def export_login_history(
     status: str | None = Query(None),
     search: str | None = Query(None),
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: LoginHistoryService = Depends(_get_service),
-):
+) -> StreamingResponse:
+    """Export login history as CSV.
+
+    The client requests this as a blob and saves it with a .csv extension, so
+    it must be real CSV -- it previously returned the ordinary JSON list
+    response, giving users a JSON file named .csv.
+    """
     success_filter = None
     if status == "success":
         success_filter = True
@@ -63,6 +73,33 @@ async def export_login_history(
         success_filter = False
 
     result = await service.list_records(
-        success=success_filter, search=search, page=1, page_size=1000
+        success=success_filter, search=search, page=1, page_size=10000
     )
-    return StandardResponse(data=LoginHistoryListResponse(**result))
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([
+        "Admin", "Email", "IP Address", "Device", "Location",
+        "Status", "Failure Reason", "Suspicious", "Timestamp",
+    ])
+    for item in result["items"]:
+        writer.writerow([
+            item["admin_name"],
+            item["admin_email"],
+            item["ip_address"] or "",
+            item["device_info"] or "",
+            item["location"] or "",
+            "Success" if item["success"] else "Failed",
+            item["failure_reason"] or "",
+            "Yes" if item["is_suspicious"] else "No",
+            item["created_at"].isoformat() if item["created_at"] else "",
+        ])
+    buffer.seek(0)
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="login-history.csv"'
+        },
+    )

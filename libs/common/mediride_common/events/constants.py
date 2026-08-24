@@ -106,6 +106,7 @@ class RoutingKeys:
     # Rider management events
     RIDER_SUSPENDED = "rider.suspended"
     RIDER_REINSTATED = "rider.reinstated"
+    RIDER_DELETED = "rider.deleted"
     RIDER_ISSUE_CREATED = "rider.issue.created"
     RIDER_ISSUE_STATUS_CHANGED = "rider.issue.status_changed"
 

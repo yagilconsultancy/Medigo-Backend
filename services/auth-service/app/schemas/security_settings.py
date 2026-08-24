@@ -15,6 +15,7 @@ class SecuritySettingsResponse(BaseModel):
     ip_whitelist_enabled: bool = False
     audit_logging_enabled: bool = True
     session_timeout_hours: int = 4
+    max_failed_login_attempts: int = 5
     min_password_length: int = 12
     require_uppercase: bool = True
     require_lowercase: bool = True
@@ -22,7 +23,7 @@ class SecuritySettingsResponse(BaseModel):
     require_special_chars: bool = True
     whitelisted_ips: dict | None = None
     two_fa_enabled_count: int = 0
-    total_admin_count: int = 8
+    total_admin_count: int = 0
     threats_blocked: int = 0
 
     model_config = {"from_attributes": True}
@@ -34,6 +35,7 @@ class UpdateSecuritySettingsRequest(BaseModel):
     ip_whitelist_enabled: bool | None = None
     audit_logging_enabled: bool | None = None
     session_timeout_hours: int | None = None
+    max_failed_login_attempts: int | None = None
     min_password_length: int | None = None
     require_uppercase: bool | None = None
     require_lowercase: bool | None = None

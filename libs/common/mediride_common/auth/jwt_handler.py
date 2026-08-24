@@ -27,9 +27,12 @@ class JWTHandler:
         role: UserRole,
         business_id: str | None = None,
         email: str | None = None,
+        expire_minutes: int | None = None,
     ) -> str:
         now = datetime.now(UTC)
-        expire = now + timedelta(minutes=self.access_token_expire_minutes)
+        expire = now + timedelta(
+            minutes=expire_minutes or self.access_token_expire_minutes
+        )
         payload = {
             "sub": user_id,
             "role": role,
@@ -60,13 +63,23 @@ class JWTHandler:
         role: UserRole,
         business_id: str | None = None,
         email: str | None = None,
+        expire_minutes: int | None = None,
     ) -> TokenPair:
-        access_token = self.create_access_token(user_id, role, business_id, email)
+        """`expire_minutes` overrides the default access-token lifetime.
+
+        Used to honour the admin-configured session_timeout_hours. It must
+        also flow into `expires_in`, or the client refreshes on the wrong
+        schedule.
+        """
+        effective_minutes = expire_minutes or self.access_token_expire_minutes
+        access_token = self.create_access_token(
+            user_id, role, business_id, email, expire_minutes=effective_minutes
+        )
         refresh_token = self.create_refresh_token(user_id)
         return TokenPair(
             access_token=access_token,
             refresh_token=refresh_token,
-            expires_in=self.access_token_expire_minutes * 60,
+            expires_in=effective_minutes * 60,
         )
 
     def decode_token(self, token: str) -> TokenPayload:

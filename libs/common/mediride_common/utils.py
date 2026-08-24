@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-DEFAULT_TIMEZONE = os.getenv("DEFAULT_TIMEZONE", "Canada/Eastern")
+DEFAULT_TIMEZONE = os.getenv("DEFAULT_TIMEZONE", "America/Toronto")
 
 
 def utc_now() -> datetime:

@@ -5,6 +5,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.middleware.activity_logger import (
+    start_activity_logger,
+    stop_activity_logger,
+)
 from app.realtime.socket_proxy import sio as socket_sio
 from app.routes.docs import router as docs_router
 from app.routes.proxy import router as proxy_router
@@ -15,7 +19,13 @@ from mediride_common.middleware import CorrelationIdMiddleware, register_error_h
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging(level=settings.LOG_LEVEL, service_name="api-gateway")
-    yield
+    if settings.ACTIVITY_LOG_ENABLED:
+        await start_activity_logger()
+    try:
+        yield
+    finally:
+        if settings.ACTIVITY_LOG_ENABLED:
+            await stop_activity_logger()
 
 
 fastapi_app = FastAPI(

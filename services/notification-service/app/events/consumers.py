@@ -12,6 +12,7 @@ from app.services.chat_service import ChatService
 from app.clients.user_service_client import UserServiceClient
 from app.config import settings
 from app.services.email_service import (
+    format_datetime,
     send_account_reactivation_email,
     send_admin_invite_email,
     send_admin_ride_booking_email,
@@ -253,7 +254,10 @@ class RideEventConsumer(BaseEventConsumer):
                         "ride_id": str(payload.ride_id),
                         "pickup_address": payload.pickup_address,
                         "destination_address": payload.destination_address,
-                        "scheduled_at": str(payload.scheduled_at),
+                        # Rendered, not str()-ed: ride_notification.html prints
+                        # this verbatim, so a raw UTC datetime showed the rider
+                        # a pickup 4-5 hours later than the one they booked.
+                        "scheduled_at": format_datetime(payload.scheduled_at),
                     }
                     await self._send_notification(
                         svc=svc,

@@ -34,8 +34,9 @@ class SecuritySettings(Base):
     whitelisted_ips: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # KPI statistics
+    max_failed_login_attempts: Mapped[int] = mapped_column(Integer, default=5)
     two_fa_enabled_count: Mapped[int] = mapped_column(Integer, default=0)
-    total_admin_count: Mapped[int] = mapped_column(Integer, default=8)
+    total_admin_count: Mapped[int] = mapped_column(Integer, default=0)
     threats_blocked: Mapped[int] = mapped_column(Integer, default=0)
 
     # Audit

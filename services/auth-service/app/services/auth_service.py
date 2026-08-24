@@ -9,8 +9,10 @@ from app.models.refresh_token import RefreshToken
 from app.models.user_credential import UserCredential
 from app.normalization import normalize_email, normalize_phone
 from app.repositories.credential_repo import CredentialRepository
+from app.repositories.security_settings_repo import SecuritySettingsRepository
 from app.repositories.token_repo import TokenRepository
 from app.services.otp_service import OTPService
+from app.services.security_policy_cache import get_password_policy
 from app.services.password_service import (
     hash_password,
     hash_token,
@@ -37,6 +39,16 @@ from mediride_common.schemas.enums import UserRole
 from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
+
+# Failed logins for an unrecognised email have no credential to point at.
+# A fixed sentinel keeps those rows joinable/filterable; the previous code
+# minted a fresh uuid4() per attempt, which made them permanently orphaned.
+UNKNOWN_ADMIN_ID = UUID(int=0)
+
+# A login is flagged suspicious after this many failures for the same email
+# inside this window, or on a first-ever success from an unseen IP.
+SUSPICIOUS_FAILURE_THRESHOLD = 3
+SUSPICIOUS_FAILURE_WINDOW_MINUTES = 15
 
 
 class AuthService:
@@ -101,7 +113,7 @@ class AuthService:
         """Register a new user. Returns (user_id, otp_code)."""
         email = normalize_email(email)
         phone = normalize_phone(phone)
-        validate_password_strength(password)
+        await self._validate_password(password)
 
         # Check if user already exists
         existing = await self.credential_repo.get_by_email_or_phone(email, phone)
@@ -206,11 +218,20 @@ class AuthService:
             await self.credential_repo.increment_failed_attempts(credential.id)
 
             # Lock after max attempts
-            if credential.failed_attempts + 1 >= settings.MAX_LOGIN_ATTEMPTS:
+            if credential.failed_attempts + 1 >= await self._max_failed_attempts():
                 locked_until = utc_now() + timedelta(
                     minutes=settings.LOCKOUT_DURATION_MINUTES
                 )
                 await self.credential_repo.lock_account(credential.id, locked_until)
+
+            # Commit before raising: the AuthenticationError below unwinds
+            # through get_db(), which rolls back the request transaction and
+            # would otherwise discard the attempt counter and the lock --
+            # silently disabling lockout and allowing unlimited brute-force.
+            try:
+                await self.credential_repo.session.commit()
+            except Exception as e:  # never turn a 401 into a 500
+                logger.warning(f"Failed to persist failed-login state: {e}")
 
             raise AuthenticationError("Email or password is not correct")
 
@@ -303,7 +324,7 @@ class AuthService:
         # Verify password
         if not verify_password(password, credential.password_hash):
             await self.credential_repo.increment_failed_attempts(credential.id)
-            if credential.failed_attempts + 1 >= settings.MAX_LOGIN_ATTEMPTS:
+            if credential.failed_attempts + 1 >= await self._max_failed_attempts():
                 locked_until = utc_now() + timedelta(
                     minutes=settings.LOCKOUT_DURATION_MINUTES
                 )
@@ -356,6 +377,7 @@ class AuthService:
             role=credential.role,
             business_id=str(credential.business_id) if credential.business_id else None,
             email=credential.email,
+            expire_minutes=await self._admin_session_minutes(),
         )
         token_pair.role = credential.role
 
@@ -380,6 +402,43 @@ class AuthService:
 
         return token_pair
 
+    async def _max_failed_attempts(self) -> int:
+        """Lockout threshold from Security Settings, falling back to config."""
+        try:
+            repo = SecuritySettingsRepository(self.credential_repo.session)
+            security_settings = await repo.get_active()
+        except Exception:
+            logger.warning("Could not load lockout threshold", exc_info=True)
+            return settings.MAX_LOGIN_ATTEMPTS
+        if not security_settings or not security_settings.max_failed_login_attempts:
+            return settings.MAX_LOGIN_ATTEMPTS
+        return security_settings.max_failed_login_attempts
+
+    async def _admin_session_minutes(self) -> int | None:
+        """Admin session lifetime from Security Settings, in minutes.
+
+        Returns None to fall back to the JWT handler's default when the
+        settings row is unavailable.
+        """
+        try:
+            repo = SecuritySettingsRepository(self.credential_repo.session)
+            security_settings = await repo.get_active()
+        except Exception:
+            logger.warning("Could not load session timeout", exc_info=True)
+            return None
+        if not security_settings or not security_settings.session_timeout_hours:
+            return None
+        return security_settings.session_timeout_hours * 60
+
+    async def _validate_password(self, password: str) -> None:
+        """Validate against the admin-configured policy, not a hardcoded one.
+
+        Falls back to the built-in defaults if the settings row can't be read,
+        so a settings problem never blocks registration or password reset.
+        """
+        policy = await get_password_policy(self.credential_repo.session)
+        validate_password_strength(password, policy)
+
     async def _record_login(
         self,
         user_id,
@@ -390,24 +449,62 @@ class AuthService:
         success: bool,
         failure_reason: str | None = None,
     ) -> None:
-        """Record admin login attempt if login_history_service is available."""
+        """Record an admin login attempt, durably.
+
+        Failure paths raise immediately after calling this, and that exception
+        unwinds through get_db(), which rolls the request transaction back. So
+        for unsuccessful attempts we commit here.
+
+        That commit is deliberate and load-bearing: besides the audit row, it
+        is what persists the increment_failed_attempts()/lock_account() writes
+        made just above by the caller. Without it, `failed_attempts` never
+        increments and `locked_until` is never set, which silently disables
+        account lockout entirely and allows unlimited password brute-force.
+        Do not remove it without replacing it with an independent session.
+        """
         if not self.login_history_service:
             return
         try:
-            from uuid import uuid4
-
-            uid = user_id or uuid4()
+            is_suspicious = await self._is_suspicious_login(
+                admin_email=admin_email, ip_address=ip_address, success=success
+            )
             await self.login_history_service.record_login(
-                user_id=uid,
+                user_id=user_id or UNKNOWN_ADMIN_ID,
                 admin_name=admin_name,
                 admin_email=admin_email,
                 ip_address=ip_address,
                 device_info=device_info,
                 success=success,
                 failure_reason=failure_reason,
+                is_suspicious=is_suspicious,
             )
+            if not success:
+                await self.login_history_service.session.commit()
         except Exception as e:
+            # Audit logging must never turn a clean 401 into a 500.
             logger.warning(f"Failed to record login attempt: {e}")
+
+    async def _is_suspicious_login(
+        self, admin_email: str, ip_address: str, success: bool
+    ) -> bool:
+        """Flag repeated failures, or a first-ever success from a new IP."""
+        if not self.login_history_service or not admin_email:
+            return False
+        repo = self.login_history_service.repo
+        try:
+            if not success:
+                since = utc_now() - timedelta(
+                    minutes=SUSPICIOUS_FAILURE_WINDOW_MINUTES
+                )
+                recent = await repo.count_recent_failures(admin_email, since)
+                return recent + 1 >= SUSPICIOUS_FAILURE_THRESHOLD
+            if ip_address and ip_address != "unknown":
+                return not await repo.has_successful_login_from_ip(
+                    admin_email, ip_address
+                )
+        except Exception as e:
+            logger.warning(f"Suspicious-login check failed: {e}")
+        return False
 
     @staticmethod
     def _parse_device_info(user_agent: str) -> str:
@@ -462,12 +559,18 @@ class AuthService:
         if not credential or not credential.is_active:
             raise AuthenticationError("Account not found or deactivated")
 
-        # Create new token pair
+        # Create new token pair. Admins keep the configured session timeout,
+        # otherwise the first refresh silently drops back to the default.
         new_token_pair = self.jwt_handler.create_token_pair(
             user_id=str(credential.id),
             role=credential.role,
             business_id=str(credential.business_id) if credential.business_id else None,
             email=credential.email,
+            expire_minutes=(
+                await self._admin_session_minutes()
+                if credential.role == UserRole.ADMIN
+                else None
+            ),
         )
         new_token_pair.role = credential.role
 
@@ -493,7 +596,7 @@ class AuthService:
         self, user_id: UUID, current_password: str, new_password: str
     ) -> None:
         """Change user password."""
-        validate_password_strength(new_password)
+        await self._validate_password(new_password)
 
         credential = await self.credential_repo.get_by_id(user_id)
         if not credential:
@@ -572,7 +675,7 @@ class AuthService:
         self, user_id: UUID, code: str, new_password: str
     ) -> None:
         """Reset password using a valid OTP code."""
-        validate_password_strength(new_password)
+        await self._validate_password(new_password)
 
         credential = await self.credential_repo.get_by_id(user_id)
         if not credential:
@@ -618,7 +721,7 @@ class AuthService:
         # Check if user already exists (admin-created driver)
         existing = await self.credential_repo.get_by_email_or_phone(email, None)
         if existing:
-            validate_password_strength(password)
+            await self._validate_password(password)
 
             # Credential was pre-created by admin — update the password from the invitee
             await self.credential_repo.update_password(
@@ -653,7 +756,7 @@ class AuthService:
             logger.info(f"Admin-created driver password updated via register: {existing.id}")
             return token_pair
 
-        validate_password_strength(password)
+        await self._validate_password(password)
 
         # Create credential — a valid invite token is proof of identity, so the
         # driver is verified on activation (no separate email-OTP step).
@@ -748,7 +851,7 @@ class AuthService:
         if existing:
             raise ConflictError("A user with this email already exists")
 
-        validate_password_strength(password)
+        await self._validate_password(password)
 
         # Create credential with ADMIN role
         credential = UserCredential(

@@ -26,6 +26,9 @@ class GatewaySettings(BaseSettings):
     # CORS
     CORS_ORIGINS: list[str] = ["*"]
 
+    # Admin activity logging (fire-and-forget to auth-service)
+    ACTIVITY_LOG_ENABLED: bool = True
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 

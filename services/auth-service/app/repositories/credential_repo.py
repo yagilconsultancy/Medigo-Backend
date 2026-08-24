@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user_credential import UserCredential
 from app.normalization import normalize_email, normalize_phone
+from mediride_common.schemas.enums import UserRole
 
 
 class CredentialRepository:
@@ -94,3 +95,13 @@ class CredentialRepository:
             .where(UserCredential.id == user_id)
             .values(locked_until=locked_until)
         )
+
+    async def count_active_admins(self) -> int:
+        """Active admin accounts, for the Security Settings KPI cards."""
+        result = await self.session.execute(
+            select(func.count(UserCredential.id)).where(
+                UserCredential.role == UserRole.ADMIN,
+                UserCredential.is_active.is_(True),
+            )
+        )
+        return result.scalar() or 0

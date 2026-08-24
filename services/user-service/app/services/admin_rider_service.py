@@ -296,6 +296,33 @@ class AdminRiderService:
 
         return await self.get_rider_detail(rider_id)
 
+    # --- Delete ---
+
+    async def delete_rider(self, rider_id: UUID, admin_id: UUID) -> dict:
+        """Remove a rider from the admin lists (used to clear out test accounts).
+
+        The profile row is soft-deleted so historical rides keep resolving, while
+        the auth credential is dropped outright so the phone/email is free again.
+        """
+        detail = await self.repo.get_rider_detail(rider_id)
+        if not detail:
+            raise ValueError("Rider not found")
+
+        await self.repo.delete_rider(rider_id)
+        await self.auth_client.delete_account(rider_id)
+
+        await self.publisher.publish(
+            exchange_name=Exchanges.USERS,
+            routing_key=RoutingKeys.RIDER_DELETED,
+            payload={
+                "rider_id": str(rider_id),
+                "deleted_by": str(admin_id),
+            },
+        )
+
+        logger.info(f"Admin {admin_id} deleted rider: {rider_id}")
+        return {"deleted": True, "rider_id": str(rider_id)}
+
     # --- Rider profile & KYC ---
 
     # Fields that live on rider_kyc rather than users.

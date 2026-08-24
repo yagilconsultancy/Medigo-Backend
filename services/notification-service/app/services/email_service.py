@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -527,12 +527,23 @@ def _format_datetime(value: datetime | str | None) -> str | None:
             value = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError:
             return str(value)
-    local_dt = value.astimezone(app_timezone()) if value.tzinfo else value
+    # Timestamps cross the wire as UTC; a naive value is UTC that lost its
+    # tzinfo in transit, not a local wall-clock time. Treating it as local
+    # printed the raw UTC hour with an empty %Z, so a 1 PM pickup rendered as
+    # 5 PM with nothing to signal the zone.
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    local_dt = value.astimezone(app_timezone())
     hour = local_dt.strftime("%I").lstrip("0") or "12"
     return (
         f"{local_dt.strftime('%A, %B')} {local_dt.day}, {local_dt.year} "
         f"at {hour}:{local_dt.strftime('%M %p')} {local_dt.strftime('%Z')}".strip()
     )
+
+
+# Public alias: event consumers building rider-facing detail dicts must render
+# times through here rather than str()-ing a UTC datetime into the template.
+format_datetime = _format_datetime
 
 
 def _format_duration(minutes: int | None) -> str | None:
@@ -556,7 +567,7 @@ def _urgent_note(scheduled_at: datetime | str | None) -> str | None:
         except ValueError:
             return None
     if scheduled_at.tzinfo is None:
-        return None
+        scheduled_at = scheduled_at.replace(tzinfo=UTC)
     remaining = scheduled_at - utc_now()
     if remaining <= timedelta(0):
         return "The scheduled pickup time has already passed. Please review this booking now."

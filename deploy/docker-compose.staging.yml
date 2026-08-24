@@ -11,7 +11,7 @@ x-service-defaults: &service-defaults
 x-service-env: &service-env
   ENVIRONMENT: staging
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
-  DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-Canada/Eastern}
+  DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-America/Toronto}
   RABBITMQ_URL: amqp://mediride:${RABBITMQ_PASSWORD:-staging_password}@rabbitmq:5672/mediride
   REDIS_URL: redis://redis:6379/0
 

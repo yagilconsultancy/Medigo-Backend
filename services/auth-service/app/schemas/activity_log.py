@@ -40,3 +40,4 @@ class CreateActivityLogRequest(BaseModel):
     severity: str = "info"
     target_entity_id: str | None = None
     target_entity_type: str | None = None
+    ip_address: str | None = None

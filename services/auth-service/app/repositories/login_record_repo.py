@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from sqlalchemy import Boolean, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -58,21 +60,72 @@ class LoginRecordRepository:
                 select(func.count(LoginRecord.id)).where(LoginRecord.success.is_(False))
             )
         ).scalar() or 0
+        # `location` is never populated (no GeoIP lookup exists), so counting
+        # distinct locations is structurally always 0. Count distinct IPs
+        # instead so the KPI reflects something real.
         unique_locations = (
             await self.session.execute(
-                select(func.count(func.distinct(LoginRecord.location))).where(LoginRecord.location.isnot(None))
+                select(func.count(func.distinct(LoginRecord.ip_address))).where(
+                    LoginRecord.ip_address.isnot(None)
+                )
             )
         ).scalar() or 0
+
+        suspicious = await self.get_suspicious_count()
 
         return {
             "total_logins": total,
             "successful": successful,
             "failed_attempts": failed,
             "unique_locations": unique_locations,
+            "suspicious_count": suspicious,
         }
+
+    async def count_recent_failures(self, admin_email: str, since: datetime) -> int:
+        """Failed attempts for an email since a cutoff, used to flag suspicion."""
+        result = await self.session.execute(
+            select(func.count(LoginRecord.id)).where(
+                LoginRecord.admin_email == admin_email,
+                LoginRecord.success.is_(False),
+                LoginRecord.created_at >= since,
+            )
+        )
+        return result.scalar() or 0
+
+    async def has_successful_login_from_ip(
+        self, admin_email: str, ip_address: str
+    ) -> bool:
+        """True if this email has ever logged in successfully from this IP."""
+        result = await self.session.execute(
+            select(LoginRecord.id)
+            .where(
+                LoginRecord.admin_email == admin_email,
+                LoginRecord.ip_address == ip_address,
+                LoginRecord.success.is_(True),
+            )
+            .limit(1)
+        )
+        return result.scalar() is not None
 
     async def get_suspicious_count(self) -> int:
         result = await self.session.execute(
             select(func.count(LoginRecord.id)).where(LoginRecord.is_suspicious.is_(True))
+        )
+        return result.scalar() or 0
+
+    async def count_blocked_recent(self, days: int = 30) -> int:
+        """Failed sign-in attempts in the window, for the "threats blocked" KPI.
+
+        Only meaningful once failed attempts are actually persisted -- they
+        used to be rolled back with the request transaction.
+        """
+        from mediride_common.utils import utc_now
+
+        since = utc_now() - timedelta(days=days)
+        result = await self.session.execute(
+            select(func.count(LoginRecord.id)).where(
+                LoginRecord.success.is_(False),
+                LoginRecord.created_at >= since,
+            )
         )
         return result.scalar() or 0

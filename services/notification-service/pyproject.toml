@@ -25,6 +25,7 @@ dependencies = [
     "redis[hiredis]>=5.0.0",
     "PyJWT>=2.8.0",
     "exponent-server-sdk>=2.1.0",
+    "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]

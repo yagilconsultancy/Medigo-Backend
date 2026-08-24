@@ -9,6 +9,7 @@ class LoginHistoryKPIs(BaseModel):
     successful: int = 0
     failed_attempts: int = 0
     unique_locations: int = 0
+    suspicious_count: int = 0
 
 
 class LoginRecordItem(BaseModel):

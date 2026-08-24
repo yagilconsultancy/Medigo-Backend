@@ -228,6 +228,20 @@ async def update_rider(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.delete("/{rider_id}", response_model=StandardResponse[dict])
+async def delete_rider(
+    rider_id: UUID,
+    admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    service: AdminRiderService = Depends(_get_service),
+):
+    """Remove a rider from the admin lists (e.g. clearing out test accounts)."""
+    try:
+        result = await service.delete_rider(rider_id, admin.id)
+        return StandardResponse(data=result, message="Rider deleted")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.put(
     "/{rider_id}/kyc/approve",
     response_model=StandardResponse[AdminRiderDetailResponse],
