@@ -46,6 +46,23 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_email_ci(self, email: str) -> User | None:
+        """Case-insensitive email lookup.
+
+        get_by_email() compares exactly, which is fine for internal callers
+        that already hold the stored address. The public deletion form is
+        typed by hand, so "John@Example.com" must still find the account
+        stored as "john@example.com" - otherwise the requester silently never
+        receives a code.
+        """
+        result = await self.session.execute(
+            select(User).where(
+                func.lower(User.email) == email.strip().lower(),
+                User.deleted_at.is_(None),
+            )
+        )
+        return result.scalars().first()
+
     async def list_by_role(
         self, role: str, offset: int = 0, limit: int = 20, business_id: UUID | None = None
     ) -> tuple[list[User], int]:

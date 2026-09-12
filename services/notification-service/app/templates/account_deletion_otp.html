@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        .otp-code { text-align: center; font-size: 36px; font-weight: bold; color: #B91C1C; letter-spacing: 8px; margin: 30px 0; padding: 20px; background: #FFF5F5; border-radius: 8px; }
+        .message { color: #555; line-height: 1.6; }
+        .warning { color: #7F1D1D; background: #FFF5F5; border: 1px solid #FECACA; border-radius: 8px; padding: 16px; line-height: 1.6; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% include "_email_logo.html" %}
+        <h2 style="text-align: center; color: #333;">Confirm Your Account Deletion Request</h2>
+        <p class="message">Hello {{ full_name }},</p>
+        <p class="message">
+            We received a request to delete your MediGo account. Enter the code below on the
+            deletion page to confirm that this request came from you:
+        </p>
+        <div class="otp-code">{{ otp_code }}</div>
+        <p class="message">This code expires in <strong>{{ expires_in_minutes }} minutes</strong>.</p>
+        <div class="warning">
+            <strong>Didn't request this?</strong> You can safely ignore this email &mdash; your
+            account will not be touched. Nothing is deleted until this code is entered and a
+            member of our team has reviewed the request.
+        </div>
+        <p class="message">
+            If you have any questions, contact us at
+            <a href="mailto:info@getmedigo.com">info@getmedigo.com</a>.
+        </p>
+        <div class="footer">
+            <p>&copy; 2026 MediGo. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>

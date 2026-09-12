@@ -110,6 +110,12 @@ class RoutingKeys:
     RIDER_ISSUE_CREATED = "rider.issue.created"
     RIDER_ISSUE_STATUS_CHANGED = "rider.issue.status_changed"
 
+    # Public account deletion events (getmedigo.com/medigo-delete-account)
+    ACCOUNT_DELETION_OTP_REQUESTED = "account.deletion.otp_requested"
+    ACCOUNT_DELETION_REQUEST_RECEIVED = "account.deletion.received"
+    ACCOUNT_DELETION_APPROVED = "account.deletion.approved"
+    ACCOUNT_DELETION_REJECTED = "account.deletion.rejected"
+
 
 class Queues:
     # user-service queues
@@ -121,6 +127,7 @@ class Queues:
     NOTIFICATION_RIDE_EVENTS = "notification-service.ride-events"
     NOTIFICATION_PAYMENT_EVENTS = "notification-service.payment-events"
     NOTIFICATION_FLEET_EVENTS = "notification-service.fleet-events"
+    NOTIFICATION_ACCOUNT_DELETION_EVENTS = "notification-service.account-deletion-events"
 
     # payment-service queues
     PAYMENT_RIDE_COMPLETED = "payment-service.ride-completed"

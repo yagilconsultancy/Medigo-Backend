@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        .message { color: #555; line-height: 1.6; }
+        .reference { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px; text-align: center; font-size: 14px; color: #374151; margin: 24px 0; }
+        .reference strong { display: block; font-size: 16px; margin-top: 6px; color: #111827; word-break: break-all; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+        ul { color: #555; line-height: 1.8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% include "_email_logo.html" %}
+        <h2 style="text-align: center; color: #333;">Deletion Request Received</h2>
+        <p class="message">Hello {{ full_name }},</p>
+        <p class="message">
+            Thank you for confirming your identity. Your request to delete your MediGo account
+            has been verified and passed to our team for review.
+        </p>
+        <div class="reference">
+            Your reference number
+            <strong>{{ request_id }}</strong>
+        </div>
+        <p class="message">
+            We will process your request within <strong>30 days</strong> and email you once it is
+            complete. Once your account is deleted we will remove your profile information,
+            contact details, login credentials and saved preferences.
+        </p>
+        <p class="message">
+            Some records &mdash; trip history, payment transactions, audit logs and regulatory
+            compliance records &mdash; may be retained where we are required to keep them by law
+            or for legitimate business obligations, and only for as long as that requires.
+        </p>
+        <p class="message">
+            Changed your mind, or have a question? Reply to this email or contact
+            <a href="mailto:info@getmedigo.com">info@getmedigo.com</a> quoting your reference
+            number before the request is processed.
+        </p>
+        <div class="footer">
+            <p>&copy; 2026 MediGo. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>

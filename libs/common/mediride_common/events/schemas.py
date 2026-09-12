@@ -100,6 +100,39 @@ class FleetApplicationCreatedPayload(BaseModel):
     created_by: str
 
 
+class AccountDeletionOTPRequestedPayload(BaseModel):
+    """Emailed verification code for a public account-deletion request.
+
+    otp_code travels on the bus in the clear, exactly as the auth service's
+    existing OTP events do - only the stored copy is hashed.
+    """
+
+    request_id: UUID
+    email: str
+    full_name: str
+    otp_code: str
+    expires_in_minutes: int = 15
+
+
+class AccountDeletionRequestReceivedPayload(BaseModel):
+    request_id: UUID
+    email: str
+    full_name: str
+
+
+class AccountDeletionApprovedPayload(BaseModel):
+    request_id: UUID
+    email: str
+    full_name: str
+
+
+class AccountDeletionRejectedPayload(BaseModel):
+    request_id: UUID
+    email: str
+    full_name: str
+    reason: str
+
+
 class FleetApplicationInfoRequestedPayload(BaseModel):
     application_id: UUID
     company_name: str

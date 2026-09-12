@@ -44,6 +44,7 @@ Thumbs.db
 
 # Logs
 *.log
+*.docx
 logs/
 .env
 deploy/deploy_command.txt

@@ -724,3 +724,124 @@ async def send_payment_receipt_email(
         </html>
         """
     return await send_email(to, subject, html)
+
+
+async def send_account_deletion_otp_email(
+    to: str, full_name: str, otp_code: str, expires_in_minutes: int = 15
+) -> bool:
+    """Send the verification code for a public account-deletion request.
+
+    Deliberately separate from send_otp_email: this one has to say plainly
+    what is about to be deleted and how to ignore the mail if the recipient
+    did not ask for it, since anyone can type an address into the public form.
+    """
+    subject = "MediGo - Confirm your account deletion request"
+
+    try:
+        template = _template_env.get_template("account_deletion_otp.html")
+        html = template.render(
+            full_name=full_name,
+            otp_code=otp_code,
+            expires_in_minutes=expires_in_minutes,
+        )
+    except Exception as e:
+        logger.exception(
+            "Failed to render account deletion OTP email for %s: %s", to, e
+        )
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - Confirm Your Account Deletion Request</h2>
+            <p>Hello {full_name},</p>
+            <p>We received a request to delete your MediGo account. Enter this code on the deletion page to confirm it was you:</p>
+            <h1 style="color: #B91C1C; letter-spacing: 5px;">{otp_code}</h1>
+            <p>This code expires in {expires_in_minutes} minutes.</p>
+            <p>If you did not request this, you can safely ignore this email — your account will not be touched.</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(to, subject, html)
+
+
+async def send_account_deletion_received_email(
+    to: str, full_name: str, request_id: str
+) -> bool:
+    """Confirm a verified deletion request and hand over its reference number."""
+    subject = "MediGo - Account deletion request received"
+
+    try:
+        template = _template_env.get_template("account_deletion_received.html")
+        html = template.render(full_name=full_name, request_id=request_id)
+    except Exception as e:
+        logger.exception(
+            "Failed to render account deletion received email for %s: %s", to, e
+        )
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - Deletion Request Received</h2>
+            <p>Hello {full_name},</p>
+            <p>Your request to delete your MediGo account has been verified and passed to our team for review.</p>
+            <p>Your reference number is <strong>{request_id}</strong>.</p>
+            <p>We will process your request within 30 days and email you once it is complete.</p>
+            <p>Questions? Contact info@getmedigo.com quoting your reference number.</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(to, subject, html)
+
+
+async def send_account_deletion_completed_email(to: str, full_name: str) -> bool:
+    """Tell the requester their account has actually been deleted."""
+    subject = "MediGo - Your account has been deleted"
+
+    try:
+        template = _template_env.get_template("account_deletion_completed.html")
+        html = template.render(full_name=full_name)
+    except Exception as e:
+        logger.exception(
+            "Failed to render account deletion completed email for %s: %s", to, e
+        )
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - Your Account Has Been Deleted</h2>
+            <p>Hello {full_name},</p>
+            <p>Your MediGo account has been deleted as requested. You will no longer be able to sign in.</p>
+            <p>Records we are required to keep, such as trip and payment history, are retained only for as long as the law or our legitimate business obligations require.</p>
+            <p>If you did not request this, contact us immediately at info@getmedigo.com.</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(to, subject, html)
+
+
+async def send_account_deletion_rejected_email(
+    to: str, full_name: str, reason: str
+) -> bool:
+    """Explain why a deletion request could not be completed."""
+    subject = "MediGo - About your account deletion request"
+
+    try:
+        template = _template_env.get_template("account_deletion_rejected.html")
+        html = template.render(full_name=full_name, reason=reason)
+    except Exception as e:
+        logger.exception(
+            "Failed to render account deletion rejected email for %s: %s", to, e
+        )
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - About Your Account Deletion Request</h2>
+            <p>Hello {full_name},</p>
+            <p>We have reviewed your request to delete your MediGo account and are unable to complete it at this time. Your account remains active.</p>
+            <p>{reason}</p>
+            <p>If you believe this is a mistake, contact info@getmedigo.com and we will be glad to help.</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(to, subject, html)

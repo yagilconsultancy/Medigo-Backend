@@ -17,6 +17,8 @@ from app.api.v1.admin_rider_endpoints import router as admin_rider_router
 from app.api.v1.admin_role_endpoints import router as admin_role_router
 from app.api.v1.admin_invitation_endpoints import router as admin_invitation_router
 from app.api.v1.caregiver_endpoints import router as caregiver_router
+from app.api.v1.public_account_deletion_endpoints import router as public_account_deletion_router
+from app.api.v1.admin_account_deletion_endpoints import router as admin_account_deletion_router
 
 router = APIRouter()
 router.include_router(user_router, tags=["Users"])
@@ -36,3 +38,5 @@ router.include_router(admin_rider_router, tags=["Admin Rider Management"])
 router.include_router(admin_invitation_router, tags=["Admin Invitations"])
 router.include_router(caregiver_router, tags=["Service Provider (Caregivers)"])
 router.include_router(admin_role_router, tags=["Roles & Permissions"])
+router.include_router(public_account_deletion_router, tags=["Public Account Deletion"])
+router.include_router(admin_account_deletion_router, tags=["Admin Account Deletion"])

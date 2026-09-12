@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        .message { color: #555; line-height: 1.6; }
+        .reason { background: #F9FAFB; border-left: 4px solid #E5E7EB; border-radius: 4px; padding: 16px; color: #374151; line-height: 1.6; margin: 24px 0; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% include "_email_logo.html" %}
+        <h2 style="text-align: center; color: #333;">About Your Account Deletion Request</h2>
+        <p class="message">Hello {{ full_name }},</p>
+        <p class="message">
+            We have reviewed your request to delete your MediGo account and are unable to
+            complete it at this time. Your account remains active.
+        </p>
+        <div class="reason">{{ reason }}</div>
+        <p class="message">
+            If you believe this is a mistake, or once the matter above has been resolved, reply
+            to this email or contact <a href="mailto:info@getmedigo.com">info@getmedigo.com</a>
+            and we will be glad to help.
+        </p>
+        <div class="footer">
+            <p>&copy; 2026 MediGo. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -13,6 +13,10 @@ from app.clients.user_service_client import UserServiceClient
 from app.config import settings
 from app.services.email_service import (
     format_datetime,
+    send_account_deletion_completed_email,
+    send_account_deletion_otp_email,
+    send_account_deletion_received_email,
+    send_account_deletion_rejected_email,
     send_account_reactivation_email,
     send_admin_invite_email,
     send_admin_ride_booking_email,
@@ -31,6 +35,10 @@ from mediride_common.events.broker import RabbitMQBroker
 from mediride_common.events.constants import Exchanges, Queues, RoutingKeys
 from mediride_common.events.consumer import BaseEventConsumer
 from mediride_common.events.schemas import (
+    AccountDeletionApprovedPayload,
+    AccountDeletionOTPRequestedPayload,
+    AccountDeletionRejectedPayload,
+    AccountDeletionRequestReceivedPayload,
     AdminInviteSentPayload,
     DriverEmailChangedPayload,
     DriverInviteSentPayload,
@@ -704,6 +712,89 @@ class FleetEventConsumer(BaseEventConsumer):
                 )
 
 
+class AccountDeletionEventConsumer(BaseEventConsumer):
+    """Emails for the public account-deletion flow.
+
+    Covers the whole journey the requester sees: the code that proves they own
+    the mailbox, the acknowledgement once it is verified, and the outcome after
+    an admin reviews it. Nothing here touches the account itself.
+    """
+
+    async def handle(self, envelope: EventEnvelope) -> None:
+        if envelope.event_type == RoutingKeys.ACCOUNT_DELETION_OTP_REQUESTED:
+            payload = AccountDeletionOTPRequestedPayload(**envelope.payload)
+            sent = await send_account_deletion_otp_email(
+                to=payload.email,
+                full_name=payload.full_name,
+                otp_code=payload.otp_code,
+                expires_in_minutes=payload.expires_in_minutes,
+            )
+            # The code is never logged - only whether the mail went out.
+            if sent:
+                logger.info(
+                    "Account deletion OTP email sent for request %s",
+                    payload.request_id,
+                )
+            else:
+                logger.error(
+                    "Account deletion OTP email failed for request %s",
+                    payload.request_id,
+                )
+
+        elif envelope.event_type == RoutingKeys.ACCOUNT_DELETION_REQUEST_RECEIVED:
+            payload = AccountDeletionRequestReceivedPayload(**envelope.payload)
+            sent = await send_account_deletion_received_email(
+                to=payload.email,
+                full_name=payload.full_name,
+                request_id=str(payload.request_id),
+            )
+            if sent:
+                logger.info(
+                    "Account deletion acknowledgement sent for request %s",
+                    payload.request_id,
+                )
+            else:
+                logger.error(
+                    "Account deletion acknowledgement failed for request %s",
+                    payload.request_id,
+                )
+
+        elif envelope.event_type == RoutingKeys.ACCOUNT_DELETION_APPROVED:
+            payload = AccountDeletionApprovedPayload(**envelope.payload)
+            sent = await send_account_deletion_completed_email(
+                to=payload.email,
+                full_name=payload.full_name,
+            )
+            if sent:
+                logger.info(
+                    "Account deletion completed email sent for request %s",
+                    payload.request_id,
+                )
+            else:
+                logger.error(
+                    "Account deletion completed email failed for request %s",
+                    payload.request_id,
+                )
+
+        elif envelope.event_type == RoutingKeys.ACCOUNT_DELETION_REJECTED:
+            payload = AccountDeletionRejectedPayload(**envelope.payload)
+            sent = await send_account_deletion_rejected_email(
+                to=payload.email,
+                full_name=payload.full_name,
+                reason=payload.reason,
+            )
+            if sent:
+                logger.info(
+                    "Account deletion rejected email sent for request %s",
+                    payload.request_id,
+                )
+            else:
+                logger.error(
+                    "Account deletion rejected email failed for request %s",
+                    payload.request_id,
+                )
+
+
 class ChatConversationConsumer(BaseEventConsumer):
     """Auto-creates a chat conversation when a driver is assigned to a ride."""
 
@@ -803,6 +894,18 @@ async def setup_consumers(broker: RabbitMQBroker) -> None:
             RoutingKeys.FLEET_APPLICATION_APPROVED,
             RoutingKeys.FLEET_APPLICATION_REJECTED,
             RoutingKeys.FLEET_APPLICATION_INFO_REQUESTED,
+        ],
+    )
+
+    account_deletion_consumer = AccountDeletionEventConsumer(broker)
+    await account_deletion_consumer.setup_queue(
+        queue_name=Queues.NOTIFICATION_ACCOUNT_DELETION_EVENTS,
+        exchange_name=Exchanges.USERS,
+        routing_keys=[
+            RoutingKeys.ACCOUNT_DELETION_OTP_REQUESTED,
+            RoutingKeys.ACCOUNT_DELETION_REQUEST_RECEIVED,
+            RoutingKeys.ACCOUNT_DELETION_APPROVED,
+            RoutingKeys.ACCOUNT_DELETION_REJECTED,
         ],
     )
 

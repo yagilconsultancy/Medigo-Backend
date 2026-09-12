@@ -41,6 +41,15 @@ from app.routes.proxy import _STRIPPED_REQUEST_HEADERS, _is_public_path
         ("/payments/fare-estimate/abc", False),
         ("/users/public/fleet/apply", True),
         ("/users/public/fleet/apply/123", False),
+        # Public account deletion (Play Store deletion URL).
+        ("/users/public/account-deletion/request", True),
+        ("/users/public/account-deletion/verify", True),
+        ("/users/public/account-deletion/resend-otp", True),
+        # The admin review side must stay behind auth.
+        ("/users/admin/account-deletion/requests", False),
+        ("/users/admin/account-deletion/requests/123/approve", False),
+        # And no child of a public deletion route is public.
+        ("/users/public/account-deletion/request/123", False),
         # Docs.
         ("/auth/docs", True),
         ("/auth/openapi.json", True),

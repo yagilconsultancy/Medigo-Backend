@@ -50,6 +50,12 @@ PUBLIC_EXACT_PATHS = frozenset({
     "/tracking/test/simulate-location",  # Public test endpoint for simulating driver GPS
     "/locations/public/check-address",  # Public address validation
     "/users/public/fleet/apply",  # Public fleet partner application
+    # Play Store requires a deletion URL reachable without the app or a login.
+    # These three back getmedigo.com/medigo-delete-account; ownership is proven
+    # by an emailed OTP, and an admin still reviews every verified request.
+    "/users/public/account-deletion/request",
+    "/users/public/account-deletion/verify",
+    "/users/public/account-deletion/resend-otp",
     "/notifications/public/contact",  # Public contact form submission
 })
 

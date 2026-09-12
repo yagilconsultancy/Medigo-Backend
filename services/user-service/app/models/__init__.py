@@ -1,3 +1,4 @@
+from app.models.account_deletion_request import AccountDeletionRequest
 from app.models.admin_invitation import AdminInvitation
 from app.models.admin_role import AdminRole, AdminRoleAssignment, ModulePermission
 from app.models.fleet import Fleet
@@ -22,6 +23,7 @@ from app.models.rider_kyc import RiderKYC
 from app.models.vehicle_maintenance_log import VehicleMaintenanceLog
 
 __all__ = [
+    "AccountDeletionRequest",
     "AdminInvitation",
     "AdminRole",
     "AdminRoleAssignment",

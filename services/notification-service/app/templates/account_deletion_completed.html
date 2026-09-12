@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        .message { color: #555; line-height: 1.6; }
+        .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% include "_email_logo.html" %}
+        <h2 style="text-align: center; color: #333;">Your Account Has Been Deleted</h2>
+        <p class="message">Hello {{ full_name }},</p>
+        <p class="message">
+            Your MediGo account has been deleted as requested. Your profile information, contact
+            details, saved preferences and login credentials have been removed, and you will no
+            longer be able to sign in.
+        </p>
+        <p class="message">
+            Records we are required to keep &mdash; such as trip history, payment transactions,
+            audit logs and regulatory compliance records &mdash; are retained only for as long as
+            the law or our legitimate business obligations require.
+        </p>
+        <p class="message">
+            Thank you for having travelled with MediGo. If you would like to use MediGo again in
+            the future, you are welcome to create a new account at any time.
+        </p>
+        <p class="message">
+            If you did not request this, contact us immediately at
+            <a href="mailto:info@getmedigo.com">info@getmedigo.com</a>.
+        </p>
+        <div class="footer">
+            <p>&copy; 2026 MediGo. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>
