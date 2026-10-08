@@ -13,7 +13,12 @@ class AuthServiceClient:
         self.base_url = base_url.rstrip("/")
 
     async def create_driver_credential(
-        self, email: str, phone: str | None, password: str, business_id: UUID
+        self,
+        email: str,
+        phone: str | None,
+        password: str,
+        business_id: UUID,
+        is_verified: bool = True,
     ) -> dict:
         """Create driver credential. Returns result dict or raises with actual error."""
         try:
@@ -25,6 +30,7 @@ class AuthServiceClient:
                         "phone": phone,
                         "password": password,
                         "business_id": str(business_id),
+                        "is_verified": is_verified,
                     },
                     headers=HEADERS,
                 )
@@ -188,3 +194,24 @@ class AuthServiceClient:
         except httpx.RequestError as e:
             logger.error(f"Auth service change-email error: {e}")
             raise RuntimeError(f"Auth service unavailable: {e}")
+
+    async def send_driver_activation_code(self, user_id: UUID) -> bool:
+        """Ask auth-service to email the driver's activation code.
+
+        Best effort: a failure here must never undo the approval; the admin can
+        use "resend" instead. Returns True only if a code was actually sent.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{self.base_url}/internal/drivers/{user_id}/send-activation-code",
+                    headers=HEADERS,
+                )
+            if resp.status_code == 200:
+                return bool(resp.json().get("sent"))
+            logger.warning(
+                f"send-activation-code returned {resp.status_code} for {user_id}"
+            )
+        except Exception as e:  # noqa: BLE001 - best effort by design
+            logger.warning(f"send-activation-code failed for {user_id}: {e}")
+        return False

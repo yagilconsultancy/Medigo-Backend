@@ -20,6 +20,7 @@ from app.services.email_service import (
     send_account_reactivation_email,
     send_admin_invite_email,
     send_admin_ride_booking_email,
+    send_driver_activation_email,
     send_driver_invite_email,
     send_fleet_application_approved_email,
     send_fleet_application_received_email,
@@ -72,10 +73,16 @@ class AuthEventConsumer(BaseEventConsumer):
         elif envelope.event_type == RoutingKeys.USER_OTP_REQUESTED:
             payload = UserOTPRequestedPayload(**envelope.payload)
             if payload.email and payload.channel == "email":
-                sent = await send_otp_email(
-                    to=payload.email,
-                    otp_code=payload.otp_code,
-                )
+                if payload.purpose == "driver_activation":
+                    sent = await send_driver_activation_email(
+                        to=payload.email,
+                        otp_code=payload.otp_code,
+                    )
+                else:
+                    sent = await send_otp_email(
+                        to=payload.email,
+                        otp_code=payload.otp_code,
+                    )
                 if sent:
                     logger.info(
                         "OTP email sent to %s for purpose %s",

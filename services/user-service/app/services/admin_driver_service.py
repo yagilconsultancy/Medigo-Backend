@@ -1,14 +1,12 @@
 import asyncio
 import logging
 import secrets
-from datetime import timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.clients.auth_service_client import AuthServiceClient
 from app.clients.ride_service_client import RideServiceClient
 from app.config import settings
-from app.models.driver_invitation import DriverInvitation
 from app.repositories.admin_driver_repo import AdminDriverRepository
 from app.repositories.fleet_repo import FleetRepository
 from app.repositories.invitation_repo import InvitationRepository
@@ -41,7 +39,6 @@ from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.events.schemas import (
     DriverEmailChangedPayload,
-    DriverInviteSentPayload,
 )
 from mediride_common.exceptions import ConflictError, NotFoundError, ValidationError
 from mediride_common.utils import utc_now
@@ -217,16 +214,20 @@ class AdminDriverService:
         request: CreateDriverRequest,
         documents: "dict[str, UploadFile] | None" = None,
     ) -> AdminDriverDetailResponse:
-        # Use default password for driver credential
-        default_password = settings.DEFAULT_DRIVER_PASSWORD
+        # The driver chooses their own password the first time they activate in
+        # the app (proof of email via a emailed code). Until then the credential
+        # holds a random password nobody knows and is marked unverified, so it
+        # cannot be used to log in. Never email or log this value.
+        placeholder_password = secrets.token_urlsafe(24) + "aA1!"
 
         # Create credential in auth-service
         try:
             cred_result = await self.auth_client.create_driver_credential(
                 email=request.email,
                 phone=request.phone,
-                password=default_password,
+                password=placeholder_password,
                 business_id=request.fleet_id,
+                is_verified=False,
             )
         except RuntimeError as e:
             raise ValidationError(str(e))
@@ -244,6 +245,11 @@ class AdminDriverService:
             business_id=request.fleet_id,
             date_of_birth=request.date_of_birth,
             is_active=True,  # Auto-activate driver
+            # The admin has already entered the driver's details, so there are no
+            # app onboarding steps left. Without this the app sends the driver into
+            # the old registration flow after login.
+            onboarding_step=5,
+            onboarding_completed=True,
         )
 
         # Create driver profile
@@ -257,7 +263,8 @@ class AdminDriverService:
             "service_capabilities": request.service_capabilities,
             "specialty": request.specialty,
             "date_of_birth": request.date_of_birth,
-            "account_status": request.account_status,
+            # Switching "Approve Driver" on means the driver is live.
+            "account_status": "active" if request.is_approved else request.account_status,
             "is_approved": request.is_approved,
         }
 
@@ -306,40 +313,7 @@ class AdminDriverService:
             "created_by": str(admin_id),
         }
 
-        # Build the driver invitation as part of the SAME transaction as the driver
-        # record. This is intentionally NOT wrapped in try/except: if the invite cannot
-        # be persisted (e.g. FK violation), the whole creation must fail loudly rather
-        # than report success while the driver holds a token that has no matching row.
-        invite_token: str | None = None
-        invite_payload: dict | None = None
-        if self.invitation_repo and self.fleet_repo:
-            fleet = await self.fleet_repo.get_by_id(request.fleet_id)
-            fleet_name = fleet.name if fleet else "MediRide"
-
-            token = secrets.token_urlsafe(5)
-            invitation = DriverInvitation(
-                business_id=request.fleet_id,
-                email=request.email,
-                invited_by=admin_id,
-                token=token,
-                expires_at=utc_now() + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS),
-            )
-            await self.invitation_repo.create(invitation)
-            invite_token = token
-            # Capture the payload now, while attributes are loaded and before commit
-            # expires the ORM object, so we never touch the session after publishing.
-            invite_payload = DriverInviteSentPayload(
-                invitation_id=invitation.id,
-                business_id=request.fleet_id,
-                fleet_name=fleet_name,
-                email=request.email,
-                invite_token=token,
-                temporary_password=default_password,
-            ).model_dump(mode="json")
-
-        # Commit user + profile + documents + invitation atomically BEFORE emitting any
-        # events. Events (esp. the invite email) are non-transactional side effects, so a
-        # later failure must never leave a token emailed to a driver with no persisted row.
+        # Commit user + profile + documents atomically BEFORE emitting any events.
         await self.repo.session.commit()
 
         await self.publisher.publish(
@@ -347,68 +321,29 @@ class AdminDriverService:
             RoutingKeys.DRIVER_ACCOUNT_CREATED,
             account_created_payload,
         )
-        if invite_payload is not None:
-            await self.publisher.publish(
-                Exchanges.AUTH,
-                RoutingKeys.DRIVER_INVITE_SENT,
-                invite_payload,
-            )
-            logger.info(f"Driver invitation created for {request.email}")
+        # Welcome email with the activation code (only once approved).
+        if request.is_approved:
+            await self.auth_client.send_driver_activation_code(user_id)
 
         logger.info(f"Admin created driver: {user_id}")
         detail = await self.get_driver_detail(user_id)
-        detail.invite_token = invite_token
         return detail
 
-    async def resend_invitation(self, driver_user_id: UUID, admin_id: UUID) -> str:
-        """Revoke any existing pending invitation and create a new one. Returns the new invite token."""
+    async def resend_invitation(self, driver_user_id: UUID, admin_id: UUID) -> bool:
+        """Resend the welcome email with a fresh activation code."""
         detail = await self.repo.get_driver_detail(driver_user_id)
         if not detail:
             raise NotFoundError("Driver not found")
 
-        if not self.invitation_repo or not self.fleet_repo:
-            raise ValidationError("Invitation service not available")
+        sent = await self.auth_client.send_driver_activation_code(driver_user_id)
+        if not sent:
+            raise ValidationError(
+                "No code was sent. The driver must be approved and must not have "
+                "set a password yet (or too many codes were requested; try again later)."
+            )
 
-        email = detail["email"]
-        fleet_id = detail["fleet_id"]
-        fleet_name = detail.get("fleet_name") or "MediRide"
-
-        # Revoke any existing pending invitation for this email + fleet
-        existing = await self.invitation_repo.get_by_email_and_fleet(email, fleet_id)
-        if existing:
-            await self.invitation_repo.revoke(existing.id)
-
-        # Create new invitation
-        token = secrets.token_urlsafe(5)
-        invitation = DriverInvitation(
-            business_id=fleet_id,
-            email=email,
-            invited_by=admin_id,
-            token=token,
-            expires_at=utc_now() + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS),
-        )
-        await self.invitation_repo.create(invitation)
-        invite_payload = DriverInviteSentPayload(
-            invitation_id=invitation.id,
-            business_id=fleet_id,
-            fleet_name=fleet_name,
-            email=email,
-            invite_token=token,
-        ).model_dump(mode="json")
-
-        # Commit the revoke + new invitation before emailing, so the token in the
-        # driver's inbox always corresponds to a durable, verifiable row.
-        await self.repo.session.commit()
-
-        # Publish event to send email (non-transactional side effect, post-commit)
-        await self.publisher.publish(
-            Exchanges.AUTH,
-            RoutingKeys.DRIVER_INVITE_SENT,
-            invite_payload,
-        )
-
-        logger.info(f"Resent invitation for driver {driver_user_id} to {email}")
-        return token
+        logger.info(f"Admin {admin_id} resent activation code for driver {driver_user_id}")
+        return True
 
     async def update_driver(
         self, driver_user_id: UUID, request: UpdateDriverRequest
@@ -619,11 +554,18 @@ class AdminDriverService:
             performed_by=admin_id,
         )
 
+        # Commit first so auth-service sees the approval when it checks.
+        await self.repo.session.commit()
+
         await self.publisher.publish(
             Exchanges.USERS,
             RoutingKeys.DRIVER_APPROVED,
             {"driver_id": str(driver_user_id), "approved_by": str(admin_id)},
         )
+
+        # First approval of a driver who has not set a password yet: welcome
+        # email with the activation code (no-op for drivers already active).
+        await self.auth_client.send_driver_activation_code(driver_user_id)
 
         logger.info(f"Admin approved driver: {driver_user_id}")
         return await self.get_driver_detail(driver_user_id)

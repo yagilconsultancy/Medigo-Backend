@@ -166,6 +166,32 @@ async def send_otp_email(to: str, otp_code: str) -> bool:
     return await send_email(to, "MediGo - Verification Code", html)
 
 
+async def send_driver_activation_email(to: str, otp_code: str) -> bool:
+    """Welcome email for a newly approved driver. Contains ONLY the activation
+    code - never a password. The driver enters it in the app together with
+    their own new password."""
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; color: #1a1a1a;">
+        <h2>Welcome to MediGo</h2>
+        <p>Your driver account has been created and approved.</p>
+        <p>Your activation code is:</p>
+        <h1 style="color: #3B5998; letter-spacing: 5px;">{otp_code}</h1>
+        <p><strong>To activate your account:</strong></p>
+        <ol>
+            <li>Open the MediGo app and choose <strong>Driver</strong>.</li>
+            <li>Enter this email address and tap <strong>Continue</strong>.</li>
+            <li>Enter the activation code above and choose your own password.</li>
+            <li>Tap <strong>Activate account</strong>, then log in.</li>
+        </ol>
+        <p>This code is valid for 7 days. Never share it with anyone.</p>
+        <p>Questions? Email support@getmedigo.com.</p>
+    </body>
+    </html>
+    """
+    return await send_email(to, "Welcome to MediGo - Your activation code", html)
+
+
 async def send_driver_invite_email(
     to: str, fleet_name: str, invite_token: str, temporary_password: str | None = None
 ) -> bool:

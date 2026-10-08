@@ -64,3 +64,26 @@ class UserServiceClient:
             raise ServiceUnavailableError("Failed to accept invitation")
 
         return response.json()
+
+    async def get_driver_profile(self, user_id: str) -> dict | None:
+        """Fetch a driver's profile. Returns None if the driver has no profile."""
+        try:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+                response = await client.get(
+                    f"{self._base_url}/internal/drivers/{user_id}/profile",
+                    headers={"X-Internal-Service": "auth-service"},
+                )
+        except httpx.ConnectError:
+            raise ServiceUnavailableError("User service is unavailable")
+        except httpx.TimeoutException:
+            raise ServiceUnavailableError("User service request timed out")
+
+        if response.status_code == 404:
+            return None
+        if response.status_code != 200:
+            logger.error(
+                f"Failed to fetch driver profile: {response.status_code}"
+            )
+            raise ServiceUnavailableError("Failed to check driver status")
+
+        return response.json()

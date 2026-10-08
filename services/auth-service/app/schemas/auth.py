@@ -91,6 +91,20 @@ class AdminRegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=128)
 
 
+class DriverActivationCheckRequest(BaseModel):
+    email: EmailStr
+
+
+class DriverActivationOTPRequest(BaseModel):
+    email: EmailStr
+
+
+class DriverActivationCompleteRequest(BaseModel):
+    email: EmailStr
+    otp: str = Field(..., min_length=6, max_length=6)
+    password: str = Field(..., min_length=8, max_length=128)
+
+
 # Response schemas
 class RegisterResponse(BaseModel):
     user_id: UUID
@@ -119,3 +133,11 @@ class InviteVerifyResponse(BaseModel):
     valid: bool
     fleet_name: str | None = None
     email: str | None = None
+
+
+class DriverActivationCheckResponse(BaseModel):
+    # not_activated -> tell the driver to email support
+    # set_password  -> approved, first time: needs emailed code + new password
+    # login         -> approved and password already set: normal login
+    next_step: str
+    message: str | None = None
