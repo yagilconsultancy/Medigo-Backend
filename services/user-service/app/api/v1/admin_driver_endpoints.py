@@ -263,11 +263,11 @@ async def resend_invitation(
     admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: AdminDriverService = Depends(_get_service),
 ):
-    """Resend invitation email to a driver. Returns the new invite token."""
-    token = await service.resend_invitation(driver_id, admin.id)
+    """Resend the welcome email with a fresh activation code."""
+    await service.resend_invitation(driver_id, admin.id)
     return StandardResponse(
-        data={"invite_token": token},
-        message="Invitation resent successfully",
+        data={"sent": True},
+        message="Activation code resent successfully",
     )
 
 

@@ -11,7 +11,6 @@ class UserSettings(BaseServiceSettings):
     RIDE_SERVICE_URL: str = "http://ride-service:8003"
 
     # Default password for newly created drivers
-    DEFAULT_DRIVER_PASSWORD: str = "MediRide2026!"
 
     # Default password for newly created admins
     DEFAULT_ADMIN_PASSWORD: str = "MediAdmin2026!"

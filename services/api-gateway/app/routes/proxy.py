@@ -43,6 +43,9 @@ PUBLIC_EXACT_PATHS = frozenset({
     "/auth/admin/register",
     "/auth/driver/verify-invite",
     "/auth/driver/register",
+    "/auth/driver/activation/check",  # Driver email gate: is my account activated?
+    "/auth/driver/activation/request-otp",
+    "/auth/driver/activation/complete",
     "/payments/webhooks/stripe",
     "/payments/fare-estimate",  # Public fare estimates for riders
     "/payments/base-fare-estimate",  # Public base fare estimates for guests

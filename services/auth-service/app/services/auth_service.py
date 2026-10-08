@@ -808,6 +808,117 @@ class AuthService:
         )
         return token_pair
 
+    # ------------------------------------------------------------------
+    # Driver activation (email gate on the mobile app)
+    # ------------------------------------------------------------------
+    DRIVER_ACTIVATION_PURPOSE = "driver_activation"
+    NOT_ACTIVATED_MESSAGE = (
+        "Your account isn't activated yet. Please email "
+        "support@getmedigo.com to start your application."
+    )
+
+    async def _driver_activation_state(
+        self, email: str
+    ) -> tuple[str, UserCredential | None]:
+        """Work out where a driver is in the activation journey.
+
+        Returns (next_step, credential). Credential is only returned for
+        states that need it (set_password / login).
+        """
+        if not self.user_service_client:
+            raise ValidationError("Driver activation is not configured")
+
+        credential = await self.credential_repo.get_by_email_or_phone(
+            normalize_email(email), None
+        )
+        if (
+            not credential
+            or credential.role != UserRole.DRIVER
+            or not credential.is_active
+        ):
+            return "not_activated", None
+
+        profile = await self.user_service_client.get_driver_profile(
+            str(credential.id)
+        )
+        if (
+            not profile
+            or not profile.get("is_approved")
+            or profile.get("account_status") != "active"
+        ):
+            return "not_activated", None
+
+        if credential.is_verified:
+            return "login", credential
+        return "set_password", credential
+
+    async def check_driver_activation(self, email: str) -> dict:
+        step, _ = await self._driver_activation_state(email)
+        return {
+            "next_step": step,
+            "message": self.NOT_ACTIVATED_MESSAGE if step == "not_activated" else None,
+        }
+
+    async def request_driver_activation_otp(self, email: str) -> bool:
+        """Email the activation code, but only to an approved driver who still
+        has to set a password. Returns whether a code was sent. Callers that
+        face the public must not reveal this value (it would show which emails
+        exist)."""
+        step, credential = await self._driver_activation_state(email)
+        if step != "set_password" or credential is None:
+            return False
+
+        otp_code = await self.otp_service.generate_otp(
+            credential.id,
+            self.DRIVER_ACTIVATION_PURPOSE,
+            "email",
+            expire_minutes=settings.DRIVER_ACTIVATION_CODE_EXPIRE_MINUTES,
+        )
+        await self._publish_otp_requested(
+            user_id=credential.id,
+            purpose=self.DRIVER_ACTIVATION_PURPOSE,
+            channel="email",
+            otp_code=otp_code,
+            email=credential.email,
+            phone=credential.phone,
+        )
+        logger.info(f"Driver activation code sent: user_id={credential.id}")
+        return True
+
+    async def send_driver_activation_code(self, user_id: UUID) -> bool:
+        """Internal: admin just approved this driver, so send the welcome code."""
+        credential = await self.credential_repo.get_by_id(user_id)
+        if not credential or not credential.email:
+            return False
+        return await self.request_driver_activation_otp(credential.email)
+
+    async def complete_driver_activation(
+        self, email: str, otp: str, password: str
+    ) -> None:
+        """Check the emailed code and set the driver's own password.
+
+        The driver is NOT logged in here; the app sends them to the Driver
+        Login page to sign in with the new password.
+        """
+        step, credential = await self._driver_activation_state(email)
+        if step == "not_activated" or credential is None:
+            raise ValidationError(self.NOT_ACTIVATED_MESSAGE)
+        if step == "login":
+            raise ConflictError(
+                "This account already has a password. Please log in."
+            )
+
+        await self._validate_password(password)
+        await self.otp_service.verify_otp(
+            credential.id, otp, self.DRIVER_ACTIVATION_PURPOSE
+        )
+
+        await self.credential_repo.update_password(
+            credential.id, hash_password(password)
+        )
+        await self.credential_repo.update_verified(credential.id, True)
+        logger.info(f"Driver activated and password set: user_id={credential.id}")
+
     async def verify_admin_invite(self, invite_token: str) -> dict:
         """Verify an admin invitation token via user-service."""
         if not self.user_service_client:

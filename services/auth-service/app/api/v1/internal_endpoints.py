@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.dependencies import get_db
+from app.dependencies import get_db, get_publisher
 from app.models.user_credential import UserCredential
 from app.normalization import normalize_email, normalize_phone
 from app.repositories.credential_repo import CredentialRepository
@@ -23,6 +23,7 @@ from app.schemas.activity_log import CreateActivityLogRequest
 from app.services.activity_log_service import ActivityLogService
 from app.services.password_service import hash_password, validate_password_strength
 from app.services.security_policy_cache import get_password_policy
+from mediride_common.events.publisher import EventPublisher
 from mediride_common.schemas.enums import UserRole
 
 # Reactivation tokens are self-contained signed JWTs (no DB storage needed).
@@ -63,6 +64,9 @@ class CreateDriverCredentialRequest(BaseModel):
     phone: str | None = None
     password: str
     business_id: UUID
+    # False = the driver must prove their email and set their own password
+    # (driver activation) before they can log in.
+    is_verified: bool = True
 
 
 class CreateAdminCredentialRequest(BaseModel):
@@ -97,7 +101,7 @@ async def create_driver_credential(
         password_hash=hash_password(request.password),
         role=UserRole.DRIVER,
         business_id=request.business_id,
-        is_verified=True,
+        is_verified=request.is_verified,
     )
     try:
         await repo.create(credential)
@@ -114,6 +118,23 @@ async def create_driver_credential(
         "user_id": str(credential.id),
         "email": credential.email,
     }
+
+
+@router.post("/drivers/{user_id}/send-activation-code")
+async def send_driver_activation_code(
+    user_id: UUID,
+    _service: str = Depends(_require_internal_service),
+    session: AsyncSession = Depends(get_db),
+    publisher: EventPublisher = Depends(get_publisher),
+):
+    """Email the driver's welcome activation code. Called by user-service when
+    an admin approves a driver. A no-op (sent=false) unless the driver is
+    approved and has not set a password yet."""
+    from app.api.v1.auth_endpoints import _get_auth_service
+
+    auth_service = _get_auth_service(session=session, publisher=publisher)
+    sent = await auth_service.send_driver_activation_code(user_id)
+    return {"sent": sent}
 
 
 @router.post("/admins/create-credential")

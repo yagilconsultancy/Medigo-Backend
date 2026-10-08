@@ -15,6 +15,10 @@ from app.schemas.auth import (
     AdminRegisterRequest,
     AdminVerifyInviteRequest,
     ChangePasswordRequest,
+    DriverActivationCheckRequest,
+    DriverActivationCheckResponse,
+    DriverActivationCompleteRequest,
+    DriverActivationOTPRequest,
     DriverRegisterRequest,
     DriverVerifyInviteRequest,
     ForgotPasswordRequest,
@@ -264,6 +268,45 @@ async def verify_driver_invite(
             email=result.get("email"),
         ),
         message="Invitation is valid" if valid else "Invitation is invalid",
+    )
+
+
+@router.post("/driver/activation/check")
+async def driver_activation_check(
+    request: DriverActivationCheckRequest,
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    result = await auth_service.check_driver_activation(request.email)
+    return StandardResponse(
+        data=DriverActivationCheckResponse(**result),
+        message="OK",
+    )
+
+
+@router.post("/driver/activation/request-otp")
+async def driver_activation_request_otp(
+    request: DriverActivationOTPRequest,
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    await auth_service.request_driver_activation_otp(request.email)
+    # Same answer whether or not a code was sent.
+    return StandardResponse(
+        data=None,
+        message="If this account is ready to activate, a code has been emailed.",
+    )
+
+
+@router.post("/driver/activation/complete")
+async def driver_activation_complete(
+    request: DriverActivationCompleteRequest,
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    await auth_service.complete_driver_activation(
+        email=request.email, otp=request.otp, password=request.password
+    )
+    return StandardResponse(
+        data=None,
+        message="Your account is activated. Please log in.",
     )
 
 

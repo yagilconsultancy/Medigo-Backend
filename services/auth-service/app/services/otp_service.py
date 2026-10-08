@@ -13,7 +13,11 @@ class OTPService:
         self.otp_repo = otp_repo
 
     async def generate_otp(
-        self, user_id: UUID, purpose: str, channel: str
+        self,
+        user_id: UUID,
+        purpose: str,
+        channel: str,
+        expire_minutes: int | None = None,
     ) -> str:
         # Rate limit: max OTP requests per hour
         recent_count = await self.otp_repo.count_recent_for_user(user_id)
@@ -27,7 +31,8 @@ class OTPService:
             code=code,
             purpose=purpose,
             channel=channel,
-            expires_at=utc_now() + timedelta(minutes=settings.OTP_EXPIRE_MINUTES),
+            expires_at=utc_now()
+            + timedelta(minutes=expire_minutes or settings.OTP_EXPIRE_MINUTES),
         )
         await self.otp_repo.create(otp)
         return code
