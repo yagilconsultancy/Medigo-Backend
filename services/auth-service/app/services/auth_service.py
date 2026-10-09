@@ -814,7 +814,7 @@ class AuthService:
     DRIVER_ACTIVATION_PURPOSE = "driver_activation"
     NOT_ACTIVATED_MESSAGE = (
         "Your account isn't activated yet. Please email "
-        "support@getmedigo.com to start your application."
+        "admin@getmedigo.com to start your application."
     )
 
     async def _driver_activation_state(

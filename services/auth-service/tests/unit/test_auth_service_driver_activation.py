@@ -66,7 +66,7 @@ async def test_unknown_email_is_not_activated():
     svc, _ = _service(None, None)
     result = await svc.check_driver_activation("nobody@example.com")
     assert result["next_step"] == "not_activated"
-    assert "support@getmedigo.com" in result["message"]
+    assert "admin@getmedigo.com" in result["message"]
 
 
 @pytest.mark.asyncio
