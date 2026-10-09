@@ -185,7 +185,7 @@ async def send_driver_activation_email(to: str, otp_code: str) -> bool:
             <li>Tap <strong>Activate account</strong>, then log in.</li>
         </ol>
         <p>This code is valid for 7 days. Never share it with anyone.</p>
-        <p>Questions? Email support@getmedigo.com.</p>
+        <p>Questions? Email admin@getmedigo.com.</p>
     </body>
     </html>
     """
