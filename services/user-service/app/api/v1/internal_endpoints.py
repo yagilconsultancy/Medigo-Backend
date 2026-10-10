@@ -255,6 +255,7 @@ async def get_driver_profile_internal(
         "avatar_url": user.avatar_url,
         "business_id": str(driver.business_id) if driver.business_id else None,
         "rating": float(driver.rating),
+        "total_ratings": driver.total_ratings or 0,
         "total_trips": driver.total_trips,
         "is_online": driver.is_online,
         "is_approved": driver.is_approved,

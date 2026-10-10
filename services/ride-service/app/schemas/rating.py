@@ -21,3 +21,19 @@ class RatingResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class DriverRatingItem(BaseModel):
+    """One rating a driver received. Deliberately has no rider identity."""
+
+    rating: int
+    comment: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DriverRatingsResponse(BaseModel):
+    average_rating: float | None = None
+    total_ratings: int = 0
+    ratings: list[DriverRatingItem] = []
