@@ -211,6 +211,32 @@ async def get_driver_active_ride(
     )
 
 
+# Fields get_ride_detail sets by hand. They are left out of the generic copy
+# from RideResponse so the same keyword is never passed to RideDetailResponse twice.
+_RIDE_DETAIL_EXPLICIT_FIELDS = frozenset({
+    "pickup_latitude",
+    "pickup_longitude",
+    "destination_latitude",
+    "destination_longitude",
+    "pickup_at",
+    "dropoff_at",
+    "actual_distance_miles",
+    "actual_duration_minutes",
+    "appointment_time",
+    "mobility_level",
+    "assistance_level",
+    "cancellation_reason",
+    "cancelled_at",
+    "rider_name",
+    "rider_rating",
+    "rider_trip_count",
+    "driver_rating",
+    "rider_rating_given",
+    "timeline",
+    "driver_notes",
+})
+
+
 @router.get("/{ride_id}", response_model=StandardResponse[RideDetailResponse])
 async def get_ride_detail(
     ride_id: UUID,
@@ -221,7 +247,11 @@ async def get_ride_detail(
     ride = detail["ride"]
     return StandardResponse(
         data=RideDetailResponse(
-            **{k: getattr(ride, k) for k in RideResponse.model_fields if hasattr(ride, k)},
+            **{
+                k: getattr(ride, k)
+                for k in RideResponse.model_fields
+                if hasattr(ride, k) and k not in _RIDE_DETAIL_EXPLICIT_FIELDS
+            },
             pickup_latitude=float(ride.pickup_latitude) if ride.pickup_latitude else None,
             pickup_longitude=float(ride.pickup_longitude) if ride.pickup_longitude else None,
             destination_latitude=float(ride.destination_latitude) if ride.destination_latitude else None,
