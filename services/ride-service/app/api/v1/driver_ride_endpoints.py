@@ -13,6 +13,7 @@ from app.schemas.ride import (
     DriverStatsResponse,
     RideResponse,
 )
+from app.schemas.rating import DriverRatingsResponse
 from app.services.ride_service import RideService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
@@ -82,3 +83,15 @@ async def get_driver_stats(
 ):
     stats = await service.get_driver_stats(user.id)
     return StandardResponse(data=DriverStatsResponse(**stats))
+
+
+@router.get("/ratings", response_model=StandardResponse[DriverRatingsResponse])
+async def get_my_ratings(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER])),
+    service: RideService = Depends(_get_ride_service),
+):
+    """The driver's own real ratings. No rider identity is returned."""
+    data = await service.get_driver_ratings(user.id, (page - 1) * limit, limit)
+    return StandardResponse(data=DriverRatingsResponse(**data))
