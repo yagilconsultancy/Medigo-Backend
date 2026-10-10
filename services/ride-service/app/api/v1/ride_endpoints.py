@@ -22,6 +22,7 @@ from app.schemas.ride import (
     StatusLogResponse,
     StatusTransitionRequest,
 )
+from app.services.ride_access import ensure_ride_access
 from app.services.ride_service import RideService
 from mediride_common.auth.dependencies import get_current_user, require_role
 from mediride_common.auth.models import UserClaims
@@ -243,6 +244,7 @@ async def get_ride_detail(
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
+    ensure_ride_access(await service.get_ride(ride_id), user)
     detail = await service.get_ride_detail(ride_id)
     ride = detail["ride"]
     return StandardResponse(
@@ -285,6 +287,7 @@ async def get_ride_timeline(
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
+    ensure_ride_access(await service.get_ride(ride_id), user)
     timeline = await service.get_ride_timeline(ride_id)
     return StandardResponse(
         data=[StatusLogResponse.model_validate(l) for l in timeline],
@@ -298,6 +301,7 @@ async def transition_ride_status(
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.ADMIN])),
     service: RideService = Depends(_get_ride_service),
 ):
+    ensure_ride_access(await service.get_ride(ride_id), user)
     ride = await service.transition_status(
         ride_id, request.status, user.id, request.notes
     )

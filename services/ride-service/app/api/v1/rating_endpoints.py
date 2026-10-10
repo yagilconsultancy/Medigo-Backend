@@ -12,6 +12,7 @@ from app.repositories.ride_repo import RideRepository
 from app.repositories.ride_request_repo import RideRequestRepository
 from app.repositories.status_log_repo import StatusLogRepository
 from app.schemas.rating import RatingResponse, SubmitRatingRequest
+from app.services.ride_access import ensure_ride_access
 from app.services.ride_service import RideService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
@@ -63,6 +64,7 @@ async def get_ride_ratings(
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN])),
     service: RideService = Depends(_get_ride_service),
 ):
+    ensure_ride_access(await service.get_ride(ride_id), user)
     ratings = await service.get_ride_ratings(ride_id)
     return StandardResponse(
         data=[RatingResponse.model_validate(r) for r in ratings],
