@@ -25,6 +25,12 @@ class ReceiptService:
         if not ride_data:
             raise NotFoundError("Ride not found")
 
+        # Only the ride's own rider or assigned driver may view its receipt.
+        # 404 so ride ids cannot be probed for existence.
+        participants = {str(ride_data.get("rider_id")), str(ride_data.get("driver_id"))}
+        if str(user_id) not in participants:
+            raise NotFoundError("Ride not found")
+
         breakdown = await self.fare_repo.get_by_ride_id(ride_id)
         viewer_is_driver = str(user_id) == str(ride_data.get("driver_id"))
         total_fare = float(breakdown.total_fare) if breakdown else float(ride_data.get("final_fare") or 0)

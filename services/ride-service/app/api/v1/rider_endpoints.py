@@ -21,6 +21,7 @@ from app.schemas.ride import (
     ShareRideResponse,
     SharedRideResponse,
 )
+from app.services.ride_access import ensure_ride_access
 from app.services.ride_service import RideService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
@@ -195,8 +196,10 @@ async def get_driver_contact(
 async def get_ride_fare(
     ride_id: UUID,
     user: UserClaims = Depends(require_role([UserRole.RIDER, UserRole.DRIVER, UserRole.ADMIN, UserRole.FACILITY])),
+    service: RideService = Depends(_get_ride_service),
 ):
     """Get fare breakdown for a ride from payment-service."""
+    ensure_ride_access(await service.get_ride(ride_id), user)
     payment_client = PaymentServiceClient(settings.PAYMENT_SERVICE_URL)
     fare = await payment_client.get_fare_breakdown(ride_id)
     if not fare:
