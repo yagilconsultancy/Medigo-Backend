@@ -1,0 +1,14 @@
+# Build context is the repo root. Keep images lean and free of local files.
+.git
+.github
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/Dockerfile.bak
+*.png
+*.pdf
+*.html
+clear_*
+.env
+.env.*
+!.env.example

@@ -27,10 +27,13 @@ def _extract_user_from_auth(auth: dict | None) -> dict | None:
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
+        if payload.get("type", "access") != "access":
+            return None
         return {
             "user_id": payload.get("sub"),
             "role": payload.get("role"),
             "email": payload.get("email"),
+            "business_id": payload.get("business_id"),
         }
     except jwt.PyJWTError as e:
         logger.warning(f"Socket.IO auth failed: {e}")
@@ -39,17 +42,43 @@ def _extract_user_from_auth(auth: dict | None) -> dict | None:
 
 @sio.on("connect", namespace="/tracking")
 async def on_connect(sid, environ, auth=None):
-    # In development/testing, allow connections without auth
-    # In production, you should enable the auth check below
     user = _extract_user_from_auth(auth)
     if not user:
-        # For now, create a guest session in development
+        if settings.ENVIRONMENT != "development":
+            logger.warning(f"Unauthenticated tracking connection refused: {sid}")
+            raise socketio.exceptions.ConnectionRefusedError("Authentication required")
         user = {"user_id": f"guest_{sid}", "role": "guest", "email": None}
-        logger.info(f"Guest Socket.IO connection: {sid}")
+        logger.info(f"Guest Socket.IO connection (development): {sid}")
     else:
         logger.info(f"Socket.IO connected: {sid} (user={user['user_id']}, role={user['role']})")
 
     await sio.save_session(sid, user, namespace="/tracking")
+
+
+async def _can_watch_ride(user: dict, ride_id: str) -> bool:
+    """Admins see every ride; everyone else only rides they take part in."""
+    if user.get("role") == "admin":
+        return True
+    if settings.ENVIRONMENT == "development" and user.get("role") == "guest":
+        return True
+
+    from uuid import UUID
+
+    from app.clients.ride_service_client import RideServiceClient
+
+    try:
+        ride = await RideServiceClient(settings.RIDE_SERVICE_URL).get_ride(UUID(str(ride_id)))
+    except ValueError:
+        return False
+    if not ride:
+        return False
+
+    user_id = str(user.get("user_id"))
+    participants = {str(ride.get(k)) for k in ("rider_id", "driver_id", "caregiver_id") if ride.get(k)}
+    if user_id in participants:
+        return True
+    business_id = user.get("business_id")
+    return bool(business_id) and str(ride.get("business_id")) == str(business_id)
 
 
 @sio.on("disconnect", namespace="/tracking")
@@ -64,6 +93,10 @@ async def on_join_ride(sid, data):
     ride_id = data.get("ride_id")
     if not ride_id:
         return {"error": "ride_id is required"}
+
+    if not await _can_watch_ride(session, ride_id):
+        logger.warning(f"User {session['user_id']} refused tracking room for ride {ride_id}")
+        return {"error": "Not allowed to track this ride"}
 
     room = f"ride_{ride_id}"
     await sio.enter_room(sid, room, namespace="/tracking")

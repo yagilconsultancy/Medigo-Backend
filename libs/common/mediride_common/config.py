@@ -1,4 +1,7 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+DEV_JWT_SECRET = "dev-secret-key-change-in-production"
 
 
 class BaseServiceSettings(BaseSettings):
@@ -16,7 +19,7 @@ class BaseServiceSettings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
 
     # JWT
-    JWT_SECRET_KEY: str = "dev-secret-key-change-in-production"
+    JWT_SECRET_KEY: str = DEV_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -35,3 +38,9 @@ class BaseServiceSettings(BaseSettings):
     GOOGLE_MAPS_API_KEY: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @model_validator(mode="after")
+    def _require_real_jwt_secret(self):
+        if self.ENVIRONMENT == "production" and self.JWT_SECRET_KEY in ("", DEV_JWT_SECRET):
+            raise ValueError("JWT_SECRET_KEY must be set in production")
+        return self
