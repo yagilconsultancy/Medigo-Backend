@@ -40,10 +40,36 @@ def _extract_user_from_auth(auth: dict | None) -> dict | None:
         return None
 
 
+def _guest_session_from_auth(auth: dict | None) -> str | None:
+    """Guest riders have no login token; they identify with their booking session id."""
+    if not auth:
+        return None
+    value = auth.get("guest_session_id")
+    if not value:
+        return None
+    from uuid import UUID
+
+    try:
+        return str(UUID(str(value)))
+    except ValueError:
+        return None
+
+
 @sio.on("connect", namespace="/tracking")
 async def on_connect(sid, environ, auth=None):
     user = _extract_user_from_auth(auth)
     if not user:
+        guest_session_id = _guest_session_from_auth(auth)
+        if guest_session_id:
+            user = {
+                "user_id": f"guest_{guest_session_id}",
+                "role": "guest",
+                "email": None,
+                "guest_session_id": guest_session_id,
+            }
+            await sio.save_session(sid, user, namespace="/tracking")
+            logger.info(f"Guest Socket.IO connection: {sid}")
+            return
         if settings.ENVIRONMENT != "development":
             logger.warning(f"Unauthenticated tracking connection refused: {sid}")
             raise socketio.exceptions.ConnectionRefusedError("Authentication required")
@@ -59,7 +85,7 @@ async def _can_watch_ride(user: dict, ride_id: str) -> bool:
     """Admins see every ride; everyone else only rides they take part in."""
     if user.get("role") == "admin":
         return True
-    if settings.ENVIRONMENT == "development" and user.get("role") == "guest":
+    if settings.ENVIRONMENT == "development" and user.get("role") == "guest" and not user.get("guest_session_id"):
         return True
 
     from uuid import UUID
@@ -72,6 +98,10 @@ async def _can_watch_ride(user: dict, ride_id: str) -> bool:
         return False
     if not ride:
         return False
+
+    if user.get("role") == "guest":
+        guest_session_id = user.get("guest_session_id")
+        return bool(guest_session_id) and str(ride.get("guest_session_id")) == guest_session_id
 
     user_id = str(user.get("user_id"))
     participants = {str(ride.get(k)) for k in ("rider_id", "driver_id", "caregiver_id") if ride.get(k)}
