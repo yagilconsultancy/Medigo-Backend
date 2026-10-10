@@ -626,8 +626,7 @@ class AuthService:
 
         channel = "email" if credential.email else "sms"
         otp_code = await self.otp_service.generate_otp(user_id, purpose, channel)
-        # TODO: Consider removing the OTP code from logs in production for security reasons
-        print(f"Resending OTP for user {user_id}, purpose={purpose}, channel={channel}, otp_code={otp_code}")
+        logger.info("OTP resent for user %s (purpose=%s, channel=%s)", user_id, purpose, channel)
         await self._publish_otp_requested(
             user_id=user_id,
             purpose=purpose,
@@ -721,6 +720,8 @@ class AuthService:
         # Check if user already exists (admin-created driver)
         existing = await self.credential_repo.get_by_email_or_phone(email, None)
         if existing:
+            if existing.role != UserRole.DRIVER:
+                raise ConflictError("An account with this email already exists")
             await self._validate_password(password)
 
             # Credential was pre-created by admin — update the password from the invitee
