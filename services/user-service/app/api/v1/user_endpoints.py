@@ -45,6 +45,21 @@ def _get_user_service_with_auth(session: AsyncSession = Depends(get_db)) -> User
     )
 
 
+def restrict_avatar_url(update_data: dict, user_id, bucket: str) -> None:
+    """Drop an avatar_url the caller is not allowed to set through JSON.
+
+    An avatar is normally set by uploading it (PUT /me). The JSON field is only
+    honoured when it points at the caller's own avatar folder, so nobody can aim
+    it at another user's file and get a signed download link back.
+    """
+    value = update_data.get("avatar_url")
+    if value is None:
+        return
+    own_prefix = f"s3://{bucket}/avatars/{user_id}/"
+    if not (value.startswith(own_prefix) and ".." not in value):
+        update_data.pop("avatar_url")
+
+
 @router.get("/me", response_model=StandardResponse[UserProfileResponse])
 async def get_my_profile(
     user: UserClaims = Depends(get_current_user),
@@ -156,6 +171,7 @@ async def update_my_profile_json(
     For avatar upload, use PUT /me with multipart/form-data instead.
     """
     update_data = request.model_dump(exclude_unset=True)
+    restrict_avatar_url(update_data, user.id, settings.S3_BUCKET_DOCUMENTS)
     profile = await service.update_profile(user.id, **update_data)
     data = UserProfileResponse.model_validate(profile)
     if data.avatar_url and data.avatar_url.startswith("s3://"):

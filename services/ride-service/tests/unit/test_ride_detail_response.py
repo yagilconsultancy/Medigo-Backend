@@ -20,6 +20,8 @@ sys.modules.setdefault("aio_pika.abc", aio_pika_abc_stub)
 
 from app.api.v1.ride_endpoints import _RIDE_DETAIL_EXPLICIT_FIELDS, get_ride_detail
 from app.schemas.ride import RideDetailResponse, RideResponse
+from mediride_common.auth.models import UserClaims
+from mediride_common.schemas.enums import UserRole
 
 
 def _fake_ride():
@@ -60,6 +62,9 @@ class _FakeService:
     def __init__(self, ride):
         self.ride = ride
 
+    async def get_ride(self, ride_id):
+        return self.ride
+
     async def get_ride_detail(self, ride_id):
         return {
             "ride": self.ride,
@@ -76,7 +81,8 @@ class _FakeService:
 @pytest.mark.asyncio
 async def test_ride_detail_returns_levels_without_duplicate_keyword_error():
     ride = _fake_ride()
-    result = await get_ride_detail(ride.id, user=None, service=_FakeService(ride))
+    admin = UserClaims(id=uuid4(), role=UserRole.ADMIN)
+    result = await get_ride_detail(ride.id, user=admin, service=_FakeService(ride))
     assert result.data.mobility_level == "ambulatory"
     assert result.data.assistance_level == "door_to_door"
     assert result.data.rider_name == "Test Rider"
