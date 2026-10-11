@@ -58,6 +58,10 @@ async def create_ride(
     service: RideService = Depends(_get_ride_service),
 ):
     data = request.model_dump()
+    # A rider's ride is never attached to a fleet by the client: it would show
+    # up in that fleet's dashboards and tracking.
+    if user.role == UserRole.RIDER:
+        data["business_id"] = None
     # Auto-set facility fields when booked by a facility user
     if user.role == UserRole.FACILITY:
         data["facility_id"] = user.id

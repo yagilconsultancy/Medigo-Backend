@@ -4,8 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db
 from app.models.safety_report import SafetyReport
 from app.models.vehicle_checklist import VehicleChecklist
+from app.repositories.ride_repo import RideRepository
 from app.repositories.safety_report_repo import SafetyReportRepository
 from app.repositories.vehicle_checklist_repo import VehicleChecklistRepository
+from app.services.ride_access import can_access_ride
 from app.schemas.safety import (
     CreateSafetyReportRequest,
     SafetyReportResponse,
@@ -14,6 +16,7 @@ from app.schemas.safety import (
 )
 from mediride_common.auth.dependencies import get_current_user, require_role
 from mediride_common.auth.models import UserClaims
+from mediride_common.exceptions import NotFoundError, ValidationError
 from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import PaginatedResponse, StandardResponse
 from mediride_common.utils import utc_now
@@ -27,6 +30,19 @@ async def create_safety_report(
     user: UserClaims = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
+    if body.ride_id:
+        ride = await RideRepository(session).get_by_id(body.ride_id)
+        if not ride or not can_access_ride(ride, user):
+            raise NotFoundError("Ride not found")
+        if body.reported_user_id:
+            on_ride = {
+                str(ride_party)
+                for ride_party in (ride.rider_id, ride.driver_id, ride.caregiver_id)
+                if ride_party
+            }
+            if str(body.reported_user_id) not in on_ride:
+                raise ValidationError("The reported person was not on this ride")
+
     repo = SafetyReportRepository(session)
     report = SafetyReport(
         reporter_id=user.id,

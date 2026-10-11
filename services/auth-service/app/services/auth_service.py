@@ -28,11 +28,12 @@ from mediride_common.events.schemas import (
     UserRegisteredPayload,
     UserVerifiedPayload,
 )
+from mediride_common.auth.revocation import revoke_user_tokens
 from mediride_common.exceptions import (
     AuthenticationError,
     ConflictError,
-    ConflictError,
     NotFoundError,
+    RateLimitError,
     ValidationError,
 )
 from mediride_common.schemas.enums import UserRole
@@ -119,6 +120,9 @@ class AuthService:
         existing = await self.credential_repo.get_by_email_or_phone(email, phone)
         if existing:
             if not existing.is_verified:
+                await self._refresh_stale_registration(
+                    existing, password, role, business_id
+                )
                 raise ConflictError(
                     "Registration not completed. Please verify your OTP.",
                     details=self._verification_details(existing),
@@ -168,6 +172,56 @@ class AuthService:
 
         logger.info(f"User registered: {credential.id}, role={role}")
         return credential.id, otp_code
+
+    async def _refresh_stale_registration(
+        self,
+        existing: UserCredential,
+        password: str,
+        role: UserRole,
+        business_id: UUID | None,
+    ) -> None:
+        """Take over an abandoned, unverified sign-up for the same email/phone.
+
+        Someone could register another person's email and never verify it. When
+        the real owner later signs up they would otherwise be told to verify the
+        stranger's pending account, and end up with a password they never chose.
+
+        If the pending sign-up's code is still valid, it is left alone, so a
+        second attempt cannot overwrite it while the real owner is verifying.
+        Once that code has expired, the new request replaces the password and
+        role and sends a fresh code. The caller still gets the same
+        "verify your OTP" reply as before.
+        """
+        pending = await self.otp_service.otp_repo.get_latest_unverified(
+            existing.id, "registration"
+        )
+        if pending:
+            return
+
+        existing.password_hash = hash_password(password)
+        existing.role = role
+        existing.business_id = business_id
+        channel = "email" if existing.email else "sms"
+        try:
+            otp_code = await self.otp_service.generate_otp(
+                existing.id, "registration", channel
+            )
+        except RateLimitError:
+            return
+        await self._publish_otp_requested(
+            user_id=existing.id,
+            purpose="registration",
+            channel=channel,
+            otp_code=otp_code,
+            email=existing.email,
+            phone=existing.phone,
+        )
+        # Commit before the caller raises ConflictError: the error unwinds
+        # through get_db(), which rolls back and would discard the new password.
+        try:
+            await self.credential_repo.session.commit()
+        except Exception:  # never turn a 409 into a 500
+            logger.warning("Failed to persist refreshed registration", exc_info=True)
 
     async def verify_otp(self, user_id: UUID, code: str, purpose: str) -> bool:
         """Verify OTP and mark user as verified."""
@@ -695,6 +749,9 @@ class AuthService:
 
         # Revoke all refresh tokens (force re-login)
         await self.token_repo.revoke_all_for_user(user_id)
+        # And cut off any access token already issued (for example to someone
+        # who had the old password).
+        await revoke_user_tokens(user_id, settings.REDIS_URL)
 
         logger.info(f"Password reset completed for user {user_id}")
 

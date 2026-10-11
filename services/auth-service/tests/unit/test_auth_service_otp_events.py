@@ -144,10 +144,15 @@ async def test_register_unverified_existing_user_returns_otp_flag():
         )
     )
 
+    otp_service = MagicMock()
+    # A registration code is still valid, so the pending sign-up is left alone.
+    otp_service.otp_repo.get_latest_unverified = AsyncMock(
+        return_value=SimpleNamespace(id=uuid4())
+    )
     service = AuthService(
         credential_repo=credential_repo,
         token_repo=MagicMock(),
-        otp_service=MagicMock(),
+        otp_service=otp_service,
         jwt_handler=MagicMock(),
         publisher=MagicMock(),
     )
@@ -319,3 +324,78 @@ def test_placeholder_user_id_is_stable_and_looks_like_a_real_id():
     assert first == _placeholder_user_id("nobody@example.com ")
     assert first != _placeholder_user_id("other@example.com")
     assert first.version == 4  # same version as real (uuid4) account ids
+
+
+def _unverified(email="victim@example.com"):
+    return SimpleNamespace(
+        id=uuid4(),
+        email=email,
+        phone=None,
+        is_verified=False,
+        password_hash="hashed:attacker-password",
+        role=UserRole.BUSINESS,
+        business_id=None,
+    )
+
+
+def _registration_service(existing, pending_otp):
+    credential_repo = MagicMock()
+    credential_repo.get_by_email_or_phone = AsyncMock(return_value=existing)
+    credential_repo.session = MagicMock()
+    credential_repo.session.commit = AsyncMock()
+    otp_service = MagicMock()
+    otp_service.otp_repo = MagicMock()
+    otp_service.otp_repo.get_latest_unverified = AsyncMock(return_value=pending_otp)
+    otp_service.generate_otp = AsyncMock(return_value="246810")
+    publisher = MagicMock()
+    publisher.publish = AsyncMock()
+    service = AuthService(
+        credential_repo=credential_repo,
+        token_repo=MagicMock(),
+        otp_service=otp_service,
+        jwt_handler=MagicMock(),
+        publisher=publisher,
+    )
+    service._validate_password = AsyncMock()
+    return service, credential_repo, otp_service, publisher
+
+
+@pytest.mark.asyncio
+async def test_register_over_abandoned_signup_replaces_password_and_role():
+    existing = _unverified()
+    service, repo, otp_service, publisher = _registration_service(existing, None)
+
+    with pytest.raises(ConflictError):
+        await service.register(
+            email="victim@example.com",
+            phone=None,
+            password="the-real-owner-pw",
+            role=UserRole.RIDER,
+        )
+
+    assert existing.password_hash != "hashed:attacker-password"
+    assert existing.role == UserRole.RIDER
+    otp_service.generate_otp.assert_awaited_once()
+    repo.session.commit.assert_awaited_once()  # kept despite the 409 rollback
+    publisher.publish.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_register_does_not_overwrite_while_code_is_still_valid():
+    existing = _unverified()
+    service, repo, otp_service, publisher = _registration_service(
+        existing, SimpleNamespace(id=uuid4())
+    )
+
+    with pytest.raises(ConflictError):
+        await service.register(
+            email="victim@example.com",
+            phone=None,
+            password="someone-else-pw",
+            role=UserRole.RIDER,
+        )
+
+    assert existing.password_hash == "hashed:attacker-password"
+    assert existing.role == UserRole.BUSINESS
+    otp_service.generate_otp.assert_not_awaited()
+    repo.session.commit.assert_not_awaited()

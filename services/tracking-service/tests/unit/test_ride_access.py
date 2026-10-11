@@ -70,3 +70,15 @@ async def test_unknown_ride_gets_not_found(monkeypatch):
     _patch_ride(monkeypatch, None)
     with pytest.raises(NotFoundError):
         await ride_access.ensure_can_view_ride(_user(UserRole.RIDER), uuid4())
+
+
+def test_simulate_location_requires_admin():
+    """The GPS simulator must never be callable without an admin token."""
+    import inspect
+
+    from app.api.v1 import test_location_endpoints as module
+
+    params = inspect.signature(module.simulate_driver_location).parameters
+    assert "_admin" in params
+    dependency = params["_admin"].default.dependency
+    assert dependency.__closure__ is not None  # built by require_role([...])
