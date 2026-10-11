@@ -11,6 +11,7 @@ from app.schemas.tracking import (
     LocationHistoryResponse,
     TrackingSessionResponse,
 )
+from app.services.ride_access import ensure_can_view_ride
 from app.services.tracking_service import TrackingService
 from mediride_common.auth.dependencies import get_current_user, require_role
 from mediride_common.auth.models import UserClaims
@@ -39,6 +40,7 @@ async def get_tracking_session(
     service: TrackingService = Depends(_get_tracking_service),
 ):
     """Get current tracking session for a ride."""
+    await ensure_can_view_ride(user, ride_id)
     session = await service.get_session(ride_id)
     return StandardResponse(
         data=TrackingSessionResponse.model_validate(session),
@@ -55,6 +57,7 @@ async def get_location_history(
     service: TrackingService = Depends(_get_tracking_service),
 ):
     """Get location history for a ride."""
+    await ensure_can_view_ride(user, ride_id)
     entries, total, session_id = await service.get_location_history(ride_id, offset, limit)
     return StandardResponse(
         data=LocationHistoryResponse(

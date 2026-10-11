@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_db, get_publisher, get_s3_client
 from app.config import settings
 from app.repositories.document_repo import DocumentRepository
+from app.repositories.driver_repo import DriverRepository
 from app.schemas.document import (
     RIDER_DOCUMENT_TYPES,
     DocumentResponse,
@@ -14,6 +15,7 @@ from app.schemas.document import (
     DocumentVerifyRequest,
 )
 from app.services.document_service import DocumentService
+from app.services.fleet_scope import ensure_driver_in_scope
 from mediride_common.auth.dependencies import get_current_user, require_role
 from mediride_common.auth.models import UserClaims
 from mediride_common.events.publisher import EventPublisher
@@ -152,8 +154,10 @@ async def list_user_documents(
     user_id: UUID,
     _admin: UserClaims = Depends(require_role([UserRole.ADMIN, UserRole.BUSINESS])),
     service: DocumentService = Depends(_get_document_service),
+    session: AsyncSession = Depends(get_db),
 ):
-    """Admin/Business: List all documents for a user."""
+    """Admin: any user. Business: only drivers of their own fleet."""
+    await ensure_driver_in_scope(DriverRepository(session), _admin, user_id)
     documents = await service.list_documents(user_id)
     return StandardResponse(
         data=[
@@ -181,10 +185,13 @@ async def verify_document(
     request: DocumentVerifyRequest,
     admin: UserClaims = Depends(require_role([UserRole.ADMIN, UserRole.BUSINESS])),
     service: DocumentService = Depends(_get_document_service),
+    session: AsyncSession = Depends(get_db),
 ):
-    """Admin/Business: Approve or reject a document."""
+    """Admin: any document. Business: only documents of their own fleet's drivers."""
+    await ensure_driver_in_scope(DriverRepository(session), admin, user_id)
     document = await service.verify_document(
         document_id=document_id,
+        expected_user_id=user_id,
         admin_id=admin.id,
         status=request.status,
         rejection_reason=request.rejection_reason,

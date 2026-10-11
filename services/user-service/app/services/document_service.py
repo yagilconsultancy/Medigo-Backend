@@ -174,10 +174,15 @@ class DocumentService:
         admin_id: UUID,
         status: str,
         rejection_reason: str | None = None,
+        expected_user_id: UUID | None = None,
     ) -> DriverDocument:
         """Admin: approve or reject a document."""
         document = await self.document_repo.get_by_id(document_id)
         if not document:
+            raise NotFoundError("Document not found")
+        # The document must belong to the user named in the URL, so a caller
+        # cleared for one user cannot verify another user's document.
+        if expected_user_id is not None and document.user_id != expected_user_id:
             raise NotFoundError("Document not found")
 
         if status == "rejected" and not rejection_reason:

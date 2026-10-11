@@ -270,3 +270,52 @@ async def test_login_normalizes_email_before_lookup():
     credential_repo.get_by_email_or_phone.assert_awaited_once_with(
         "moses.oladunjoyejobs@gmail.com", None
     )
+
+
+def _bare_service(credential=None, otp_service=None):
+    credential_repo = MagicMock()
+    credential_repo.get_by_id = AsyncMock(return_value=credential)
+    return AuthService(
+        credential_repo=credential_repo,
+        token_repo=MagicMock(),
+        otp_service=otp_service or MagicMock(),
+        jwt_handler=MagicMock(),
+        publisher=MagicMock(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_resend_otp_refuses_unlisted_purposes():
+    from mediride_common.exceptions import ValidationError
+
+    otp_service = MagicMock()
+    otp_service.generate_otp = AsyncMock()
+    service = _bare_service(
+        SimpleNamespace(id=uuid4(), email="a@example.com", phone=None), otp_service
+    )
+
+    for purpose in ("driver_activation", "account_deletion", "anything"):
+        with pytest.raises(ValidationError):
+            await service.resend_otp(uuid4(), purpose)
+    otp_service.generate_otp.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_reset_password_for_unknown_id_looks_like_a_wrong_code():
+    from mediride_common.exceptions import ValidationError
+
+    service = _bare_service(credential=None)
+    service._validate_password = AsyncMock()
+
+    with pytest.raises(ValidationError) as exc:
+        await service.reset_password(uuid4(), "123456", "N3w-Passw0rd!")
+    assert "Invalid OTP code" in str(exc.value.message)
+
+
+def test_placeholder_user_id_is_stable_and_looks_like_a_real_id():
+    from app.api.v1.auth_endpoints import _placeholder_user_id
+
+    first = _placeholder_user_id("Nobody@Example.com")
+    assert first == _placeholder_user_id("nobody@example.com ")
+    assert first != _placeholder_user_id("other@example.com")
+    assert first.version == 4  # same version as real (uuid4) account ids

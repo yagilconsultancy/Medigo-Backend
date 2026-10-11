@@ -620,6 +620,8 @@ class AuthService:
 
     async def resend_otp(self, user_id: UUID, purpose: str) -> str:
         """Resend OTP for a user."""
+        if purpose not in self.RESENDABLE_OTP_PURPOSES:
+            raise ValidationError("Unsupported code type")
         credential = await self.credential_repo.get_by_id(user_id)
         if not credential:
             raise NotFoundError("User not found")
@@ -678,7 +680,10 @@ class AuthService:
 
         credential = await self.credential_repo.get_by_id(user_id)
         if not credential:
-            raise NotFoundError("User not found")
+            # Same answer as a wrong code, so reset-password cannot be used to
+            # tell real account ids from the placeholder ids forgot-password
+            # returns for unknown emails.
+            raise ValidationError("Invalid OTP code")
 
         # Verify OTP
         await self.otp_service.verify_otp(user_id, code, "password_reset")
@@ -813,6 +818,9 @@ class AuthService:
     # Driver activation (email gate on the mobile app)
     # ------------------------------------------------------------------
     DRIVER_ACTIVATION_PURPOSE = "driver_activation"
+    # The only codes the public resend-otp route may send. Driver activation
+    # has its own request-otp route.
+    RESENDABLE_OTP_PURPOSES = frozenset({"registration", "password_reset"})
     NOT_ACTIVATED_MESSAGE = (
         "Your account isn't activated yet. Please email "
         "admin@getmedigo.com to start your application."
