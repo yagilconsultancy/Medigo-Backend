@@ -21,6 +21,7 @@ from app.schemas.analytics import (
 from app.services.analytics_service import AnalyticsService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
+from mediride_common.exceptions import AuthorizationError
 from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import StandardResponse
 
@@ -36,8 +37,14 @@ def _analytics_service(session: AsyncSession) -> AnalyticsService:
 
 
 def _resolve_fleet_id(user: UserClaims) -> str | None:
-    """ADMIN sees all data; fleet managers see only their fleet."""
+    """ADMIN sees all data; fleet managers see only their fleet.
+
+    A BUSINESS account with no fleet attached must never fall through to the
+    unfiltered (platform-wide) view, so it is refused instead.
+    """
     if user.role == UserRole.BUSINESS:
+        if not user.business_id:
+            raise AuthorizationError("No fleet is linked to this account")
         return user.business_id
     return None
 

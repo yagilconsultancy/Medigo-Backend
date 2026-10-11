@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 from uuid import UUID
 
@@ -6,6 +7,9 @@ from app.models.otp import OTPRecord
 from app.repositories.otp_repo import OTPRepository
 from mediride_common.exceptions import RateLimitError, ValidationError
 from mediride_common.utils import generate_otp, utc_now
+
+
+logger = logging.getLogger(__name__)
 
 
 class OTPService:
@@ -20,7 +24,11 @@ class OTPService:
         expire_minutes: int | None = None,
     ) -> str:
         # Rate limit: max OTP requests per hour
-        recent_count = await self.otp_repo.count_recent_for_user(user_id)
+        # Counted per purpose, so spamming one flow cannot use up the quota
+        # of another (for example blocking a real password reset).
+        recent_count = await self.otp_repo.count_recent_for_user(
+            user_id, purpose=purpose
+        )
         if recent_count >= settings.OTP_MAX_REQUESTS_PER_HOUR:
             raise RateLimitError("Too many OTP requests. Please try again later.")
 
@@ -48,6 +56,13 @@ class OTPService:
         await self.otp_repo.increment_attempts(otp.id)
 
         if otp.code != code:
+            # Commit before raising: the ValidationError unwinds through
+            # get_db(), which rolls the request transaction back and would
+            # otherwise discard the attempt counter, leaving unlimited guesses.
+            try:
+                await self.otp_repo.session.commit()
+            except Exception:  # never turn a 400 into a 500
+                logger.warning("Failed to persist OTP attempt counter", exc_info=True)
             raise ValidationError("Invalid OTP code")
 
         await self.otp_repo.mark_verified(otp.id)
