@@ -5,7 +5,10 @@ from fastapi import APIRouter, Request, Response
 
 from app.config import settings
 from app.middleware.activity_logger import emit
-from app.middleware.auth_middleware import validate_jwt_and_get_claims
+from app.middleware.auth_middleware import (
+    token_was_revoked,
+    validate_jwt_and_get_claims,
+)
 from app.routes.activity_map import classify, extract_entity_id
 
 logger = logging.getLogger(__name__)
@@ -94,8 +97,8 @@ def _get_service_url(path: str) -> tuple[str, str] | None:
 
 
 def _docs_enabled() -> bool:
-    """API docs are served everywhere except production."""
-    return settings.ENVIRONMENT != "production"
+    """API docs are only served in development, never on staging or production."""
+    return settings.ENVIRONMENT == "development"
 
 
 def _is_public_path(path: str) -> bool:
@@ -150,6 +153,8 @@ async def proxy_request(request: Request, path: str):
 
         token = auth_header.split(" ", 1)[1]
         claims = validate_jwt_and_get_claims(token)
+        if claims and await token_was_revoked(token, claims):
+            claims = None
         if not claims:
             return Response(
                 content='{"success": false, "message": "Invalid or expired token", "error_code": "AUTHENTICATION_ERROR"}',

@@ -1,7 +1,7 @@
 import logging
 import secrets
 from calendar import monthrange
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -43,6 +43,31 @@ logger = logging.getLogger(__name__)
 
 def _enum_value(value):
     return value.value if hasattr(value, "value") else value
+
+
+
+SHARE_LINK_GRACE = timedelta(hours=1)
+
+
+def share_link_expired(ride, now: datetime | None = None) -> bool:
+    """A share link stops working one hour after the ride ended.
+
+    The link exposes the driver, the live position and the addresses, so it
+    should not stay open forever. Rides that are still active (or not started
+    yet) keep a working link.
+    """
+    if ride.status not in (RideStatus.COMPLETED, RideStatus.CANCELLED, RideStatus.NO_SHOW):
+        return False
+    ended_at = (
+        (ride.dropoff_at if ride.status == RideStatus.COMPLETED else ride.cancelled_at)
+        or ride.updated_at
+    )
+    if ended_at is None:
+        return False
+    now = now or datetime.now(timezone.utc)
+    if ended_at.tzinfo is None:
+        ended_at = ended_at.replace(tzinfo=timezone.utc)
+    return now > ended_at + SHARE_LINK_GRACE
 
 
 class RideService:
@@ -958,7 +983,7 @@ class RideService:
 
     async def get_ride_by_share_token(self, token: str) -> Ride:
         ride = await self.ride_repo.get_by_share_token(token)
-        if not ride:
+        if not ride or share_link_expired(ride):
             raise NotFoundError("Shared ride not found")
         return ride
 

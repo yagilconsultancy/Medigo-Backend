@@ -41,6 +41,7 @@ from mediride_common.auth.models import TokenPair
 from app.services.login_history_service import LoginHistoryService
 from app.services.otp_service import OTPService
 from mediride_common.auth.jwt_handler import JWTHandler
+from mediride_common.auth.revocation import claim_single_use, revoke_user_tokens
 from mediride_common.auth.dependencies import get_current_user
 from mediride_common.auth.models import UserClaims
 from mediride_common.events.publisher import EventPublisher
@@ -204,6 +205,7 @@ async def logout(
     auth_service: AuthService = Depends(_get_auth_service),
 ):
     await auth_service.logout(user.id, request.refresh_token)
+    await revoke_user_tokens(user.id, settings.REDIS_URL)
     return StandardResponse(message="Logged out successfully")
 
 
@@ -452,6 +454,20 @@ async def reactivate_account(
     credential = await repo.get_by_id(UUID(user_id))
     if not credential:
         raise HTTPException(status_code=404, detail="Account not found")
+
+    # The link works once. Otherwise an old email could switch a driver back on
+    # after an admin suspended them for another reason.
+    first_use = await claim_single_use(
+        "reactivation:" + hashlib.sha256(request.token.encode()).hexdigest(),
+        settings.REDIS_URL,
+        7 * 24 * 60 * 60,
+    )
+    if not first_use:
+        raise HTTPException(
+            status_code=400,
+            detail="This reactivation link has already been used. "
+            "Please contact admin@getmedigo.com.",
+        )
 
     credential.is_active = True
     # Clicking the emailed reactivation link proves ownership of the address,

@@ -12,7 +12,17 @@ class PushTokenRepository:
         self.session = session
 
     async def upsert(self, user_id: UUID, token: str, platform: str) -> PushToken:
-        """Create or update a push token for a user."""
+        """Create or update a push token for a user.
+
+        A device token can only belong to one user: when someone else signs in
+        on the same phone, the previous account stops receiving its
+        notifications.
+        """
+        await self.session.execute(
+            delete(PushToken).where(
+                PushToken.token == token, PushToken.user_id != user_id
+            )
+        )
         result = await self.session.execute(
             select(PushToken).where(PushToken.user_id == user_id)
         )

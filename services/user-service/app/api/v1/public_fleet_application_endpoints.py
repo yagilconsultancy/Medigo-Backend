@@ -8,6 +8,11 @@ from app.repositories.fleet_document_repo import FleetDocumentRepository
 from app.repositories.fleet_repo import FleetRepository
 from app.schemas.fleet_application import FleetApplicationPublicResponse
 from app.services.fleet_application_service import FleetApplicationService
+from app.services.upload_validation import (
+    DOCUMENT_MAX_BYTES,
+    check_upload,
+    safe_display_name,
+)
 from mediride_common.events.constants import Exchanges, RoutingKeys
 from mediride_common.events.publisher import EventPublisher
 from mediride_common.schemas.responses import StandardResponse
@@ -86,6 +91,23 @@ async def submit_fleet_application(
         )
 
     # Create the application
+    # Check every attached file before anything is saved.
+    attachments = []
+    for doc_type, file in (
+        ("certificate_of_insurance", certificate_of_insurance),
+        ("business_registration", business_registration_doc),
+        ("vehicle_registration", vehicle_registration_doc),
+        ("driver_certifications", driver_certifications_doc),
+        ("safety_compliance", safety_compliance_doc),
+    ):
+        if file is None or not file.filename:
+            continue
+        file_data = await file.read()
+        if not file_data:
+            continue
+        checked = check_upload(file_data, allow_pdf=True, max_bytes=DOCUMENT_MAX_BYTES)
+        attachments.append((doc_type, file, file_data, checked))
+
     application = await service.create_public_application(
         publish_created_event=False,
         company_name=company_name,
@@ -116,39 +138,24 @@ async def submit_fleet_application(
         consent_contact=consent_contact,
     )
 
-    # Upload any attached documents
-    doc_files = [
-        ("certificate_of_insurance", certificate_of_insurance),
-        ("business_registration", business_registration_doc),
-        ("vehicle_registration", vehicle_registration_doc),
-        ("driver_certifications", driver_certifications_doc),
-        ("safety_compliance", safety_compliance_doc),
-    ]
-
-    for doc_type, file in doc_files:
-        if file is None or file.filename is None or file.filename == "":
-            continue
-
-        file_data = await file.read()
-        if not file_data:
-            continue
-
-        file_key = f"fleet-applications/{application.id}/{doc_type}/{file.filename}"
+    # Upload the (already checked) documents under server-generated names.
+    for doc_type, file, file_data, checked in attachments:
+        file_key = f"fleet-applications/{application.id}/{doc_type}/{checked.new_name()}"
 
         await s3_client.upload_file(
             bucket=settings.S3_BUCKET_DOCUMENTS,
             key=file_key,
             file_data=file_data,
-            content_type=file.content_type or "application/octet-stream",
+            content_type=checked.content_type,
         )
 
         await service.upload_document(
             app_id=application.id,
             document_type=doc_type,
             file_key=file_key,
-            file_name=file.filename,
+            file_name=safe_display_name(file.filename),
             file_size=len(file_data),
-            mime_type=file.content_type or "application/octet-stream",
+            mime_type=checked.content_type,
         )
 
     # Trigger applicant confirmation email once submission finishes successfully.
