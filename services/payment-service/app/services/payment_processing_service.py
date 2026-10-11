@@ -97,6 +97,23 @@ class PaymentProcessingService:
         total_fare = float(breakdown.total_fare)
         driver_earnings = float(breakdown.driver_earnings)
 
+        # 2b. Never charge twice. The rider may already have paid through the app
+        # (before or after the trip), or this ride.completed event may be
+        # delivered a second time. Nothing to charge then; the driver is still
+        # credited, once.
+        for existing in await self.tx_repo.get_by_ride_id(ride_id):
+            if (
+                existing.transaction_type == TransactionType.RIDE_PAYMENT
+                and existing.status == PaymentStatus.COMPLETED
+                and existing.user_id == rider_id
+            ):
+                logger.info(
+                    f"Ride {ride_id} is already paid (transaction {existing.id}); "
+                    f"skipping the charge"
+                )
+                await self._record_driver_earnings(ride_id, driver_id, driver_earnings)
+                return existing
+
         # 3. Find rider's default payment method
         rider_methods = await self.pm_repo.get_by_user(rider_id)
         default_pm = next(
@@ -262,7 +279,19 @@ class PaymentProcessingService:
     async def _record_driver_earnings(
         self, ride_id: UUID, driver_id: UUID, amount: float
     ) -> None:
-        """Add earnings to driver balance and create a transaction record."""
+        """Add earnings to driver balance and create a transaction record.
+
+        Runs at most once per ride and driver, so a repeated event cannot
+        credit the driver twice.
+        """
+        earnings_description = f"Earnings from ride {ride_id}"
+        for prior in await self.tx_repo.get_by_ride_id(ride_id):
+            if prior.user_id == driver_id and prior.description == earnings_description:
+                logger.info(
+                    f"Earnings for ride {ride_id} already recorded for driver {driver_id}; skipping"
+                )
+                return
+
         await self.earnings_repo.add_earnings(driver_id, amount)
 
         tx = Transaction(
@@ -271,7 +300,7 @@ class PaymentProcessingService:
             transaction_type=TransactionType.RIDE_PAYMENT,
             amount=amount,
             status=PaymentStatus.COMPLETED,
-            description=f"Earnings from ride {ride_id}",
+            description=earnings_description,
         )
         await self.tx_repo.create(tx)
 

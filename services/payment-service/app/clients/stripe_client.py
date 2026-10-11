@@ -285,6 +285,7 @@ class StripeClient:
         existing_customer_id: str | None = None,
         customer_session_api_version: str | None = None,
         setup_future_usage: str | None = None,
+        idempotency_key: str | None = None,
     ) -> StripeMobilePaymentIntentResult:
         """Create a Stripe PaymentIntent for mobile SDK flows.
 
@@ -314,6 +315,11 @@ class StripeClient:
                 existing_customer_id=existing_customer_id,
             )
 
+            intent_kwargs: dict = {}
+            if idempotency_key:
+                # Stripe returns the same PaymentIntent for a repeated key, so a
+                # double tap or retry cannot create two.
+                intent_kwargs["idempotency_key"] = idempotency_key
             intent = await stripe.PaymentIntent.create_async(
                 amount=amount_cents,
                 currency=normalized_currency,
@@ -322,6 +328,7 @@ class StripeClient:
                 description=description,
                 metadata=metadata or {},
                 setup_future_usage=setup_future_usage,
+                **intent_kwargs,
             )
 
             ephemeral_key_secret = None
