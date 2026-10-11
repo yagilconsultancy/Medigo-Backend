@@ -259,7 +259,7 @@ class DriverContactResponse(BaseModel):
     last_name: str
     phone: str | None = None
     avatar_url: str | None = None
-    rating: float
+    rating: float | None = None
     vehicle_type: str | None = None
     vehicle_make: str | None = None
     vehicle_model: str | None = None
