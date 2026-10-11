@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clients.ride_service_client import RideServiceClient
 from app.clients.stripe_client import StripeClient
+from app.config import settings
 from app.dependencies import get_db, get_stripe_client
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.repositories.transaction_repo import TransactionRepository
@@ -26,13 +28,14 @@ def _get_mobile_payment_service(
         pm_repo=PaymentMethodRepository(session),
         tx_repo=TransactionRepository(session),
         stripe_client=stripe,
+        ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
     )
 
 
 @router.post("/payment-intent", response_model=StandardResponse[MobilePaymentIntentResponse])
 async def create_mobile_payment_intent(
     body: CreateMobilePaymentIntentRequest,
-    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.FACILITY])),
+    user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.FACILITY])),  # ownership is checked in the service
     service: MobilePaymentService = Depends(_get_mobile_payment_service),
 ):
     payment_intent = await service.create_payment_intent(

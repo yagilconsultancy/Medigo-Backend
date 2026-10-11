@@ -41,8 +41,11 @@ class PaymentEventConsumer(BaseEventConsumer):
             status_log_repo = StatusLogRepository(session)
             ride = await repo.get_by_id(payload.ride_id)
             if ride:
-                await repo.update(payload.ride_id, final_fare=payload.amount)
-                logger.info(f"Updated ride {payload.ride_id} fare to ${payload.amount}")
+                # Only fill in the fare when none is stored. A later payment
+                # event must never overwrite a fare that is already recorded.
+                if ride.final_fare is None:
+                    await repo.update(payload.ride_id, final_fare=payload.amount)
+                    logger.info(f"Updated ride {payload.ride_id} fare to ${payload.amount}")
 
                 # Transition ride from PENDING to REQUESTED after payment confirmation
                 if ride.status == RideStatus.PENDING:
