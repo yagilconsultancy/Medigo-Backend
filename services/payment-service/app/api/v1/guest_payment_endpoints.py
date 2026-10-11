@@ -44,11 +44,13 @@ def _get_ride_client() -> RideServiceClient:
 def _get_mobile_payment_service(
     session: AsyncSession = Depends(get_db),
     stripe: StripeClient = Depends(get_stripe_client),
+    ride_client: RideServiceClient = Depends(_get_ride_client),
 ) -> MobilePaymentService:
     return MobilePaymentService(
         pm_repo=PaymentMethodRepository(session),
         tx_repo=TransactionRepository(session),
         stripe_client=stripe,
+        ride_client=ride_client,
     )
 
 
