@@ -257,11 +257,19 @@ class AccountDeletionRequestService:
         expected = self._hash_code(code, request.id)
         if not hmac.compare_digest(expected, request.otp_code_hash):
             request.otp_attempts += 1
+            attempts = request.otp_attempts
+            request_id = request.id
             await self.request_repo.session.flush()
+            # Commit before raising: the ValidationError unwinds through
+            # get_db(), which rolls back and would discard the counter.
+            try:
+                await self.request_repo.session.commit()
+            except Exception:  # never turn a 400 into a 500
+                logger.warning("Failed to persist deletion OTP attempts", exc_info=True)
             logger.warning(
                 "Bad deletion OTP for request %s (attempt %s)",
-                request.id,
-                request.otp_attempts,
+                request_id,
+                attempts,
             )
             raise ValidationError(INVALID_CODE_MESSAGE)
 

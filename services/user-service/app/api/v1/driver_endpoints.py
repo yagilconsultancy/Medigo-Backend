@@ -11,6 +11,7 @@ from app.schemas.driver import (
     UpdateDriverProfileRequest,
 )
 from app.services.driver_service import DriverService
+from app.services.fleet_scope import ensure_driver_in_scope
 from mediride_common.auth.dependencies import get_current_user, require_role
 from mediride_common.auth.models import UserClaims
 from mediride_common.events.publisher import EventPublisher
@@ -105,6 +106,7 @@ async def approve_driver(
     ),
     service: DriverService = Depends(_get_driver_service),
 ):
+    await ensure_driver_in_scope(service.driver_repo, user, driver_id)
     driver = await service.approve_driver(driver_id)
     return StandardResponse(
         data=DriverProfileResponse.model_validate(driver),
@@ -120,6 +122,7 @@ async def suspend_driver(
     ),
     service: DriverService = Depends(_get_driver_service),
 ):
+    await ensure_driver_in_scope(service.driver_repo, user, driver_id)
     driver = await service.suspend_driver(driver_id)
     return StandardResponse(
         data=DriverProfileResponse.model_validate(driver),

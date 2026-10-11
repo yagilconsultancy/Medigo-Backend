@@ -160,6 +160,9 @@ class UserService:
     ) -> tuple[list[User], int]:
         # Business users can only see their own business users
         if requester_role == UserRole.BUSINESS:
+            if not requester_business_id:
+                # No fleet attached: never fall through to the unfiltered list.
+                raise AuthorizationError("No fleet is linked to this account")
             business_id = requester_business_id
         return await self.user_repo.list_by_role(
             role=role or "rider", offset=offset, limit=limit, business_id=business_id

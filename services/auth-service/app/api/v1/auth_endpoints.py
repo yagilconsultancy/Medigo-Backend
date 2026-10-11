@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -79,6 +81,16 @@ def _get_auth_service(
 # Roles that can sign themselves up. Admins are invited from the back office
 # and drivers are created by an admin and activate in the app.
 SELF_SERVICE_ROLES = frozenset({UserRole.RIDER, UserRole.BUSINESS, UserRole.FACILITY})
+
+
+def _placeholder_user_id(identifier: str) -> UUID:
+    """A stable, random-looking id for accounts that do not exist."""
+    digest = hmac.new(
+        settings.JWT_SECRET_KEY.encode(),
+        identifier.strip().lower().encode(),
+        hashlib.sha256,
+    ).digest()[:16]
+    return UUID(bytes=digest, version=4)
 
 
 @router.post("/register", response_model=StandardResponse[RegisterResponse])
@@ -239,13 +251,17 @@ async def forgot_password(
         email=request.email, phone=request.phone
     )
     message = "If an account exists, a password reset OTP has been sent."
+    # Always answer with the same shape. For an unknown or deactivated account
+    # the id is a stable placeholder that looks like a real one, so the reply
+    # cannot be used to find out which emails or phones are registered.
     if result:
         user_id, _ = result
-        return StandardResponse(
-            data=ForgotPasswordResponse(user_id=user_id, message=message),
-            message=message,
-        )
-    return StandardResponse(message=message)
+    else:
+        user_id = _placeholder_user_id(request.email or request.phone or "")
+    return StandardResponse(
+        data=ForgotPasswordResponse(user_id=user_id, message=message),
+        message=message,
+    )
 
 
 @router.post("/reset-password", response_model=StandardResponse)

@@ -45,7 +45,9 @@ class OTPRepository:
             otp.attempts += 1
             await self.session.flush()
 
-    async def count_recent_for_user(self, user_id: UUID, hours: int = 1) -> int:
+    async def count_recent_for_user(
+        self, user_id: UUID, hours: int = 1, purpose: str | None = None
+    ) -> int:
         from datetime import timedelta
 
         cutoff = utc_now() - timedelta(hours=hours)
@@ -55,6 +57,7 @@ class OTPRepository:
             .where(
                 OTPRecord.user_id == user_id,
                 OTPRecord.created_at > cutoff,
+                *([OTPRecord.purpose == purpose] if purpose else []),
             )
         )
         return result.scalar_one()
