@@ -318,6 +318,7 @@ async def cancel_ride(
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
+    ensure_ride_access(await service.get_ride(ride_id), user)
     ride = await service.cancel_ride(
         ride_id,
         user.id,
