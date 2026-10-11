@@ -5,6 +5,7 @@ from app.clients.ride_service_client import RideServiceClient
 from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from mediride_common.exceptions import NotFoundError
+from mediride_common.schemas.enums import PaymentStatus, TransactionType
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +16,42 @@ class ReceiptService:
         fare_repo: FareBreakdownRepository,
         pm_repo: PaymentMethodRepository,
         ride_client: RideServiceClient,
+        tx_repo=None,
     ):
+        self.tx_repo = tx_repo
         self.fare_repo = fare_repo
         self.pm_repo = pm_repo
         self.ride_client = ride_client
+
+    async def _payment_status(self, ride_id: UUID) -> tuple[str, str | None]:
+        """Real payment state from the ride's transactions.
+
+        Returns (status, paid_at). status is one of paid, pending, failed,
+        refunded or not_recorded (no payment record exists for the ride)."""
+        if self.tx_repo is None:
+            return "not_recorded", None
+        txs = await self.tx_repo.get_by_ride_id(ride_id)
+        payments = [t for t in txs if t.transaction_type == TransactionType.RIDE_PAYMENT]
+        refunds = [
+            t
+            for t in txs
+            if t.transaction_type == TransactionType.REFUND
+            and t.status == PaymentStatus.COMPLETED
+        ]
+        completed = [t for t in payments if t.status == PaymentStatus.COMPLETED]
+        if completed and refunds:
+            return "refunded", None
+        if completed:
+            paid_at = max(t.updated_at or t.created_at for t in completed)
+            return "paid", paid_at.isoformat() if paid_at else None
+        if any(
+            t.status in (PaymentStatus.PENDING, PaymentStatus.PROCESSING)
+            for t in payments
+        ):
+            return "pending", None
+        if any(t.status == PaymentStatus.FAILED for t in payments):
+            return "failed", None
+        return "not_recorded", None
 
     async def generate_receipt(self, ride_id: UUID, user_id: UUID) -> dict:
         ride_data = await self.ride_client.get_ride(ride_id)
@@ -67,8 +100,15 @@ class ReceiptService:
             "currency": "CAD",
             "payment_method_type": "",
             "payment_method_last_four": "",
+            "payment_status": "not_recorded",
             "paid_at": None,
         }
+
+        # Payer's view only: a driver never sees the rider's payment state.
+        if not viewer_is_driver:
+            receipt["payment_status"], receipt["paid_at"] = await self._payment_status(
+                ride_id
+            )
 
         # Get payment method info
         methods = await self.pm_repo.get_by_user(user_id) if not viewer_is_driver else []
