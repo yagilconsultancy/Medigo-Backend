@@ -42,6 +42,8 @@ from mediride_common.auth.jwt_handler import JWTHandler
 from mediride_common.auth.dependencies import get_current_user
 from mediride_common.auth.models import UserClaims
 from mediride_common.events.publisher import EventPublisher
+from mediride_common.exceptions import AuthorizationError
+from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import StandardResponse
 
 router = APIRouter()
@@ -74,11 +76,19 @@ def _get_auth_service(
     )
 
 
+# Roles that can sign themselves up. Admins are invited from the back office
+# and drivers are created by an admin and activate in the app.
+SELF_SERVICE_ROLES = frozenset({UserRole.RIDER, UserRole.BUSINESS, UserRole.FACILITY})
+
+
 @router.post("/register", response_model=StandardResponse[RegisterResponse])
 async def register(
     request: RegisterRequest,
     auth_service: AuthService = Depends(_get_auth_service),
 ):
+    if request.role not in SELF_SERVICE_ROLES:
+        raise AuthorizationError("This account type cannot be created by sign-up")
+
     user_id, _ = await auth_service.register(
         email=request.email,
         phone=request.phone,

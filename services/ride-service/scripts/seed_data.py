@@ -199,4 +199,6 @@ async def seed():
 
 
 if __name__ == "__main__":
+    if os.environ.get("ENVIRONMENT", "development") != "development":
+        sys.exit("Seed data is for local development only.")
     asyncio.run(seed())

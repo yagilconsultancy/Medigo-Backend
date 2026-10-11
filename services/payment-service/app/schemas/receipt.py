@@ -30,4 +30,5 @@ class ReceiptResponse(BaseModel):
     currency: str = "CAD"
     payment_method_type: str
     payment_method_last_four: str
+    payment_status: str = "not_recorded"
     paid_at: str | None = None

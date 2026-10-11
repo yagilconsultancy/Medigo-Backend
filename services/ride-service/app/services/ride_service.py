@@ -369,13 +369,13 @@ class RideService:
         # Enrich with rider info
         rider_info = await self.user_client.get_user_profile(ride.rider_id)
         rider_name = "Unknown"
-        rider_rating = 5.0
+        rider_rating = None
         rider_trip_count = 0
         if rider_info:
             first = rider_info.get("first_name", "")
             last = rider_info.get("last_name", "")
             rider_name = f"{first} {last}".strip() or "Unknown"
-            rider_rating = rider_info.get("rating", 5.0)
+            rider_rating = rider_info.get("rating")
             rider_trip_count = rider_info.get("total_trips", 0)
 
         # Get ratings
@@ -736,8 +736,11 @@ class RideService:
 
     async def get_driver_stats(self, driver_id: UUID) -> dict:
         stats = await self.ride_repo.get_driver_stats(driver_id)
-        avg_rating = await self.rating_repo.get_average_rating(driver_id)
-        stats["rating"] = round(avg_rating, 2)
+        avg_rating, total_ratings = await self.rating_repo.get_rating_summary(
+            driver_id
+        )
+        stats["rating"] = avg_rating
+        stats["total_ratings"] = total_ratings
 
         # Today's earnings
         now = utc_now()
@@ -746,6 +749,19 @@ class RideService:
             driver_id, today_start
         )
         return stats
+
+    async def get_driver_ratings(
+        self, driver_id: UUID, offset: int = 0, limit: int = 20
+    ) -> dict:
+        avg_rating, total = await self.rating_repo.get_rating_summary(driver_id)
+        ratings, _ = await self.rating_repo.get_ratings_for_user(
+            driver_id, offset, limit
+        )
+        return {
+            "average_rating": avg_rating,
+            "total_ratings": total,
+            "ratings": ratings,
+        }
 
     # ---- Rider Queries ----
 
@@ -966,7 +982,9 @@ class RideService:
             "last_name": driver_info.get("last_name", ""),
             "phone": driver_info.get("phone"),
             "avatar_url": driver_info.get("avatar_url"),
-            "rating": driver_info.get("rating", 5.0),
+            "rating": (
+                driver_info.get("rating") if driver_info.get("total_ratings") else None
+            ),
             "vehicle_type": driver_info.get("vehicle_type"),
             "vehicle_make": driver_info.get("vehicle_make"),
             "vehicle_model": driver_info.get("vehicle_model"),

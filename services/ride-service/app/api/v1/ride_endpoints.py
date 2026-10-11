@@ -22,6 +22,7 @@ from app.schemas.ride import (
     StatusLogResponse,
     StatusTransitionRequest,
 )
+from app.services.ride_access import ensure_ride_access
 from app.services.ride_service import RideService
 from mediride_common.auth.dependencies import get_current_user, require_role
 from mediride_common.auth.models import UserClaims
@@ -211,17 +212,48 @@ async def get_driver_active_ride(
     )
 
 
+# Fields get_ride_detail sets by hand. They are left out of the generic copy
+# from RideResponse so the same keyword is never passed to RideDetailResponse twice.
+_RIDE_DETAIL_EXPLICIT_FIELDS = frozenset({
+    "pickup_latitude",
+    "pickup_longitude",
+    "destination_latitude",
+    "destination_longitude",
+    "pickup_at",
+    "dropoff_at",
+    "actual_distance_miles",
+    "actual_duration_minutes",
+    "appointment_time",
+    "mobility_level",
+    "assistance_level",
+    "cancellation_reason",
+    "cancelled_at",
+    "rider_name",
+    "rider_rating",
+    "rider_trip_count",
+    "driver_rating",
+    "rider_rating_given",
+    "timeline",
+    "driver_notes",
+})
+
+
 @router.get("/{ride_id}", response_model=StandardResponse[RideDetailResponse])
 async def get_ride_detail(
     ride_id: UUID,
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
+    ensure_ride_access(await service.get_ride(ride_id), user)
     detail = await service.get_ride_detail(ride_id)
     ride = detail["ride"]
     return StandardResponse(
         data=RideDetailResponse(
-            **{k: getattr(ride, k) for k in RideResponse.model_fields if hasattr(ride, k)},
+            **{
+                k: getattr(ride, k)
+                for k in RideResponse.model_fields
+                if hasattr(ride, k) and k not in _RIDE_DETAIL_EXPLICIT_FIELDS
+            },
             pickup_latitude=float(ride.pickup_latitude) if ride.pickup_latitude else None,
             pickup_longitude=float(ride.pickup_longitude) if ride.pickup_longitude else None,
             destination_latitude=float(ride.destination_latitude) if ride.destination_latitude else None,
@@ -255,6 +287,7 @@ async def get_ride_timeline(
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.RIDER, UserRole.ADMIN, UserRole.FACILITY])),
     service: RideService = Depends(_get_ride_service),
 ):
+    ensure_ride_access(await service.get_ride(ride_id), user)
     timeline = await service.get_ride_timeline(ride_id)
     return StandardResponse(
         data=[StatusLogResponse.model_validate(l) for l in timeline],
@@ -268,6 +301,7 @@ async def transition_ride_status(
     user: UserClaims = Depends(require_role([UserRole.DRIVER, UserRole.ADMIN])),
     service: RideService = Depends(_get_ride_service),
 ):
+    ensure_ride_access(await service.get_ride(ride_id), user)
     ride = await service.transition_status(
         ride_id, request.status, user.id, request.notes
     )

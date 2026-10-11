@@ -97,17 +97,20 @@ class StripeClient:
             message="Card tokenized in development mock mode",
         )
 
-    @staticmethod
     def _is_mock_payment_method(
+        self,
         data_key: str | None,
         customer_id: str | None = None,
     ) -> bool:
+        if not self._mock_enabled:
+            return False
         if not data_key or not data_key.startswith("pm_mock_"):
             return False
         return customer_id is None or customer_id.startswith("cus_mock_")
 
-    @staticmethod
-    def _is_mock_transaction(transaction_id: str | None) -> bool:
+    def _is_mock_transaction(self, transaction_id: str | None) -> bool:
+        if not self._mock_enabled:
+            return False
         return bool(transaction_id and transaction_id.startswith("pi_mock_"))
 
     @staticmethod

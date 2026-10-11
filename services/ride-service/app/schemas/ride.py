@@ -180,7 +180,7 @@ class RideDetailResponse(BaseModel):
 
     # Enriched fields
     rider_name: str
-    rider_rating: float
+    rider_rating: float | None = None
     rider_trip_count: int
     driver_rating: "RatingResponse | None" = None
     rider_rating_given: "RatingResponse | None" = None
@@ -218,7 +218,8 @@ class DriverStatsResponse(BaseModel):
     total_trips: int
     hours_online: float
     average_earnings: float
-    rating: float
+    rating: float | None = None
+    total_ratings: int = 0
     earnings_today: float
 
 

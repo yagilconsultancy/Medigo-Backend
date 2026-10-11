@@ -80,3 +80,14 @@ async def test_mock_payment_method_can_be_used_for_local_purchase_lifecycle():
     assert capture.response_code == "succeeded"
     assert void.success is True
     assert void.response_code == "canceled"
+
+
+def test_mock_ids_are_ignored_outside_development():
+    client = StripeClient(
+        secret_key="",
+        environment="production",
+        mock_in_development=True,
+    )
+
+    assert client._is_mock_payment_method("pm_mock_abc123", "cus_mock_user123") is False
+    assert client._is_mock_transaction("pi_mock_abc123") is False

@@ -50,7 +50,6 @@ PUBLIC_EXACT_PATHS = frozenset({
     "/payments/fare-estimate",  # Public fare estimates for riders
     "/payments/base-fare-estimate",  # Public base fare estimates for guests
     "/payments/guest/payment-intent",  # Guest payment intent (uses session_id instead of JWT)
-    "/tracking/test/simulate-location",  # Public test endpoint for simulating driver GPS
     "/locations/public/check-address",  # Public address validation
     "/users/public/fleet/apply",  # Public fleet partner application
     # Play Store requires a deletion URL reachable without the app or a login.
@@ -94,10 +93,15 @@ def _get_service_url(path: str) -> tuple[str, str] | None:
     return None
 
 
+def _docs_enabled() -> bool:
+    """API docs are served everywhere except production."""
+    return settings.ENVIRONMENT != "production"
+
+
 def _is_public_path(path: str) -> bool:
     """Public iff an exact match, a documented subtree, or a docs endpoint."""
     if path.endswith(_DOC_SUFFIXES):
-        return True
+        return _docs_enabled()
     if (path.rstrip("/") or "/") in PUBLIC_EXACT_PATHS:
         return True
     return any(
@@ -116,7 +120,7 @@ async def proxy_request(request: Request, path: str):
 
     # Determine target service
     result = _get_service_url(full_path)
-    if not result:
+    if not result or (full_path.endswith(_DOC_SUFFIXES) and not _docs_enabled()):
         return Response(
             content='{"success": false, "message": "Route not found", "error_code": "NOT_FOUND"}',
             status_code=404,

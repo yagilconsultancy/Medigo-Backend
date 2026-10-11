@@ -64,6 +64,19 @@ def test_is_public_path(path: str, expected: bool) -> None:
     assert _is_public_path(path) is expected
 
 
+def test_docs_are_not_public_in_production(monkeypatch) -> None:
+    from app.routes import proxy
+
+    monkeypatch.setattr(proxy.settings, "ENVIRONMENT", "production")
+    assert _is_public_path("/auth/docs") is False
+    assert _is_public_path("/rides/openapi.json") is False
+    assert _is_public_path("/auth/login") is True
+
+
+def test_simulate_location_is_not_public() -> None:
+    assert _is_public_path("/tracking/test/simulate-location") is False
+
+
 def test_identity_headers_are_stripped_from_client_requests() -> None:
     """A client must never be able to supply its own identity headers.
 

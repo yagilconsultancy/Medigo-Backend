@@ -22,6 +22,7 @@ class DriverProfileResponse(BaseModel):
     is_approved: bool
     is_online: bool
     rating: float
+    total_ratings: int = 0
     total_trips: int
 
     model_config = {"from_attributes": True}

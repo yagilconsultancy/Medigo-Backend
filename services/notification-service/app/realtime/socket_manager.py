@@ -28,6 +28,8 @@ def _extract_user_from_auth(auth: dict | None) -> dict | None:
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
+        if payload.get("type", "access") != "access":
+            return None
         return {
             "user_id": payload.get("sub"),
             "role": payload.get("role"),
@@ -54,6 +56,30 @@ async def on_disconnect(sid):
     logger.info(f"Chat disconnected: {sid}")
 
 
+async def _is_participant(user: dict, conversation_id: str) -> bool:
+    """Only the ride's rider and driver (or an admin) may join its chat."""
+    if user.get("role") == "admin":
+        return True
+
+    from uuid import UUID
+
+    from app.dependencies import get_db
+    from app.repositories.conversation_repo import ConversationRepository
+
+    try:
+        conv_id = UUID(str(conversation_id))
+    except ValueError:
+        return False
+
+    conversation = None
+    async for db_session in get_db():
+        conversation = await ConversationRepository(db_session).get_by_id(conv_id)
+    if not conversation:
+        return False
+    user_id = str(user.get("user_id"))
+    return user_id in (str(conversation.rider_id), str(conversation.driver_id))
+
+
 @sio.on("join_conversation", namespace="/chat")
 async def on_join_conversation(sid, data):
     """Join a conversation room to receive real-time messages."""
@@ -61,6 +87,10 @@ async def on_join_conversation(sid, data):
     conversation_id = data.get("conversation_id")
     if not conversation_id:
         return {"error": "conversation_id is required"}
+
+    if not await _is_participant(session, conversation_id):
+        logger.warning(f"User {session['user_id']} refused chat room for {conversation_id}")
+        return {"error": "Not allowed to join this conversation"}
 
     room = f"chat_{conversation_id}"
     await sio.enter_room(sid, room, namespace="/chat")

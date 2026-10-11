@@ -41,13 +41,22 @@ class RatingRepository:
         )
         return list(result.scalars().all()), total
 
-    async def get_average_rating(self, user_id: UUID) -> float:
+    async def get_rating_summary(self, user_id: UUID) -> tuple[float | None, int]:
+        """Return (average, count) of ratings received. Average is None when
+        the user has no ratings, so callers never show an invented score."""
         result = await self.session.execute(
-            select(func.avg(RideRating.rating)).where(
+            select(func.avg(RideRating.rating), func.count(RideRating.id)).where(
                 RideRating.rated_user_id == user_id
             )
         )
-        return float(result.scalar_one() or 5.0)
+        avg, count = result.one()
+        if not count or avg is None:
+            return None, 0
+        return round(float(avg), 2), int(count)
+
+    async def get_average_rating(self, user_id: UUID) -> float | None:
+        avg, _ = await self.get_rating_summary(user_id)
+        return avg
 
     async def get_average_rating_given(
         self, user_id: UUID, rating_type: str

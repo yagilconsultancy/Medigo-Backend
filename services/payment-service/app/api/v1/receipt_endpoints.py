@@ -9,6 +9,7 @@ from app.dependencies import get_db
 from app.repositories.fare_repo import FareBreakdownRepository
 from app.repositories.payment_method_repo import PaymentMethodRepository
 from app.schemas.receipt import ReceiptResponse
+from app.repositories.transaction_repo import TransactionRepository
 from app.services.receipt_service import ReceiptService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
@@ -23,6 +24,7 @@ def _get_receipt_service(session: AsyncSession = Depends(get_db)) -> ReceiptServ
         fare_repo=FareBreakdownRepository(session),
         pm_repo=PaymentMethodRepository(session),
         ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
+        tx_repo=TransactionRepository(session),
     )
 
 

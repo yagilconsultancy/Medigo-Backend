@@ -188,6 +188,7 @@ async def get_receipt_internal(
         fare_repo=FareBreakdownRepository(session),
         pm_repo=PaymentMethodRepository(session),
         ride_client=RideServiceClient(settings.RIDE_SERVICE_URL),
+        tx_repo=TransactionRepository(session),
     )
     return await service.generate_receipt(ride_id, user_id)
 

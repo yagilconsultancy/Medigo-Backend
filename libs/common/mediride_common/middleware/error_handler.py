@@ -12,10 +12,13 @@ logger = logging.getLogger(__name__)
 
 def _sanitize_errors(errors: list) -> list:
     """Make pydantic validation errors JSON-serializable by converting
-    non-serializable objects (e.g. ValueError) in 'ctx' to strings."""
+    non-serializable objects (e.g. ValueError) in 'ctx' to strings, and drop
+    the submitted input values."""
     sanitized = []
     for err in errors:
         err = dict(err)
+        # Never echo submitted values back: they can be passwords, codes or PHI.
+        err.pop("input", None)
         if "ctx" in err and isinstance(err["ctx"], dict):
             err["ctx"] = {
                 k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
@@ -28,20 +31,19 @@ def _sanitize_errors(errors: list) -> list:
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
-        body = await request.body()
+        errors = _sanitize_errors(exc.errors())
         logger.warning(
-            "Validation error on %s %s | body=%s | errors=%s",
+            "Validation error on %s %s | errors=%s",
             request.method,
             request.url.path,
-            body.decode(errors="replace"),
-            exc.errors(),
+            [{"loc": e.get("loc"), "type": e.get("type")} for e in errors],
         )
         return JSONResponse(
             status_code=422,
             content=ErrorResponse(
                 message="Validation error",
                 error_code="VALIDATION_ERROR",
-                details=_sanitize_errors(exc.errors()),
+                details=errors,
             ).model_dump(),
         )
 
