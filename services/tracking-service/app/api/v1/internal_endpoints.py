@@ -2,7 +2,8 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from mediride_common.auth.internal import require_internal_service as _require_internal_service
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db
@@ -11,14 +12,6 @@ from app.repositories.tracking_session_repo import TrackingSessionRepository
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal")
-
-
-def _require_internal_service(
-    x_internal_service: str | None = Header(None),
-) -> str:
-    if not x_internal_service:
-        raise HTTPException(status_code=403, detail="Internal access only")
-    return x_internal_service
 
 
 @router.get("/{ride_id}/driver-location")

@@ -1,6 +1,7 @@
 import logging
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 from mediride_common.exceptions import (
     AuthenticationError,
@@ -27,7 +28,7 @@ class UserServiceClient:
                 response = await client.get(
                     f"{self._base_url}/internal/invitations/verify",
                     params={"token": token},
-                    headers={"X-Internal-Service": "auth-service"},
+                    headers=internal_headers("auth-service"),
                 )
         except httpx.ConnectError:
             raise ServiceUnavailableError("User service is unavailable")
@@ -50,7 +51,7 @@ class UserServiceClient:
                 response = await client.post(
                     f"{self._base_url}/internal/invitations/accept",
                     json={"token": token, "user_id": user_id},
-                    headers={"X-Internal-Service": "auth-service"},
+                    headers=internal_headers("auth-service"),
                 )
         except httpx.ConnectError:
             raise ServiceUnavailableError("User service is unavailable")
@@ -71,7 +72,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
                 response = await client.get(
                     f"{self._base_url}/internal/drivers/{user_id}/profile",
-                    headers={"X-Internal-Service": "auth-service"},
+                    headers=internal_headers("auth-service"),
                 )
         except httpx.ConnectError:
             raise ServiceUnavailableError("User service is unavailable")

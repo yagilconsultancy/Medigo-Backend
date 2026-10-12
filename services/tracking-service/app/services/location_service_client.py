@@ -1,6 +1,7 @@
 import logging
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class LocationServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/locations/distance",
-                    headers={"X-Internal-Service": "tracking-service"},
+                    headers=internal_headers("tracking-service"),
                     params={
                         "origin_lat": origin_lat,
                         "origin_lng": origin_lng,
