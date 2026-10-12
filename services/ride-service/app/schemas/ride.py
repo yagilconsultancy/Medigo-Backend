@@ -267,6 +267,35 @@ class DriverContactResponse(BaseModel):
     vehicle_color: str | None = None
 
 
+class PublicTripDriver(BaseModel):
+    first_name: str | None = None
+    vehicle_make: str | None = None
+    vehicle_model: str | None = None
+    vehicle_color: str | None = None
+    vehicle_plate: str | None = None
+
+
+class PublicTripLocation(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class PublicTripViewResponse(BaseModel):
+    """What a share-link holder may see. Deliberately small."""
+
+    status: str
+    ended: bool
+    pickup_address: str
+    destination_address: str
+    pickup_latitude: float | None = None
+    pickup_longitude: float | None = None
+    destination_latitude: float | None = None
+    destination_longitude: float | None = None
+    scheduled_at: datetime
+    driver: PublicTripDriver | None = None
+    driver_location: PublicTripLocation | None = None
+
+
 class SharedRideResponse(BaseModel):
     id: UUID
     ride_type: str
