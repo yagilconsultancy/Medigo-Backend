@@ -26,13 +26,22 @@ class GatewaySettings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW: int = 60
 
-    # CORS
-    CORS_ORIGINS: list[str] = ["*"]
+    # Per-visitor limits on public endpoints (see app/middleware/public_limits.py)
+    RATE_LIMIT_ENABLED: bool = True
+
+    # CORS: comma separated list of web addresses, e.g.
+    # "https://backoffice.getmedigo.com,https://getmedigo.com". "*" allows any site.
+    CORS_ORIGINS: str = "*"
 
     # Admin activity logging (fire-and-forget to auth-service)
     ACTIVITY_LOG_ENABLED: bool = True
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        origins = [o.strip().rstrip("/") for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        return origins or ["*"]
 
     @model_validator(mode="after")
     def _require_real_jwt_secret(self):
