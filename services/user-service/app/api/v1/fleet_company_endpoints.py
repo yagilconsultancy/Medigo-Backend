@@ -11,6 +11,7 @@ from app.repositories.driver_repo import DriverRepository
 from app.repositories.fleet_company_repo import FleetCompanyRepository
 from app.repositories.fleet_document_repo import FleetDocumentRepository
 from app.schemas.fleet_application import FleetDocumentResponse
+from app.services.document_links import sign_fleet_documents
 from app.schemas.fleet_company import (
     AddFleetPartnerRequest,
     FleetCompanyDetailResponse,
@@ -184,12 +185,13 @@ async def list_fleet_documents(
     business_id: UUID,
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     session: AsyncSession = Depends(get_db),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     doc_repo = FleetDocumentRepository(session)
     docs = await doc_repo.list_by_fleet(business_id)
-    return StandardResponse(
-        data=[FleetDocumentResponse.model_validate(d) for d in docs],
-    )
+    items = [FleetDocumentResponse.model_validate(d) for d in docs]
+    await sign_fleet_documents(s3_client, items)
+    return StandardResponse(data=items)
 
 
 @router.post(
@@ -211,7 +213,7 @@ async def upload_fleet_document(
     await s3_client.upload_file(
         bucket=settings.S3_BUCKET_DOCUMENTS,
         key=file_key,
-        data=file_data,
+        file_data=file_data,
         content_type=file.content_type or "application/octet-stream",
     )
 
@@ -224,10 +226,9 @@ async def upload_fleet_document(
         mime_type=file.content_type or "application/octet-stream",
     )
 
-    return StandardResponse(
-        data=FleetDocumentResponse.model_validate(doc),
-        message="Document uploaded",
-    )
+    data = FleetDocumentResponse.model_validate(doc)
+    await sign_fleet_documents(s3_client, [data])
+    return StandardResponse(data=data, message="Document uploaded")
 
 
 @router.get(

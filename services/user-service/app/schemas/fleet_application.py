@@ -83,14 +83,6 @@ class FleetDocumentResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="after")
-    def build_file_url(self) -> "FleetDocumentResponse":
-        if self.file_key and not self.file_url:
-            from app.config import settings
-
-            self.file_url = f"{settings.S3_ENDPOINT_URL}/{settings.S3_BUCKET_DOCUMENTS}/{self.file_key}"
-        return self
-
 
 class FleetApplicationResponse(BaseModel):
     id: UUID
