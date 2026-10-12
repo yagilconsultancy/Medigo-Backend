@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 
 class VehicleDocumentResponse(BaseModel):
@@ -22,14 +22,6 @@ class VehicleDocumentResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @model_validator(mode="after")
-    def build_file_url(self) -> "VehicleDocumentResponse":
-        if self.file_key and not self.file_url:
-            from app.config import settings
-
-            self.file_url = f"{settings.S3_ENDPOINT_URL}/{settings.S3_BUCKET_DOCUMENTS}/{self.file_key}"
-        return self
-
 
 class VehicleDocumentUploadResponse(BaseModel):
     id: UUID
@@ -43,14 +35,6 @@ class VehicleDocumentUploadResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
-    @model_validator(mode="after")
-    def build_file_url(self) -> "VehicleDocumentUploadResponse":
-        if self.file_key and not self.file_url:
-            from app.config import settings
-
-            self.file_url = f"{settings.S3_ENDPOINT_URL}/{settings.S3_BUCKET_DOCUMENTS}/{self.file_key}"
-        return self
 
 
 class VehicleDocumentKPIs(BaseModel):
