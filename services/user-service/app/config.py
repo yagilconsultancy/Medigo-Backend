@@ -10,6 +10,10 @@ class UserSettings(BaseServiceSettings):
     AUTH_SERVICE_URL: str = "http://auth-service:8001"
     RIDE_SERVICE_URL: str = "http://ride-service:8003"
 
+    # Comma-separated login emails that may manage admin roles and permissions
+    # even without the Super Admin role (technical owner login). Empty = none.
+    ROLE_ADMIN_EXEMPT_EMAILS: str = ""
+
     # Default password for newly created drivers
 
     # Default password for newly created admins

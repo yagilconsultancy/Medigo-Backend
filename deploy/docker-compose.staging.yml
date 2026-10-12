@@ -132,6 +132,7 @@ services:
       S3_ACCESS_KEY: ${S3_ACCESS_KEY}
       S3_SECRET_KEY: ${S3_SECRET_KEY}
       S3_REGION: ${S3_REGION:-us-east-2}
+      ROLE_ADMIN_EXEMPT_EMAILS: ${ROLE_ADMIN_EXEMPT_EMAILS:-}
       S3_BUCKET_DOCUMENTS: ${S3_BUCKET_DOCUMENTS:-medigo-900}
     depends_on:
       postgres:

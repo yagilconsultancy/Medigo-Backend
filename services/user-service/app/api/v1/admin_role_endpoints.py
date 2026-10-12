@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.dependencies import get_db
 from app.repositories.admin_role_repo import AdminRoleRepository
 from app.repositories.user_repo import UserRepository
@@ -32,6 +33,29 @@ def _get_service(session: AsyncSession = Depends(get_db)) -> AdminRoleService:
     )
 
 
+async def require_role_manager(
+    admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    session: AsyncSession = Depends(get_db),
+) -> UserClaims:
+    """Only Super Admins (or the configured exempt logins) may change roles."""
+    user = await UserRepository(session).get_by_id(admin.id)
+    email = (user.email or "").strip().lower() if user else ""
+    exempt = {
+        e.strip().lower()
+        for e in settings.ROLE_ADMIN_EXEMPT_EMAILS.split(",")
+        if e.strip()
+    }
+    if email and email in exempt:
+        return admin
+    roles = await AdminRoleRepository(session).get_user_roles(admin.id)
+    if any(r.name == "super_admin" for r in roles):
+        return admin
+    raise HTTPException(
+        status_code=403,
+        detail="Only a Super Admin can manage roles and permissions",
+    )
+
+
 # Admin Roles endpoints
 @router.get(
     "/admin/roles",
@@ -53,7 +77,7 @@ async def list_admin_roles(
 )
 async def create_admin_role(
     body: AdminRoleCreate,
-    _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    _admin: UserClaims = Depends(require_role_manager),
     service: AdminRoleService = Depends(_get_service),
 ):
     """Create a new admin role."""
@@ -96,7 +120,7 @@ async def get_admin_role_detail(
 async def update_admin_role(
     role_id: UUID,
     body: AdminRoleUpdate,
-    _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    _admin: UserClaims = Depends(require_role_manager),
     service: AdminRoleService = Depends(_get_service),
 ):
     """Update role information."""
@@ -120,7 +144,7 @@ async def update_admin_role(
 )
 async def delete_admin_role(
     role_id: UUID,
-    _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    _admin: UserClaims = Depends(require_role_manager),
     service: AdminRoleService = Depends(_get_service),
 ):
     """Delete an admin role."""
@@ -137,7 +161,7 @@ async def delete_admin_role(
 )
 async def assign_role_to_admin(
     body: AssignRoleRequest,
-    admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    admin: UserClaims = Depends(require_role_manager),
     service: AdminRoleService = Depends(_get_service),
 ):
     """Assign a role to an admin user."""
@@ -158,7 +182,7 @@ async def assign_role_to_admin(
 )
 async def remove_role_from_admin(
     body: AssignRoleRequest,
-    _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    _admin: UserClaims = Depends(require_role_manager),
     service: AdminRoleService = Depends(_get_service),
 ):
     """Remove a role from an admin user."""
@@ -186,7 +210,7 @@ async def get_permission_matrix(
 )
 async def save_permissions(
     permissions: list[ModulePermissionUpdate],
-    _admin: UserClaims = Depends(require_role([UserRole.ADMIN])),
+    _admin: UserClaims = Depends(require_role_manager),
     service: AdminRoleService = Depends(_get_service),
 ):
     """Bulk save module permissions."""
