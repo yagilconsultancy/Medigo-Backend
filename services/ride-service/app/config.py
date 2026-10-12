@@ -9,7 +9,7 @@ class RideSettings(BaseServiceSettings):
     PAYMENT_SERVICE_URL: str = "http://payment-service:8005"
     TRACKING_SERVICE_URL: str = "http://tracking-service:8006"
     RIDE_REQUEST_EXPIRY_SECONDS: int = 120
-    SHARE_BASE_URL: str = "https://app.mediride.com"
+    SHARE_BASE_URL: str = "https://web.getmedigo.com"
     BUSINESS_ASSIGNMENT_EXPIRY_MINUTES: int = 30
     EXPIRY_CHECK_INTERVAL_SECONDS: int = 60
 

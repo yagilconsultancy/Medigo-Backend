@@ -148,6 +148,7 @@ services:
     environment:
       <<: *service-env
       DATABASE_URL: postgresql+asyncpg://mediride:${POSTGRES_PASSWORD:-staging_password}@postgres:5432/mediride_rides
+      SHARE_BASE_URL: ${SHARE_BASE_URL:-https://web.getmedigo.com}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       USER_SERVICE_URL: http://user-service:8002
       PAYMENT_SERVICE_URL: http://payment-service:8005
