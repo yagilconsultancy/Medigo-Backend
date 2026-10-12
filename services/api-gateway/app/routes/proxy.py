@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request, Response
 
 from app.config import settings
 from app.middleware.activity_logger import emit
+from app.middleware.public_limits import enforce_public_limits
 from app.middleware.auth_middleware import (
     token_was_revoked,
     validate_jwt_and_get_claims,
@@ -131,6 +132,10 @@ async def proxy_request(request: Request, path: str):
         )
 
     service_url, downstream_path = result
+
+    limited = await enforce_public_limits(request, full_path)
+    if limited:
+        return limited
 
     # Build headers to forward, dropping any client-supplied identity headers
     # so they can never survive alongside (and outrank) the gateway's own.
