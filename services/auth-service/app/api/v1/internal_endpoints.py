@@ -7,7 +7,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
+from mediride_common.auth.internal import require_internal_service as _require_internal_service
 from jose import jwt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.exc import IntegrityError
@@ -33,14 +34,6 @@ REACTIVATION_TOKEN_EXPIRE_DAYS = 7
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal")
-
-
-def _require_internal_service(
-    x_internal_service: str | None = Header(None),
-) -> str:
-    if not x_internal_service:
-        raise HTTPException(status_code=403, detail="Internal access only")
-    return x_internal_service
 
 
 def _mint_reactivation_token(user_id: UUID) -> str:

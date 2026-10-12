@@ -3,9 +3,10 @@ import logging
 from uuid import UUID
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 logger = logging.getLogger(__name__)
-_HEADERS = {"X-Internal-Service": "notification-service"}
+_HEADERS = internal_headers("notification-service")
 
 
 class PaymentServiceClient:

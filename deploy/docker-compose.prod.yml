@@ -14,6 +14,10 @@ x-service-env: &service-env
   DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:-America/Toronto}
   RABBITMQ_URL: amqp://mediride:${RABBITMQ_PASSWORD}@rabbitmq:5672/mediride
   REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+  # Shared secret for service-to-service calls (see libs/common/mediride_common/auth/internal.py).
+  # INTERNAL_AUTH_MODE: log = warn only (default), enforce = block calls without the secret, off = old behaviour.
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token-change-in-production}
+  INTERNAL_AUTH_MODE: ${INTERNAL_AUTH_MODE:-log}
 
 services:
   # ==================== INFRASTRUCTURE ====================

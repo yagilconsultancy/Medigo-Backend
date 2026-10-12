@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ class PaymentServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/payments/receipts/{ride_id}",
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     data = resp.json()
@@ -92,7 +93,7 @@ class PaymentServiceClient:
                 resp = await client.get(
                     f"{self.base_url}/internal/payments/revenue-summary",
                     params={"days": days},
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()

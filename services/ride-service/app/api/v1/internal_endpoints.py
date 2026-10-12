@@ -3,7 +3,8 @@ import logging
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from mediride_common.auth.internal import require_internal_service as _require_internal_service
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,14 +19,6 @@ from app.schemas.ride import RideResponse
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal")
-
-
-def _require_internal_service(
-    x_internal_service: str | None = Header(None),
-) -> str:
-    if not x_internal_service:
-        raise HTTPException(status_code=403, detail="Internal access only")
-    return x_internal_service
 
 
 class UpdateFareRequest(BaseModel):

@@ -3,6 +3,7 @@ from datetime import timedelta
 from uuid import UUID
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 from app.config import settings
 from app.models.refresh_token import RefreshToken
@@ -995,7 +996,7 @@ class AuthService:
                 response = await client.get(
                     f"{self.user_service_client._base_url}/internal/admin-invitations/verify",
                     params={"token": invite_token},
-                    headers={"X-Internal-Service": "auth-service"},
+                    headers=internal_headers("auth-service"),
                 )
         except httpx.ConnectError:
             raise ValidationError("User service is unavailable")
@@ -1046,7 +1047,7 @@ class AuthService:
                 response = await client.post(
                     f"{self.user_service_client._base_url}/internal/admin-invitations/accept",
                     json={"token": invite_token, "user_id": str(credential.id)},
-                    headers={"X-Internal-Service": "auth-service"},
+                    headers=internal_headers("auth-service"),
                 )
             if response.status_code != 200:
                 logger.error(

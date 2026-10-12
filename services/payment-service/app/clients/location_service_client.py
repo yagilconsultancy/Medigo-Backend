@@ -1,10 +1,11 @@
 import logging
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 logger = logging.getLogger(__name__)
 
-_HEADERS = {"X-Internal-Service": "payment-service"}
+_HEADERS = internal_headers("payment-service")
 
 
 class LocationServiceClient:

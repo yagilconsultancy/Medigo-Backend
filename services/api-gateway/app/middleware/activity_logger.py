@@ -14,6 +14,7 @@ import asyncio
 import logging
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 from app.config import settings
 
@@ -73,7 +74,7 @@ def emit(entry: dict) -> None:
 async def _drain() -> None:
     assert _queue is not None
     url = f"{settings.AUTH_SERVICE_URL}/internal/activity-logs"
-    headers = {"X-Internal-Service": "api-gateway"}
+    headers = internal_headers("api-gateway")
 
     async with httpx.AsyncClient(timeout=_DRAIN_TIMEOUT_SECONDS) as client:
         while True:

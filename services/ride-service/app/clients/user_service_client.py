@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/users/{user_id}/profile",
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()
@@ -47,7 +48,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
                     f"{self.base_url}/internal/guest-riders",
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                     json=payload,
                 )
                 if resp.status_code == 200:
@@ -65,7 +66,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/drivers/{driver_id}/profile",
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()
@@ -82,7 +83,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/fleets/{fleet_id}",
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()
@@ -99,7 +100,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/fleets/{fleet_id}/drivers",
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("drivers", [])
@@ -114,7 +115,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/drivers/available",
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("drivers", [])
@@ -129,7 +130,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/facilities/count",
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("count", 0)
@@ -148,7 +149,7 @@ class UserServiceClient:
                 resp = await client.get(
                     f"{self.base_url}/internal/facilities/top",
                     params={"facility_ids": ids_str},
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("facilities", {})
@@ -172,7 +173,7 @@ class UserServiceClient:
                 resp = await client.get(
                     f"{self.base_url}/internal/fleets/with-vehicle-counts",
                     params={"fleet_ids": ids_str},
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("fleets", {})
@@ -194,7 +195,7 @@ class UserServiceClient:
                 resp = await client.get(
                     f"{self.base_url}/internal/users/batch",
                     params={"user_ids": ids_str},
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("users", [])
@@ -225,7 +226,7 @@ class UserServiceClient:
                 resp = await client.get(
                     f"{self.base_url}/internal/users/search",
                     params=params,
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return [
@@ -247,7 +248,7 @@ class UserServiceClient:
                 resp = await client.get(
                     f"{self.base_url}/internal/drivers/with-details",
                     params={"driver_ids": ids_str},
-                    headers={"X-Internal-Service": "ride-service"},
+                    headers=internal_headers("ride-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("drivers", [])
