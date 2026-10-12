@@ -56,7 +56,7 @@ class AuthServiceClient:
             raise RuntimeError(f"Auth service unavailable: {e}")
 
     async def create_admin_credential(
-        self, email: str, password: str
+        self, email: str, password: str, must_change_password: bool = False
     ) -> dict:
         """Create admin credential. Returns result dict or raises with actual error."""
         try:
@@ -66,6 +66,7 @@ class AuthServiceClient:
                     json={
                         "email": email,
                         "password": password,
+                        "must_change_password": must_change_password,
                     },
                     headers=HEADERS,
                 )
