@@ -30,7 +30,15 @@ GROUP_LIMITS: dict[str, tuple[int, int]] = {
     "public_form": (10, 600),
     "fleet_apply": (5, 3600),
     "maps_lookup": (120, 60),
+    # A family member's page polls every 10 seconds; this leaves room for
+    # several tabs on one network while stopping scripted abuse.
+    "trip_view": (120, 60),
 }
+
+# (HTTP method, path prefix) -> group name, for paths that carry a token.
+_PREFIX_RULES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/rides/public/track/", "trip_view"),
+)
 
 # (HTTP method, exact path without trailing slash) -> group name
 _RULES: dict[tuple[str, str], str] = {
@@ -72,7 +80,15 @@ _TOO_MANY = (
 
 def limit_group_for(method: str, path: str) -> str | None:
     """The rule group for this request, or None if it is not limited."""
-    return _RULES.get((method.upper(), path.rstrip("/") or "/"))
+    method = method.upper()
+    clean = path.rstrip("/") or "/"
+    group = _RULES.get((method, clean))
+    if group is not None:
+        return group
+    for rule_method, prefix, rule_group in _PREFIX_RULES:
+        if method == rule_method and path.startswith(prefix):
+            return rule_group
+    return None
 
 
 def client_ip(request: Request) -> str:

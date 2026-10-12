@@ -48,6 +48,18 @@ def _enum_value(value):
 
 SHARE_LINK_GRACE = timedelta(hours=1)
 
+PUBLIC_TRIP_LIVE_STATUSES = (
+    RideStatus.DRIVER_ASSIGNED,
+    RideStatus.DRIVER_EN_ROUTE,
+    RideStatus.DRIVER_ARRIVED,
+    RideStatus.IN_PROGRESS,
+)
+PUBLIC_TRIP_ENDED_STATUSES = (
+    RideStatus.COMPLETED,
+    RideStatus.CANCELLED,
+    RideStatus.NO_SHOW,
+)
+
 
 def share_link_expired(ride, now: datetime | None = None) -> bool:
     """A share link stops working one hour after the ride ended.
@@ -986,6 +998,56 @@ class RideService:
         if not ride or share_link_expired(ride):
             raise NotFoundError("Shared ride not found")
         return ride
+
+    async def get_public_trip_view(self, token: str) -> dict:
+        """Read-only trip view for someone holding a share link (no login).
+
+        Returns only what a family member needs to follow the trip: status,
+        addresses, the driver's first name and vehicle, and the driver's live
+        position while the ride is active. Never the rider's name, phone,
+        notes, fare or payment details.
+        """
+        ride = await self.get_ride_by_share_token(token)
+        status = _enum_value(ride.status)
+        ended = ride.status in PUBLIC_TRIP_ENDED_STATUSES
+        live = ride.status in PUBLIC_TRIP_LIVE_STATUSES
+
+        driver = None
+        driver_location = None
+        if live and ride.driver_id:
+            info = await self.user_client.get_driver_profile(ride.driver_id)
+            if info:
+                driver = {
+                    "first_name": info.get("first_name") or None,
+                    "vehicle_make": info.get("vehicle_make"),
+                    "vehicle_model": info.get("vehicle_model"),
+                    "vehicle_color": info.get("vehicle_color"),
+                    "vehicle_plate": info.get("vehicle_plate"),
+                }
+            location = await self.tracking_client.get_driver_location(ride.id)
+            if (
+                location
+                and location.get("latitude") is not None
+                and location.get("longitude") is not None
+            ):
+                driver_location = {
+                    "latitude": location["latitude"],
+                    "longitude": location["longitude"],
+                }
+
+        return {
+            "status": status,
+            "ended": ended,
+            "pickup_address": ride.pickup_address,
+            "destination_address": ride.destination_address,
+            "pickup_latitude": ride.pickup_latitude,
+            "pickup_longitude": ride.pickup_longitude,
+            "destination_latitude": ride.destination_latitude,
+            "destination_longitude": ride.destination_longitude,
+            "scheduled_at": ride.scheduled_at,
+            "driver": driver,
+            "driver_location": driver_location,
+        }
 
     # ---- Contact Driver ----
 
