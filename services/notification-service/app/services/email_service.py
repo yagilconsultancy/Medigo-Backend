@@ -291,10 +291,12 @@ async def send_admin_invite_email(
     temporary_password: str,
     invited_by_name: str,
 ) -> bool:
-    """Send admin credentials email."""
+    """Send admin credentials email, with a link to the back office login."""
+    login_url = f"{settings.BACKOFFICE_URL.rstrip('/')}/login"
     try:
         template = _template_env.get_template("admin_invite.html")
         html = template.render(
+            login_url=login_url,
             email=to,
             full_name=full_name,
             role_display_name=role_display_name,
@@ -315,6 +317,8 @@ async def send_admin_invite_email(
             <p><strong>Email:</strong> {to}</p>
             <p><strong>Password:</strong> {temporary_password}</p>
             <p style="color: #dc2626; font-weight: bold;">This is a one-time password. You will be asked to choose your own new password the first time you sign in.</p>
+            <p><a href="{login_url}">Sign in to the MediGo back office</a></p>
+            <p>Or paste this link into your browser: {login_url}</p>
         </body>
         </html>
         """
