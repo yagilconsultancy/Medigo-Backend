@@ -176,6 +176,7 @@ async def admin_login(
             refresh_token=token_pair.refresh_token,
             expires_in=token_pair.expires_in,
             role=token_pair.role,
+            must_change_password=token_pair.must_change_password,
         ),
         message="Admin login successful",
     )

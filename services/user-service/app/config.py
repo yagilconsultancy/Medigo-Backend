@@ -14,11 +14,6 @@ class UserSettings(BaseServiceSettings):
     # even without the Super Admin role (technical owner login). Empty = none.
     ROLE_ADMIN_EXEMPT_EMAILS: str = ""
 
-    # Default password for newly created drivers
-
-    # Default password for newly created admins
-    DEFAULT_ADMIN_PASSWORD: str = "MediAdmin2026!"
-
     # Base URL of the web app, used to build account-reactivation links
     FRONTEND_URL: str = "https://backoffice.getmedigo.com"
 

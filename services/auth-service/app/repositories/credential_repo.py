@@ -67,7 +67,7 @@ class CredentialRepository:
         await self.session.execute(
             update(UserCredential)
             .where(UserCredential.id == user_id)
-            .values(password_hash=password_hash)
+            .values(password_hash=password_hash, must_change_password=False)
         )
 
     async def delete(self, user_id: UUID) -> None:
