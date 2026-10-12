@@ -50,6 +50,20 @@ async def create_saved_location(
     )
 
 
+@router.put("/reorder", response_model=StandardResponse[list[SavedLocationResponse]])
+async def reorder_saved_locations(
+    body: ReorderLocationsRequest,
+    user: UserClaims = Depends(get_current_user),
+    service: SavedLocationService = Depends(_get_service),
+):
+    locations = await service.reorder_locations(user.id, body.location_ids)
+    return StandardResponse(
+        data=[SavedLocationResponse.model_validate(loc) for loc in locations],
+        message="Locations reordered",
+    )
+
+
+
 @router.get("/{location_id}", response_model=StandardResponse[SavedLocationResponse])
 async def get_saved_location(
     location_id: UUID,
@@ -83,16 +97,3 @@ async def delete_saved_location(
 ):
     await service.delete_location(location_id, user.id)
     return StandardResponse(message="Saved location deleted")
-
-
-@router.put("/reorder", response_model=StandardResponse[list[SavedLocationResponse]])
-async def reorder_saved_locations(
-    body: ReorderLocationsRequest,
-    user: UserClaims = Depends(get_current_user),
-    service: SavedLocationService = Depends(_get_service),
-):
-    locations = await service.reorder_locations(user.id, body.location_ids)
-    return StandardResponse(
-        data=[SavedLocationResponse.model_validate(loc) for loc in locations],
-        message="Locations reordered",
-    )

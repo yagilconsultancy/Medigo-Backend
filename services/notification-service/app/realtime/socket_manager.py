@@ -216,6 +216,10 @@ async def on_typing(sid, data):
 
     if conversation_id:
         room = f"chat_{conversation_id}"
+        # Only people who joined the conversation (membership is checked at
+        # join) may send typing signals into it.
+        if room not in sio.rooms(sid, namespace="/chat"):
+            return
         await sio.emit(
             "typing",
             {

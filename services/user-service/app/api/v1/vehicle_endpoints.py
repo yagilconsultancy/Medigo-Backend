@@ -13,6 +13,7 @@ from app.schemas.driver import (
     VehicleDetailsResponse,
 )
 from app.schemas.user import UserProfileResponse
+from app.services.upload_validation import IMAGE_MAX_BYTES, check_upload
 from app.services.driver_service import DriverService
 from app.services.user_service import UserService
 from mediride_common.auth.dependencies import get_current_user, require_role
@@ -120,12 +121,13 @@ async def upload_avatar(
     s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     file_data = await file.read()
-    file_key = f"avatars/{user.id}/{file.filename or 'avatar.jpg'}"
+    checked = check_upload(file_data, allow_pdf=False, max_bytes=IMAGE_MAX_BYTES)
+    file_key = f"avatars/{user.id}/{checked.new_name()}"
     await s3_client.upload_file(
         bucket=settings.S3_BUCKET_DOCUMENTS,
         key=file_key,
         file_data=file_data,
-        content_type=file.content_type or "image/jpeg",
+        content_type=checked.content_type,
     )
     url = await s3_client.generate_presigned_url(
         bucket=settings.S3_BUCKET_DOCUMENTS,

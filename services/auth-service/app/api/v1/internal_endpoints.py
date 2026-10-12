@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from mediride_common.auth.revocation import revoke_user_tokens
 from app.dependencies import get_db, get_publisher
 from app.models.user_credential import UserCredential
 from app.normalization import normalize_email, normalize_phone
@@ -187,6 +188,7 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     await repo.delete(user_id)
+    await revoke_user_tokens(user_id, settings.REDIS_URL)
 
     logger.info(f"User credential deleted internally: {user_id}")
     return {"deleted": True, "user_id": str(user_id)}
@@ -206,6 +208,7 @@ async def deactivate_user(
 
     credential.is_active = False
     await session.flush()
+    await revoke_user_tokens(user_id, settings.REDIS_URL)
 
     logger.info(f"User deactivated internally: {user_id}")
     return {"deactivated": True, "user_id": str(user_id)}

@@ -1,6 +1,6 @@
 """
-Public test endpoints for simulating driver location updates.
-These endpoints bypass authentication for testing purposes.
+Test endpoint for simulating driver location updates (non-production only).
+Admin only: it can write any driver's position and push it to live rooms.
 """
 import logging
 from uuid import UUID
@@ -14,7 +14,9 @@ from app.repositories.location_history_repo import LocationHistoryRepository
 from app.repositories.tracking_session_repo import TrackingSessionRepository
 from app.schemas.tracking import SimulateLocationUpdateRequest
 from app.services.tracking_service import TrackingService
+from mediride_common.auth.dependencies import require_role
 from mediride_common.events.publisher import EventPublisher
+from mediride_common.schemas.enums import UserRole
 from mediride_common.schemas.responses import StandardResponse
 
 router = APIRouter()
@@ -35,10 +37,11 @@ def _get_tracking_service(
 @router.post("/simulate-location", response_model=StandardResponse[dict])
 async def simulate_driver_location(
     request: SimulateLocationUpdateRequest,
+    _admin=Depends(require_role([UserRole.ADMIN])),
     service: TrackingService = Depends(_get_tracking_service),
 ):
     """
-    **PUBLIC ENDPOINT** - Simulate driver GPS location update for testing.
+    **ADMIN ONLY (non-production)** - Simulate driver GPS location update for testing.
 
     This endpoint allows testing the real-time tracking map without requiring
     actual mobile devices with GPS. It simulates what a driver's app would send.
