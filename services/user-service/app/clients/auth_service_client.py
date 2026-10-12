@@ -2,10 +2,11 @@ import logging
 from uuid import UUID
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 logger = logging.getLogger(__name__)
 
-HEADERS = {"X-Internal-Service": "user-service"}
+HEADERS = internal_headers("user-service")
 
 
 class AuthServiceClient:

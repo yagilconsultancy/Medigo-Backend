@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mediride_common.auth.dependencies import get_current_user
+from mediride_common.auth.internal import internal_headers
 from mediride_common.auth.models import UserClaims
 from mediride_common.schemas.enums import UserRole
 
@@ -139,7 +140,7 @@ class ModuleAccessChecker:
                 response = await client.post(
                     f"{self.user_service_url}/internal/check-module-access",
                     json={"user_id": str(user_id), "module_name": module_name},
-                    headers={"X-Internal-Service": self.internal_service_token},
+                    headers=internal_headers("module-access-check", self.internal_service_token),
                     timeout=5.0,
                 )
                 if response.status_code == 200:

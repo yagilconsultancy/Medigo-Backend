@@ -2,7 +2,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
+from mediride_common.auth.internal import require_internal_service as _verify_internal
 from pydantic import BaseModel
 from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,11 +32,6 @@ from app.services.receipt_service import ReceiptService
 from mediride_common.events.publisher import EventPublisher
 
 router = APIRouter()
-
-
-def _verify_internal(x_internal_service: str = Header(None)):
-    if not x_internal_service:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Internal access only")
 
 
 class ChargeRideRequest(BaseModel):

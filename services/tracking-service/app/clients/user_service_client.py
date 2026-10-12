@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/users/{user_id}/profile",
-                    headers={"X-Internal-Service": "tracking-service"},
+                    headers=internal_headers("tracking-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()
@@ -30,7 +31,7 @@ class UserServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/drivers/{driver_id}/profile",
-                    headers={"X-Internal-Service": "tracking-service"},
+                    headers=internal_headers("tracking-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()

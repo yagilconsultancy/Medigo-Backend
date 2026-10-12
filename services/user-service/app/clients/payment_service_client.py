@@ -2,6 +2,7 @@ import logging
 from uuid import UUID
 
 import httpx
+from mediride_common.auth.internal import internal_headers
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class PaymentServiceClient:
                 resp = await client.get(
                     f"{self.base_url}/internal/payments/fleet-revenue-summary",
                     params=params,
-                    headers={"X-Internal-Service": "user-service"},
+                    headers=internal_headers("user-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()
@@ -46,7 +47,7 @@ class PaymentServiceClient:
                 resp = await client.get(
                     f"{self.base_url}/internal/payments/fleet-revenue-trend",
                     params=params,
-                    headers={"X-Internal-Service": "user-service"},
+                    headers=internal_headers("user-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("trend", [])
@@ -69,7 +70,7 @@ class PaymentServiceClient:
                         "business_ids": [str(bid) for bid in business_ids],
                         "days": days,
                     },
-                    headers={"X-Internal-Service": "user-service"},
+                    headers=internal_headers("user-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json().get("breakdowns", {})
@@ -88,7 +89,7 @@ class PaymentServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/riders/{rider_id}/spending",
-                    headers={"X-Internal-Service": "user-service"},
+                    headers=internal_headers("user-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()
@@ -105,7 +106,7 @@ class PaymentServiceClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
                     f"{self.base_url}/internal/riders/{rider_id}/payment-methods",
-                    headers={"X-Internal-Service": "user-service"},
+                    headers=internal_headers("user-service"),
                 )
                 if resp.status_code == 200:
                     return resp.json()
