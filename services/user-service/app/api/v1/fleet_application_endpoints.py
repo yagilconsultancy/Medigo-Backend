@@ -18,6 +18,7 @@ from app.schemas.fleet_application import (
     RejectApplicationRequest,
     RequestInfoRequest,
 )
+from app.services.document_links import sign_applications, sign_fleet_documents
 from app.services.fleet_application_service import FleetApplicationService
 from mediride_common.auth.dependencies import require_role
 from mediride_common.auth.models import UserClaims
@@ -68,13 +69,16 @@ async def list_applications(
     limit: int = Query(20, ge=1, le=100),
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetApplicationService = Depends(_get_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     offset = (page - 1) * limit
     applications, total = await service.list_applications(
         status_filter=status, offset=offset, limit=limit
     )
+    items = [FleetApplicationResponse.model_validate(a) for a in applications]
+    await sign_applications(s3_client, items)
     return PaginatedResponse(
-        data=[FleetApplicationResponse.model_validate(a) for a in applications],
+        data=items,
         total=total,
         page=page,
         limit=limit,
@@ -113,11 +117,12 @@ async def get_application(
     app_id: UUID,
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetApplicationService = Depends(_get_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     application = await service.get_application(app_id)
-    return StandardResponse(
-        data=FleetApplicationResponse.model_validate(application),
-    )
+    data = FleetApplicationResponse.model_validate(application)
+    await sign_applications(s3_client, data)
+    return StandardResponse(data=data)
 
 
 @router.delete(
@@ -155,14 +160,17 @@ async def approve_application(
     body: ApproveApplicationRequest,
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetApplicationService = Depends(_get_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     application = await service.approve_application(
         app_id=app_id,
         admin_id=user.id,
         notes=body.notes,
     )
+    data = FleetApplicationResponse.model_validate(application)
+    await sign_applications(s3_client, data)
     return StandardResponse(
-        data=FleetApplicationResponse.model_validate(application),
+        data=data,
         message="Application approved and fleet partner created",
     )
 
@@ -176,14 +184,17 @@ async def reject_application(
     body: RejectApplicationRequest,
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetApplicationService = Depends(_get_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     application = await service.reject_application(
         app_id=app_id,
         admin_id=user.id,
         reason=body.reason,
     )
+    data = FleetApplicationResponse.model_validate(application)
+    await sign_applications(s3_client, data)
     return StandardResponse(
-        data=FleetApplicationResponse.model_validate(application),
+        data=data,
         message="Application rejected",
     )
 
@@ -197,14 +208,17 @@ async def request_info(
     body: RequestInfoRequest,
     user: UserClaims = Depends(require_role([UserRole.ADMIN])),
     service: FleetApplicationService = Depends(_get_service),
+    s3_client: S3StorageClient = Depends(get_s3_client),
 ):
     application = await service.request_info(
         app_id=app_id,
         admin_id=user.id,
         message=body.message,
     )
+    data = FleetApplicationResponse.model_validate(application)
+    await sign_applications(s3_client, data)
     return StandardResponse(
-        data=FleetApplicationResponse.model_validate(application),
+        data=data,
         message="Additional information requested",
     )
 
@@ -228,7 +242,7 @@ async def upload_application_document(
     await s3_client.upload_file(
         bucket=settings.S3_BUCKET_DOCUMENTS,
         key=file_key,
-        data=file_data,
+        file_data=file_data,
         content_type=file.content_type or "application/octet-stream",
     )
 
@@ -241,7 +255,6 @@ async def upload_application_document(
         mime_type=file.content_type or "application/octet-stream",
     )
 
-    return StandardResponse(
-        data=FleetDocumentResponse.model_validate(doc),
-        message="Document uploaded",
-    )
+    data = FleetDocumentResponse.model_validate(doc)
+    await sign_fleet_documents(s3_client, [data])
+    return StandardResponse(data=data, message="Document uploaded")
