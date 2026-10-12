@@ -314,7 +314,7 @@ async def send_admin_invite_email(
             <h3>Your Login Credentials</h3>
             <p><strong>Email:</strong> {to}</p>
             <p><strong>Password:</strong> {temporary_password}</p>
-            <p style="color: #dc2626; font-weight: bold;">Please log in and change your password immediately.</p>
+            <p style="color: #dc2626; font-weight: bold;">This is a one-time password. You will be asked to choose your own new password the first time you sign in.</p>
         </body>
         </html>
         """

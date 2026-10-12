@@ -117,6 +117,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     role: str
+    must_change_password: bool = False
 
 
 class OTPVerifyResponse(BaseModel):

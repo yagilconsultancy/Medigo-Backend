@@ -66,6 +66,7 @@ class CreateDriverCredentialRequest(BaseModel):
 class CreateAdminCredentialRequest(BaseModel):
     email: EmailStr
     password: str
+    must_change_password: bool = False
 
 
 @router.post("/drivers/create-credential")
@@ -155,6 +156,7 @@ async def create_admin_credential(
         role=UserRole.ADMIN,
         business_id=None,
         is_verified=True,
+        must_change_password=request.must_change_password,
     )
     try:
         await repo.create(credential)

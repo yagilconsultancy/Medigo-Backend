@@ -1,5 +1,6 @@
 import logging
 import secrets
+import string
 from datetime import timedelta
 from uuid import UUID
 
@@ -18,6 +19,31 @@ from mediride_common.exceptions import ConflictError, NotFoundError, ValidationE
 from mediride_common.utils import utc_now
 
 logger = logging.getLogger(__name__)
+
+_TEMP_PASSWORD_LENGTH = 20
+
+
+def generate_temporary_password(length: int = _TEMP_PASSWORD_LENGTH) -> str:
+    """Return a random one-time password that satisfies any sensible policy.
+
+    Always contains an uppercase letter, a lowercase letter, a digit and a
+    special character. Ambiguous characters are avoided so it can be typed
+    from an email without mistakes.
+    """
+    upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    lower = "abcdefghijkmnpqrstuvwxyz"
+    digits = "23456789"
+    special = "!@#$%*?"
+    chars = [
+        secrets.choice(upper),
+        secrets.choice(lower),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+    pool = upper + lower + digits + special
+    chars += [secrets.choice(pool) for _ in range(max(length, 12) - len(chars))]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
 
 
 class AdminInvitationService:
@@ -60,14 +86,15 @@ class AdminInvitationService:
             raise NotFoundError("Inviter not found")
         inviter_name = f"{inviter.first_name} {inviter.last_name}"
 
-        # Use default admin password
-        default_password = settings.DEFAULT_ADMIN_PASSWORD
+        # One-time random password; the admin must change it at first login
+        temporary_password = generate_temporary_password()
 
         # Create credential in auth-service
         try:
             cred_result = await self.auth_client.create_admin_credential(
                 email=email,
-                password=default_password,
+                password=temporary_password,
+                must_change_password=True,
             )
         except RuntimeError as e:
             raise ValidationError(str(e))
@@ -122,7 +149,7 @@ class AdminInvitationService:
                 email=email,
                 full_name=full_name,
                 role_display_name=role.display_name,
-                temporary_password=default_password,
+                temporary_password=temporary_password,
                 invited_by_name=inviter_name,
             ).model_dump(mode="json"),
         )

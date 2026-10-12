@@ -435,6 +435,9 @@ class AuthService:
             expire_minutes=await self._admin_session_minutes(),
         )
         token_pair.role = credential.role
+        token_pair.must_change_password = bool(
+            getattr(credential, "must_change_password", False)
+        )
 
         # Store refresh token
         refresh_token_record = RefreshToken(
