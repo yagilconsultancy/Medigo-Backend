@@ -77,11 +77,15 @@ class AdminRoleService:
                 user = await self.user_repo.get_by_id(assignment.user_id)
                 if user:
                     admins.append({
+                        # "id" is what the back office Remove button reads;
+                        # "user_id" is kept for any other caller.
+                        "id": str(user.id),
                         "user_id": str(user.id),
                         "full_name": f"{user.first_name} {user.last_name}",
                         "email": user.email,
                         "last_active": "Today",  # TODO: Implement last active tracking
                         "joined": assignment.assigned_at.strftime("%b %d, %Y"),
+                        "created_at": assignment.assigned_at.isoformat(),
                     })
 
         return AdminRoleDetailResponse(
