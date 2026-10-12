@@ -1,3 +1,5 @@
+import logging
+
 import socketio
 from contextlib import asynccontextmanager
 
@@ -15,10 +17,14 @@ from app.routes.proxy import router as proxy_router
 from mediride_common.logging import setup_logging
 from mediride_common.middleware import CorrelationIdMiddleware, register_error_handlers
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging(level=settings.LOG_LEVEL, service_name="api-gateway")
+    if settings.ENVIRONMENT == "production" and "*" in settings.cors_origin_list:
+        logger.warning("CORS_ORIGINS is '*': any website may call this API from a browser")
     if settings.ACTIVITY_LOG_ENABLED:
         await start_activity_logger()
     try:
@@ -40,7 +46,7 @@ fastapi_app = FastAPI(
 # CORS
 fastapi_app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
