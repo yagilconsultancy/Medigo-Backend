@@ -37,6 +37,8 @@ def test_every_rule_points_at_a_defined_group():
         ("POST", "/auth/login", "login"),
         ("POST", "/auth/admin/login", "login"),
         ("POST", "/auth/login/", "login"),
+        ("POST", "/auth/social/login", "login"),
+        ("POST", "/auth/social/link", "login"),
         ("POST", "/auth/forgot-password", "send_code"),
         ("POST", "/auth/resend-otp", "send_code"),
         ("POST", "/auth/verify-otp", "check_code"),

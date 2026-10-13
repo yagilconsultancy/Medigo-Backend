@@ -1,8 +1,10 @@
 import logging
+import secrets
 from datetime import timedelta
 from uuid import UUID
 
 import httpx
+from jose import JWTError, jwt
 from mediride_common.auth.internal import internal_headers
 
 from app.config import settings
@@ -52,6 +54,9 @@ UNKNOWN_ADMIN_ID = UUID(int=0)
 SUSPICIOUS_FAILURE_THRESHOLD = 3
 SUSPICIOUS_FAILURE_WINDOW_MINUTES = 15
 
+# How long a rider has to confirm their password to link a Google/Apple sign-in.
+SOCIAL_LINK_TOKEN_MINUTES = 10
+
 
 class AuthService:
     def __init__(
@@ -63,7 +68,11 @@ class AuthService:
         publisher: EventPublisher,
         user_service_client=None,
         login_history_service=None,
+        social_repo=None,
+        social_verifier=None,
     ):
+        self.social_repo = social_repo
+        self.social_verifier = social_verifier
         self.credential_repo = credential_repo
         self.token_repo = token_repo
         self.otp_service = otp_service
@@ -319,6 +328,185 @@ class AuthService:
         await self.token_repo.create(refresh_token_record)
 
         return token_pair
+
+    # ------------------------------------------------------------------
+    # Sign in with Apple / Google (riders only)
+    # ------------------------------------------------------------------
+
+    async def _issue_tokens(self, credential: UserCredential) -> TokenPair:
+        token_pair = self.jwt_handler.create_token_pair(
+            user_id=str(credential.id),
+            role=credential.role,
+            business_id=str(credential.business_id) if credential.business_id else None,
+            email=credential.email,
+        )
+        token_pair.role = credential.role
+        await self.token_repo.create(
+            RefreshToken(
+                user_id=credential.id,
+                token_hash=hash_token(token_pair.refresh_token),
+                expires_at=utc_now()
+                + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS),
+            )
+        )
+        return token_pair
+
+    @staticmethod
+    def _ensure_social_account_usable(credential: UserCredential) -> None:
+        if credential.locked_until and credential.locked_until > utc_now():
+            raise AuthenticationError(
+                "Account is temporarily locked. Please try again later."
+            )
+        if not credential.is_active:
+            raise AuthenticationError("Account is deactivated")
+        if credential.role != UserRole.RIDER:
+            # Drivers, admins and facility staff keep password plus OTP.
+            raise AuthenticationError("This account cannot sign in this way")
+
+    def _make_social_link_token(
+        self, credential_id: UUID, provider: str, subject: str, email: str | None
+    ) -> str:
+        return jwt.encode(
+            {
+                "type": "social_link",
+                "uid": str(credential_id),
+                "provider": provider,
+                "sub": subject,
+                "email": email,
+                "exp": utc_now() + timedelta(minutes=SOCIAL_LINK_TOKEN_MINUTES),
+            },
+            settings.JWT_SECRET_KEY,
+            algorithm=settings.JWT_ALGORITHM,
+        )
+
+    async def social_login(
+        self,
+        provider: str,
+        id_token: str,
+        nonce: str | None = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
+    ) -> TokenPair:
+        """Sign a rider in with an Apple or Google identity token.
+
+        Known identity: sign in. New identity with an email that already has a
+        MediGo account: never link silently; ask for that account's password.
+        Otherwise: create a new, verified rider account.
+        """
+        claims = await self.social_verifier.verify(provider, id_token, nonce)
+
+        identity = await self.social_repo.get(provider, claims.subject)
+        if identity:
+            credential = await self.credential_repo.get_by_id(identity.user_id)
+            if not credential:
+                raise AuthenticationError("We could not sign you in")
+            self._ensure_social_account_usable(credential)
+            return await self._issue_tokens(credential)
+
+        if not claims.email or not claims.email_verified:
+            raise AuthenticationError(
+                f"Your email address is not verified with {provider.capitalize()}"
+            )
+
+        # A private relay address (Apple "Hide My Email") is its own identity
+        # and is never matched against existing accounts.
+        if not claims.is_private_email:
+            existing = await self.credential_repo.get_by_email(claims.email)
+            if existing:
+                if existing.role != UserRole.RIDER:
+                    raise ConflictError(
+                        "An account with this email already exists. "
+                        "Please sign in with your password."
+                    )
+                raise ConflictError(
+                    "An account with this email already exists. "
+                    "Enter your MediGo password to link it.",
+                    details={
+                        "code": "account_link_required",
+                        "provider": provider,
+                        "link_token": self._make_social_link_token(
+                            existing.id, provider, claims.subject, claims.email
+                        ),
+                    },
+                )
+
+        credential = UserCredential(
+            email=claims.email,
+            phone=None,
+            # Nobody knows this password: social accounts sign in through the
+            # provider, or set a password later with "Forgot password".
+            password_hash=hash_password(secrets.token_urlsafe(48)),
+            role=UserRole.RIDER,
+            is_verified=True,
+        )
+        await self.credential_repo.create(credential)
+        await self.social_repo.create(
+            credential.id, provider, claims.subject, claims.email
+        )
+
+        first = (first_name or claims.first_name or "").strip() or None
+        last = (last_name or claims.last_name or "").strip() or None
+        await self.publisher.publish(
+            Exchanges.AUTH,
+            RoutingKeys.USER_REGISTERED,
+            UserRegisteredPayload(
+                user_id=credential.id,
+                email=credential.email,
+                phone=None,
+                first_name=first,
+                last_name=last,
+                role=UserRole.RIDER,
+                business_id=None,
+            ).model_dump(mode="json"),
+        )
+        await self.publisher.publish(
+            Exchanges.AUTH,
+            RoutingKeys.USER_VERIFIED,
+            UserVerifiedPayload(
+                user_id=credential.id, email=credential.email, phone=None
+            ).model_dump(mode="json"),
+        )
+        logger.info(f"Rider created via {provider}: {credential.id}")
+        return await self._issue_tokens(credential)
+
+    async def social_link(self, link_token: str, password: str) -> TokenPair:
+        """Link a Google/Apple identity to an existing rider after the rider
+        proves they own the account by entering its password."""
+        try:
+            payload = jwt.decode(
+                link_token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            )
+        except JWTError:
+            raise AuthenticationError("This link has expired. Please start again.")
+        if payload.get("type") != "social_link":
+            raise AuthenticationError("This link has expired. Please start again.")
+
+        credential = await self.credential_repo.get_by_id(UUID(payload["uid"]))
+        if not credential:
+            raise AuthenticationError("This link has expired. Please start again.")
+        self._ensure_social_account_usable(credential)
+
+        if not verify_password(password, credential.password_hash):
+            await self.credential_repo.increment_failed_attempts(credential.id)
+            if credential.failed_attempts + 1 >= await self._max_failed_attempts():
+                await self.credential_repo.lock_account(
+                    credential.id,
+                    utc_now() + timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES),
+                )
+            # Same reason as login(): keep the counter even though we raise.
+            try:
+                await self.credential_repo.session.commit()
+            except Exception as e:
+                logger.warning(f"Failed to persist failed-login state: {e}")
+            raise AuthenticationError("Password is not correct")
+
+        await self.credential_repo.reset_failed_attempts(credential.id)
+        provider, subject = payload["provider"], payload["sub"]
+        if not await self.social_repo.get(provider, subject):
+            await self.social_repo.create(
+                credential.id, provider, subject, payload.get("email")
+            )
+        return await self._issue_tokens(credential)
 
     async def admin_login(
         self,

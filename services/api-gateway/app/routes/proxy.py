@@ -36,6 +36,8 @@ SERVICE_MAP = {
 PUBLIC_EXACT_PATHS = frozenset({
     "/auth/register",
     "/auth/login",
+    "/auth/social/login",  # Sign in with Apple / Google: provider token in body
+    "/auth/social/link",  # Confirm password to link a provider to an existing rider
     "/auth/verify-otp",
     "/auth/refresh",
     "/auth/resend-otp",

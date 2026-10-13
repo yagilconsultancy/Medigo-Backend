@@ -43,6 +43,8 @@ _PREFIX_RULES: tuple[tuple[str, str, str], ...] = (
 # (HTTP method, exact path without trailing slash) -> group name
 _RULES: dict[tuple[str, str], str] = {
     ("POST", "/auth/login"): "login",
+    ("POST", "/auth/social/login"): "login",
+    ("POST", "/auth/social/link"): "login",
     ("POST", "/auth/admin/login"): "login",
     ("POST", "/auth/register"): "register",
     ("POST", "/auth/driver/register"): "register",

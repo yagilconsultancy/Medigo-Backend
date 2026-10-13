@@ -28,6 +28,10 @@ from app.routes.proxy import _STRIPPED_REQUEST_HEADERS, _is_public_path
         ("/auth/registered-devices", False),
         # Genuinely public, exact.
         ("/auth/login", True),
+        ("/auth/social/login", True),
+        ("/auth/social/link", True),
+        ("/auth/social", False),
+        ("/auth/social/other", False),
         ("/auth/driver/activation/check", True),
         ("/auth/driver/activation/request-otp", True),
         ("/auth/driver/activation/complete", True),

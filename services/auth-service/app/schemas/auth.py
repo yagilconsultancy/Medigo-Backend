@@ -37,6 +37,20 @@ class LoginRequest(BaseModel):
         return self
 
 
+class SocialLoginRequest(BaseModel):
+    provider: str = Field(..., pattern="^(google|apple)$")
+    id_token: str = Field(..., min_length=20, max_length=8192)
+    nonce: str | None = Field(None, max_length=256)
+    # Apple only sends the name the first time, and only to the app.
+    first_name: str | None = Field(None, max_length=100)
+    last_name: str | None = Field(None, max_length=100)
+
+
+class SocialLinkRequest(BaseModel):
+    link_token: str = Field(..., min_length=20, max_length=4096)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
 class VerifyOTPRequest(BaseModel):
     user_id: UUID
     code: str = Field(..., min_length=6, max_length=6)
