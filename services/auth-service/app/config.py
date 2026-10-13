@@ -14,6 +14,11 @@ class AuthSettings(BaseServiceSettings):
     SERVICE_NAME: str = "auth-service"
     PORT: int = 8001
     USER_SERVICE_URL: str = "http://user-service:8002"
+    # Sign in with Apple / Google. Comma separated client ids the identity token
+    # must be issued for (Apple: app bundle id and web Service ID; Google: the
+    # iOS, Android and web client ids). Empty means that provider is switched off.
+    GOOGLE_CLIENT_IDS: str = ""
+    APPLE_CLIENT_IDS: str = ""
 
 
 settings = AuthSettings()
