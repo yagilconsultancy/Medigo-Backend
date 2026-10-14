@@ -1,0 +1,48 @@
+name: Certificate expiry check
+
+# Looks at every public MediGo address the way a visitor would and fails when
+# a certificate has fewer than 21 days left. A failed run emails the person
+# who last changed this schedule. Checking from outside also catches a
+# certificate that was renewed on the server but is not being served yet.
+
+on:
+  schedule:
+    - cron: "17 11 * * *"
+  workflow_dispatch:
+    inputs:
+      warn_days:
+        description: "Fail when fewer than this many days are left"
+        required: false
+        default: "21"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check certificates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Read certificate expiry dates
+        env:
+          WARN_DAYS: ${{ github.event.inputs.warn_days || '21' }}
+        run: |
+          set -u
+          failed=0
+          for host in getmedigo.com www.getmedigo.com backoffice.getmedigo.com web.getmedigo.com prod-api.getmedigo.com staging.getmedigo.com; do
+            end=$(echo | timeout 20 openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+            if [ -z "$end" ]; then
+              echo "::error::$host: could not read the certificate (site down or certificate unreadable)"
+              failed=1
+              continue
+            fi
+            days=$(( ( $(date -d "$end" +%s) - $(date +%s) ) / 86400 ))
+            echo "$host expires $end ($days days left)"
+            if [ "$days" -lt "$WARN_DAYS" ]; then
+              echo "::error::$host: certificate expires in $days days ($end)"
+              failed=1
+            fi
+          done
+          exit "$failed"

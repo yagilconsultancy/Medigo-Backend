@@ -12,6 +12,7 @@ from app.config import settings
 from app.dependencies import get_db, get_publisher
 from app.repositories.credential_repo import CredentialRepository
 from app.repositories.otp_repo import OTPRepository
+from app.repositories.social_identity_repo import SocialIdentityRepository
 from app.repositories.token_repo import TokenRepository
 from app.schemas.auth import (
     AdminRegisterRequest,
@@ -32,6 +33,8 @@ from app.schemas.auth import (
     RegisterRequest,
     RegisterResponse,
     ResetPasswordRequest,
+    SocialLinkRequest,
+    SocialLoginRequest,
     TokenResponse,
     VerifyOTPRequest,
     VerifyPasswordRequest,
@@ -40,6 +43,7 @@ from app.services.auth_service import AuthService
 from mediride_common.auth.models import TokenPair
 from app.services.login_history_service import LoginHistoryService
 from app.services.otp_service import OTPService
+from app.services.social_token_verifier import SocialTokenVerifier
 from mediride_common.auth.jwt_handler import JWTHandler
 from mediride_common.auth.revocation import claim_single_use, revoke_user_tokens
 from mediride_common.auth.dependencies import get_current_user
@@ -76,6 +80,10 @@ def _get_auth_service(
         publisher=publisher,
         user_service_client=user_service_client,
         login_history_service=login_history_service,
+        social_repo=SocialIdentityRepository(session),
+        social_verifier=SocialTokenVerifier(
+            settings.GOOGLE_CLIENT_IDS, settings.APPLE_CLIENT_IDS
+        ),
     )
 
 
@@ -152,6 +160,48 @@ async def login(
             role=token_pair.role,
         ),
         message="Login successful",
+    )
+
+
+@router.post("/social/login", response_model=StandardResponse[TokenResponse])
+async def social_login(
+    request: SocialLoginRequest,
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    token_pair = await auth_service.social_login(
+        provider=request.provider,
+        id_token=request.id_token,
+        nonce=request.nonce,
+        first_name=request.first_name,
+        last_name=request.last_name,
+    )
+    return StandardResponse(
+        data=TokenResponse(
+            access_token=token_pair.access_token,
+            refresh_token=token_pair.refresh_token,
+            expires_in=token_pair.expires_in,
+            role=token_pair.role,
+        ),
+        message="Login successful",
+    )
+
+
+@router.post("/social/link", response_model=StandardResponse[TokenResponse])
+async def social_link(
+    request: SocialLinkRequest,
+    auth_service: AuthService = Depends(_get_auth_service),
+):
+    token_pair = await auth_service.social_link(
+        link_token=request.link_token, password=request.password
+    )
+    return StandardResponse(
+        data=TokenResponse(
+            access_token=token_pair.access_token,
+            refresh_token=token_pair.refresh_token,
+            expires_in=token_pair.expires_in,
+            role=token_pair.role,
+        ),
+        message="Account linked",
     )
 
 
