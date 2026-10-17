@@ -17,27 +17,37 @@ def test_hash_and_verify_password():
 
 
 def test_validate_password_strength_valid():
-    validate_password_strength("SecurePass123")
+    validate_password_strength("Granite-Kettle7")
 
 
 def test_validate_password_strength_too_short():
-    with pytest.raises(ValidationError, match="at least 8 characters"):
-        validate_password_strength("Short1")
+    with pytest.raises(ValidationError, match="at least 12 characters"):
+        validate_password_strength("Short1!x")
+
+
+def test_validate_password_strength_eleven_chars_rejected():
+    with pytest.raises(ValidationError, match="at least 12 characters"):
+        validate_password_strength("Granite-Ke7")  # 11
 
 
 def test_validate_password_strength_no_uppercase():
     with pytest.raises(ValidationError, match="uppercase"):
-        validate_password_strength("lowercase123")
+        validate_password_strength("granite-kettle7")
 
 
 def test_validate_password_strength_no_lowercase():
     with pytest.raises(ValidationError, match="lowercase"):
-        validate_password_strength("UPPERCASE123")
+        validate_password_strength("GRANITE-KETTLE7")
 
 
 def test_validate_password_strength_no_digit():
     with pytest.raises(ValidationError, match="digit"):
-        validate_password_strength("NoDigitHere")
+        validate_password_strength("Granite-Kettle")
+
+
+def test_validate_password_strength_no_special_char():
+    with pytest.raises(ValidationError, match="special character"):
+        validate_password_strength("GraniteKettle7")
 
 
 def test_hash_token():

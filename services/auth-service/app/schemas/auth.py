@@ -11,7 +11,7 @@ class RegisterRequest(BaseModel):
     full_name: str | None = Field(None, min_length=1, max_length=200)
     first_name: str | None = Field(None, min_length=1, max_length=100)
     last_name: str | None = Field(None, min_length=1, max_length=100)
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=12, max_length=128)
     role: UserRole = UserRole.RIDER
 
     @model_validator(mode="after")
@@ -63,7 +63,7 @@ class RefreshTokenRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=12, max_length=128)
 
 
 class VerifyPasswordRequest(BaseModel):
@@ -84,7 +84,7 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     user_id: UUID
     code: str = Field(..., min_length=6, max_length=6)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=12, max_length=128)
 
 
 class DriverVerifyInviteRequest(BaseModel):
@@ -93,7 +93,7 @@ class DriverVerifyInviteRequest(BaseModel):
 
 class DriverRegisterRequest(BaseModel):
     invite_token: str
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=12, max_length=128)
 
 
 class AdminVerifyInviteRequest(BaseModel):
@@ -102,7 +102,7 @@ class AdminVerifyInviteRequest(BaseModel):
 
 class AdminRegisterRequest(BaseModel):
     invite_token: str
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=12, max_length=128)
 
 
 class DriverActivationCheckRequest(BaseModel):
@@ -116,7 +116,7 @@ class DriverActivationOTPRequest(BaseModel):
 class DriverActivationCompleteRequest(BaseModel):
     email: EmailStr
     otp: str = Field(..., min_length=6, max_length=6)
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=12, max_length=128)
 
 
 # Response schemas

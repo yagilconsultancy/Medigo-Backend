@@ -23,17 +23,25 @@ from mediride_common.exceptions import ValidationError
 # ── password policy ──────────────────────────────────────────────────────
 
 
-def test_default_policy_preserves_historical_behaviour():
-    validate_password_strength("SecurePass123")
-    with pytest.raises(ValidationError, match="at least 8 characters"):
-        validate_password_strength("Short1")
+def test_default_policy_is_owner_policy():
+    """Gap 6: with no settings row the built-in default is 12 + all classes."""
+    assert DEFAULT_PASSWORD_POLICY.min_length == 12
+    assert DEFAULT_PASSWORD_POLICY.require_uppercase
+    assert DEFAULT_PASSWORD_POLICY.require_lowercase
+    assert DEFAULT_PASSWORD_POLICY.require_numbers
+    assert DEFAULT_PASSWORD_POLICY.require_special_chars
+    validate_password_strength("SecurePass123!")
+    with pytest.raises(ValidationError, match="at least 12 characters"):
+        validate_password_strength("Short1!")
+    with pytest.raises(ValidationError, match="special character"):
+        validate_password_strength("SecurePass123")
 
 
 def test_configured_minimum_length_is_enforced():
-    policy = PasswordPolicy(min_length=14)
-    with pytest.raises(ValidationError, match="at least 14 characters"):
-        validate_password_strength("SecurePass123", policy)  # 13 chars
-    validate_password_strength("SecurePass1234", policy)
+    policy = PasswordPolicy(min_length=15)
+    with pytest.raises(ValidationError, match="at least 15 characters"):
+        validate_password_strength("SecurePass123!", policy)  # 14 chars
+    validate_password_strength("SecurePass1234!", policy)
 
 
 def test_require_special_chars_is_enforced_when_configured():
@@ -45,7 +53,7 @@ def test_require_special_chars_is_enforced_when_configured():
 
 def test_relaxed_policy_can_disable_a_rule():
     policy = PasswordPolicy(require_numbers=False)
-    validate_password_strength("SecurePassword", policy)
+    validate_password_strength("SecureCastle!", policy)
 
 
 # ── policy cache ─────────────────────────────────────────────────────────
@@ -81,6 +89,16 @@ async def test_policy_falls_back_to_defaults_when_settings_unavailable():
     with patch.object(security_policy_cache, "SecuritySettingsRepository", return_value=repo):
         policy = await security_policy_cache.get_password_policy(MagicMock())
     assert policy == DEFAULT_PASSWORD_POLICY
+
+
+@pytest.mark.asyncio
+async def test_missing_settings_row_uses_owner_policy():
+    repo = MagicMock()
+    repo.get_active = AsyncMock(return_value=None)
+    with patch.object(security_policy_cache, "SecuritySettingsRepository", return_value=repo):
+        policy = await security_policy_cache.get_password_policy(MagicMock())
+    assert policy == DEFAULT_PASSWORD_POLICY
+    assert policy.min_length == 12 and policy.require_special_chars
 
 
 @pytest.mark.asyncio

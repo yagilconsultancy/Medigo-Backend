@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
 # minted a fresh uuid4() per attempt, which made them permanently orphaned.
 UNKNOWN_ADMIN_ID = UUID(int=0)
 
+# A refresh token used again within this many seconds of being rotated is
+# treated as an honest retry, not theft.
+REFRESH_REUSE_GRACE_SECONDS = 10
+
 # A login is flagged suspicious after this many failures for the same email
 # inside this window, or on a first-ever success from an unseen IP.
 SUSPICIOUS_FAILURE_THRESHOLD = 3
@@ -124,7 +128,7 @@ class AuthService:
         """Register a new user. Returns (user_id, otp_code)."""
         email = normalize_email(email)
         phone = normalize_phone(phone)
-        await self._validate_password(password)
+        await self._validate_password(password, email=email)
 
         # Check if user already exists
         existing = await self.credential_repo.get_by_email_or_phone(email, phone)
@@ -676,14 +680,16 @@ class AuthService:
             return None
         return security_settings.session_timeout_hours * 60
 
-    async def _validate_password(self, password: str) -> None:
+    async def _validate_password(
+        self, password: str, email: str | None = None
+    ) -> None:
         """Validate against the admin-configured policy, not a hardcoded one.
 
         Falls back to the built-in defaults if the settings row can't be read,
         so a settings problem never blocks registration or password reset.
         """
         policy = await get_password_policy(self.credential_repo.session)
-        validate_password_strength(password, policy)
+        validate_password_strength(password, policy, email=email)
 
     async def _record_login(
         self,
@@ -789,8 +795,12 @@ class AuthService:
 
         # Verify token exists and is not revoked
         token_hash = hash_token(refresh_token)
-        stored_token = await self.token_repo.get_by_hash(token_hash)
+        stored_token = await self.token_repo.get_any_by_hash(token_hash)
         if not stored_token:
+            raise AuthenticationError("Invalid or revoked refresh token")
+
+        if stored_token.revoked_at is not None:
+            await self._handle_refresh_token_reuse(stored_token)
             raise AuthenticationError("Invalid or revoked refresh token")
 
         # Check expiry
@@ -831,6 +841,37 @@ class AuthService:
 
         return new_token_pair
 
+    async def _handle_refresh_token_reuse(self, stored_token: RefreshToken) -> None:
+        """A refresh token that was already used or revoked came back.
+
+        A real app only ever holds the newest token, so an old one showing up
+        usually means a copy was stolen. End every session for that user, so
+        the thief's copy and the real owner's both stop working and the owner
+        signs in again. A short grace window avoids punishing an honest app
+        that retried the same refresh twice in a row.
+        """
+        revoked_at = stored_token.revoked_at
+        if revoked_at is not None and (
+            utc_now() - revoked_at
+        ) <= timedelta(seconds=REFRESH_REUSE_GRACE_SECONDS):
+            return
+
+        logger.warning(
+            "Refresh token reuse detected; revoking all sessions for user %s",
+            stored_token.user_id,
+        )
+        await self.token_repo.revoke_all_for_user(stored_token.user_id)
+        try:
+            await revoke_user_tokens(stored_token.user_id, settings.REDIS_URL)
+        except Exception:  # never turn a 401 into a 500
+            logger.warning("Could not cut off access tokens", exc_info=True)
+        # The AuthenticationError raised next rolls the request back through
+        # get_db(); commit here so the revocation is not discarded.
+        try:
+            await self.token_repo.session.commit()
+        except Exception:
+            logger.warning("Failed to persist session revocation", exc_info=True)
+
     async def logout(self, user_id: UUID, refresh_token: str) -> None:
         """Revoke a specific refresh token."""
         token_hash = hash_token(refresh_token)
@@ -850,6 +891,10 @@ class AuthService:
 
         if not verify_password(current_password, credential.password_hash):
             raise AuthenticationError("Current password is incorrect")
+
+        # Now the caller is proven, also reject passwords built from their
+        # own email name.
+        await self._validate_password(new_password, email=credential.email)
 
         await self.credential_repo.update_password(
             user_id, hash_password(new_password)
@@ -976,7 +1021,7 @@ class AuthService:
         if existing:
             if existing.role != UserRole.DRIVER:
                 raise ConflictError("An account with this email already exists")
-            await self._validate_password(password)
+            await self._validate_password(password, email=email)
 
             # Credential was pre-created by admin — update the password from the invitee
             await self.credential_repo.update_password(
@@ -1011,7 +1056,7 @@ class AuthService:
             logger.info(f"Admin-created driver password updated via register: {existing.id}")
             return token_pair
 
-        await self._validate_password(password)
+        await self._validate_password(password, email=email)
 
         # Create credential — a valid invite token is proof of identity, so the
         # driver is verified on activation (no separate email-OTP step).
@@ -1166,7 +1211,7 @@ class AuthService:
                 "This account already has a password. Please log in."
             )
 
-        await self._validate_password(password)
+        await self._validate_password(password, email=credential.email)
         await self.otp_service.verify_otp(
             credential.id, otp, self.DRIVER_ACTIVATION_PURPOSE
         )
@@ -1220,7 +1265,7 @@ class AuthService:
         if existing:
             raise ConflictError("A user with this email already exists")
 
-        await self._validate_password(password)
+        await self._validate_password(password, email=email)
 
         # Create credential with ADMIN role
         credential = UserCredential(
