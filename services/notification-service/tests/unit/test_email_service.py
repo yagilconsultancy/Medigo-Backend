@@ -278,3 +278,36 @@ async def test_all_fleet_emails_use_the_default_smtp_account():
         assert call["username"] == "noreply@mail.getmedigo.com"
         assert call["password"] == "secret"
         assert call["message"]["From"] == "noreply@mail.getmedigo.com"
+
+
+@pytest.mark.asyncio
+async def test_send_admin_fleet_application_email_addresses_all_recipients():
+    sent = await email_service.send_admin_fleet_application_email(
+        to=["admin@getmedigo.com", "ops@getmedigo.com"],
+        application={
+            "company_name": "Acme Fleet",
+            "contact_person": "Jane Doe",
+            "email": "jane@acme.example",
+            "phone": "416-555-0100",
+            "city": "Toronto",
+            "province": "ON",
+            "fleet_size": 12,
+            "documents_count": 3,
+        },
+    )
+
+    assert sent is True
+    assert len(_send_calls) == 1
+    message = _send_calls[0]["message"]
+    assert message["To"] == "admin@getmedigo.com, ops@getmedigo.com"
+    assert "Acme Fleet" in message["Subject"]
+
+
+@pytest.mark.asyncio
+async def test_send_admin_fleet_application_email_skips_when_no_recipients():
+    sent = await email_service.send_admin_fleet_application_email(
+        to=[], application={"company_name": "Acme Fleet"}
+    )
+
+    assert sent is False
+    assert _send_calls == []

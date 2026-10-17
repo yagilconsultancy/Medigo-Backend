@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; }
+        h2 { color: #0B1F4B; margin: 0 0 16px 0; }
+        .message { color: #555; line-height: 1.7; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        td { padding: 8px 0; border-bottom: 1px solid #eee; color: #333; vertical-align: top; }
+        td.label { color: #777; width: 40%; }
+        .button { display: inline-block; background: #155DFC; color: #ffffff; text-decoration: none; padding: 12px 22px; border-radius: 8px; font-weight: bold; }
+        .meta { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% include "_email_logo.html" %}
+        <h2>New fleet partner application</h2>
+        <p class="message">A new fleet partner application is waiting for review in the back office.</p>
+
+        <table>
+            <tr><td class="label">Company</td><td>{{ company_name }}</td></tr>
+            <tr><td class="label">Contact person</td><td>{{ contact_person }}</td></tr>
+            <tr><td class="label">Email</td><td>{{ email }}</td></tr>
+            <tr><td class="label">Phone</td><td>{{ phone }}</td></tr>
+            <tr><td class="label">Location</td><td>{{ location }}</td></tr>
+            <tr><td class="label">Fleet size</td><td>{{ fleet_size }}</td></tr>
+            <tr><td class="label">Documents attached</td><td>{{ documents_count }}</td></tr>
+        </table>
+
+        {% if backoffice_link %}
+        <p><a class="button" href="{{ backoffice_link }}">Open Fleet Applications</a></p>
+        {% endif %}
+
+        <div class="meta">
+            <p>&copy; 2026 MediGo. Safe Medical Transportation.</p>
+        </div>
+    </div>
+</body>
+</html>

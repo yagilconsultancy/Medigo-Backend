@@ -714,6 +714,54 @@ async def send_admin_ride_booking_email(
     return await send_email(", ".join(to), subject, html)
 
 
+async def send_admin_fleet_application_email(
+    to: list[str],
+    application: dict,
+) -> bool:
+    """Alert the ops team that a fleet partner submitted a new application."""
+    if not to:
+        logger.info("No admin alert recipients configured; skipping fleet alert")
+        return False
+
+    location = ", ".join(
+        part for part in (application.get("city"), application.get("province")) if part
+    )
+    context = {
+        "company_name": application.get("company_name") or "Not provided",
+        "contact_person": application.get("contact_person") or "Not provided",
+        "email": application.get("email") or "Not provided",
+        "phone": application.get("phone") or "Not provided",
+        "location": location or "Not provided",
+        "fleet_size": application.get("fleet_size") or "Not provided",
+        "documents_count": application.get("documents_count") or 0,
+        "backoffice_link": (
+            f"{settings.BACKOFFICE_URL.rstrip('/')}/fleet"
+            if settings.BACKOFFICE_URL
+            else None
+        ),
+    }
+    subject = f"MediGo - New Fleet Application: {context['company_name']}"
+
+    try:
+        template = _template_env.get_template("admin_fleet_application.html")
+        html = template.render(**context)
+    except Exception as e:
+        logger.exception("Failed to render admin fleet application email: %s", e)
+        html = f"""
+        <html>
+        <body>
+            <h2>MediGo - New Fleet Application</h2>
+            <p><strong>Company:</strong> {context['company_name']}</p>
+            <p><strong>Contact:</strong> {context['contact_person']} ({context['email']}, {context['phone']})</p>
+            <p><strong>Fleet size:</strong> {context['fleet_size']}</p>
+            <p>This application is waiting for review in the back office.</p>
+        </body>
+        </html>
+        """
+
+    return await send_email(", ".join(to), subject, html)
+
+
 async def send_payment_receipt_email(
     to: str,
     name: str,
