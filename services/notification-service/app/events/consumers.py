@@ -18,6 +18,7 @@ from app.services.email_service import (
     send_account_deletion_received_email,
     send_account_deletion_rejected_email,
     send_account_reactivation_email,
+    send_admin_fleet_application_email,
     send_admin_invite_email,
     send_admin_ride_booking_email,
     send_driver_activation_email,
@@ -660,6 +661,24 @@ class FleetEventConsumer(BaseEventConsumer):
                 logger.error(
                     "Fleet application confirmation email failed for %s",
                     payload.email,
+                )
+
+            # Tell the operations team a new application is waiting. This must
+            # never stop the applicant's confirmation, so errors are logged only.
+            try:
+                alerted = await send_admin_fleet_application_email(
+                    to=settings.admin_booking_alert_recipients,
+                    application=payload.model_dump(mode="json"),
+                )
+                if alerted:
+                    logger.info(
+                        "Fleet application admin alert sent for application %s",
+                        payload.application_id,
+                    )
+            except Exception:
+                logger.exception(
+                    "Fleet application admin alert failed for application %s",
+                    payload.application_id,
                 )
 
         elif envelope.event_type == RoutingKeys.FLEET_APPLICATION_INFO_REQUESTED:

@@ -167,6 +167,12 @@ async def submit_fleet_application(
             "company_name": application.company_name,
             "email": application.email,
             "created_by": "public",
+            "contact_person": application.contact_person,
+            "phone": application.phone,
+            "city": application.city,
+            "province": application.province,
+            "fleet_size": application.fleet_size,
+            "documents_count": len(attachments),
         },
     )
 
