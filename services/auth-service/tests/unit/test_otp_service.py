@@ -20,8 +20,9 @@ async def test_generate_otp_uses_dynamic_generator(monkeypatch):
 
     assert code == "482913"
     created_otp = otp_repo.create.await_args.args[0]
-    assert created_otp.code == "482913"
-    assert created_otp.code != "123456"
+    # Stored as a hash, never the plain code.
+    assert created_otp.code != "482913"
+    assert created_otp.code.startswith("h1:")
 
 
 def _otp_record(code="111111", attempts=0):
@@ -102,3 +103,56 @@ async def test_correct_code_marks_verified_without_early_commit():
     assert await service.verify_otp(uuid4(), "111111", "password_reset") is True
     otp_repo.mark_verified.assert_awaited_once()
     otp_repo.session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_hashed_code_verifies_and_wrong_code_fails():
+    from mediride_common.exceptions import ValidationError
+
+    user_id = uuid4()
+    stored = otp_module.hash_otp(user_id, "registration", "482913")
+    session = SimpleNamespace(commit=AsyncMock())
+    otp_repo = SimpleNamespace(
+        session=session,
+        get_latest_unverified=AsyncMock(return_value=_otp_record(code=stored)),
+        increment_attempts=AsyncMock(),
+        mark_verified=AsyncMock(),
+    )
+    service = otp_module.OTPService(otp_repo)
+
+    assert await service.verify_otp(user_id, "482913", "registration") is True
+    otp_repo.mark_verified.assert_awaited_once()
+
+    with pytest.raises(ValidationError):
+        await service.verify_otp(user_id, "000000", "registration")
+
+
+@pytest.mark.asyncio
+async def test_hashed_code_is_bound_to_user_and_purpose():
+    from mediride_common.exceptions import ValidationError
+
+    stored = otp_module.hash_otp(uuid4(), "registration", "482913")
+    otp_repo = SimpleNamespace(
+        session=SimpleNamespace(commit=AsyncMock()),
+        get_latest_unverified=AsyncMock(return_value=_otp_record(code=stored)),
+        increment_attempts=AsyncMock(),
+        mark_verified=AsyncMock(),
+    )
+    service = otp_module.OTPService(otp_repo)
+
+    # Same digits, different user: must not match.
+    with pytest.raises(ValidationError):
+        await service.verify_otp(uuid4(), "482913", "registration")
+
+
+@pytest.mark.asyncio
+async def test_legacy_plain_code_still_accepted_until_it_expires():
+    otp_repo = SimpleNamespace(
+        session=SimpleNamespace(commit=AsyncMock()),
+        get_latest_unverified=AsyncMock(return_value=_otp_record(code="111111")),
+        increment_attempts=AsyncMock(),
+        mark_verified=AsyncMock(),
+    )
+    service = otp_module.OTPService(otp_repo)
+
+    assert await service.verify_otp(uuid4(), "111111", "password_reset") is True

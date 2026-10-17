@@ -5,8 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.credential_repo import CredentialRepository
 from app.repositories.login_record_repo import LoginRecordRepository
 from app.repositories.security_settings_repo import SecuritySettingsRepository
+from app.services.password_service import MIN_PASSWORD_LENGTH_FLOOR
 from app.services.security_policy_cache import invalidate_policy_cache
-from mediride_common.exceptions import NotFoundError
+from mediride_common.exceptions import NotFoundError, ValidationError
 
 
 class SecuritySettingsService:
@@ -44,7 +45,7 @@ class SecuritySettingsService:
             raise NotFoundError("Security settings not initialized")
 
         policy_level = "Strict"
-        if settings.min_password_length < 10:
+        if settings.min_password_length < MIN_PASSWORD_LENGTH_FLOOR:
             policy_level = "Basic"
         elif not (settings.require_uppercase and settings.require_special_chars):
             policy_level = "Moderate"
@@ -66,6 +67,16 @@ class SecuritySettingsService:
         }
 
     async def update_settings(self, admin_id: UUID, **updates) -> dict:
+        min_length = updates.get("min_password_length")
+        if "min_password_length" in updates and (
+            min_length is None or min_length < MIN_PASSWORD_LENGTH_FLOOR
+        ):
+            # Owner policy (security gap 6): never below 12. Refuse rather than
+            # silently clamp so the admin sees why the save did not happen.
+            raise ValidationError(
+                f"Minimum password length cannot be lower than "
+                f"{MIN_PASSWORD_LENGTH_FLOOR} characters"
+            )
         await self.repo.update_settings(admin_id, **updates)
         # Password rules are cached per-process; drop it so the new policy
         # takes effect immediately rather than after the TTL.

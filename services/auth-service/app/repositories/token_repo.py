@@ -25,6 +25,17 @@ class TokenRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_any_by_hash(self, token_hash: str) -> RefreshToken | None:
+        """Look a token up whether or not it has been revoked.
+
+        Used to notice a refresh token being presented again after it was
+        already rotated or logged out, which means someone kept a copy.
+        """
+        result = await self.session.execute(
+            select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+        )
+        return result.scalar_one_or_none()
+
     async def revoke(self, token_id: UUID) -> None:
         await self.session.execute(
             update(RefreshToken)

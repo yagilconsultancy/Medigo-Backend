@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import logging
 from datetime import timedelta
 from uuid import UUID
@@ -10,6 +12,28 @@ from mediride_common.utils import generate_otp, utc_now
 
 
 logger = logging.getLogger(__name__)
+
+# Codes are stored as a keyed hash, so a copy of the database does not reveal
+# live codes. Rows written before this change hold the plain 6 digit code and
+# are still accepted until they expire.
+_HASH_PREFIX = "h1:"
+
+
+def hash_otp(user_id: UUID, purpose: str, code: str) -> str:
+    message = f"{user_id}:{purpose}:{code}".encode()
+    digest = hmac.new(
+        settings.JWT_SECRET_KEY.encode(), message, hashlib.sha256
+    ).hexdigest()
+    return _HASH_PREFIX + digest
+
+
+def _code_matches(otp, user_id: UUID, purpose: str, code: str) -> bool:
+    stored = otp.code or ""
+    if stored.startswith(_HASH_PREFIX):
+        expected = hash_otp(user_id, purpose, code)
+    else:
+        expected = code
+    return hmac.compare_digest(stored.encode(), expected.encode())
 
 
 class OTPService:
@@ -36,7 +60,7 @@ class OTPService:
 
         otp = OTPRecord(
             user_id=user_id,
-            code=code,
+            code=hash_otp(user_id, purpose, code),
             purpose=purpose,
             channel=channel,
             expires_at=utc_now()
@@ -55,7 +79,7 @@ class OTPService:
 
         await self.otp_repo.increment_attempts(otp.id)
 
-        if otp.code != code:
+        if not _code_matches(otp, user_id, purpose, code):
             # Commit before raising: the ValidationError unwinds through
             # get_db(), which rolls the request transaction back and would
             # otherwise discard the attempt counter, leaving unlimited guesses.

@@ -87,7 +87,9 @@ async def create_driver_credential(
         raise HTTPException(status_code=409, detail="Account with this phone number already exists")
 
     validate_password_strength(
-        request.password, await get_password_policy(session)
+        request.password,
+        await get_password_policy(session),
+        email=normalized_email,
     )
 
     credential = UserCredential(
@@ -147,7 +149,9 @@ async def create_admin_credential(
         raise HTTPException(status_code=409, detail="Account with this email already exists")
 
     validate_password_strength(
-        request.password, await get_password_policy(session)
+        request.password,
+        await get_password_policy(session),
+        email=normalized_email,
     )
 
     credential = UserCredential(

@@ -10,7 +10,7 @@ from mediride_common.schemas.enums import UserRole
 @pytest.mark.asyncio
 async def test_register_driver_updates_password_for_precreated_admin_driver(monkeypatch):
     invite_token = "invite-token"
-    new_password = "NewPassword1"
+    new_password = "Granite-Kettle7"
     business_id = uuid4()
     existing = MagicMock()
     existing.id = uuid4()
@@ -62,7 +62,7 @@ async def test_register_driver_updates_password_for_precreated_admin_driver(monk
 
     assert result is token_pair
     credential_repo.update_password.assert_awaited_once_with(
-        existing.id, "hashed-NewPassword1"
+        existing.id, "hashed-Granite-Kettle7"
     )
     user_service_client.accept_invitation.assert_awaited_once_with(
         invite_token, str(existing.id)
