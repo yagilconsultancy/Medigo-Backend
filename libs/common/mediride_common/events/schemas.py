@@ -98,6 +98,14 @@ class FleetApplicationCreatedPayload(BaseModel):
     company_name: str
     email: str
     created_by: str
+    # Extra details for the alert sent to the operations team. Optional so
+    # events published by older code still validate.
+    contact_person: str | None = None
+    phone: str | None = None
+    city: str | None = None
+    province: str | None = None
+    fleet_size: int | None = None
+    documents_count: int | None = None
 
 
 class AccountDeletionOTPRequestedPayload(BaseModel):
