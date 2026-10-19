@@ -82,3 +82,23 @@ def test_extract_entity_id_ignores_resource_names():
         extract_entity_id("/rides/admin/bookings/550e8400-e29b-41d4-a716-446655440000")
         == "550e8400-e29b-41d4-a716-446655440000"
     )
+
+
+def test_logout_reads_as_signed_out():
+    title, category, severity = classify("POST", "/auth/logout")
+    assert (title, category, severity) == ("Signed out", "Admin", "info")
+
+
+def test_booking_actions_have_their_own_titles():
+    assert classify("PUT", "/rides/admin/bookings/abc/approve")[0] == "Booking approved"
+    assert classify("PUT", "/rides/admin/bookings/abc/decline")[0] == "Booking declined"
+    deleted = classify("DELETE", "/rides/admin/bookings/604b884e-0993-45a4-b7c9-bb5b51fa696d")
+    assert deleted == ("Booking deleted", "Booking", "warning")
+    assert classify("PUT", "/rides/admin/bookings/604b884e-0993-45a4-b7c9-bb5b51fa696d")[0] == "Booking updated"
+
+
+def test_fallback_titles_are_singular():
+    assert classify("DELETE", "/users/admin/drivers/50ae9bad-9ab9-406c-99b5-1609ab928c0e")[0] == "Driver deleted"
+    assert classify("POST", "/rides/")[0] == "Ride created"
+    assert classify("DELETE", "/users/admin/vehicle-categories/12")[0] == "Vehicle category deleted"
+    assert classify("PUT", "/rides/admin/status")[0] == "Status updated"

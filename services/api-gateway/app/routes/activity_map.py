@@ -16,6 +16,8 @@ import re
 _RULES: list[tuple[re.Pattern[str], str, str, str, str]] = [
     (p, m, t, c, s)
     for p, m, t, c, s in [
+        (re.compile(r"^/auth/(admin/)?logout/?$"), "*",
+         "Signed out", "Admin", "info"),
         (re.compile(r"^/auth/admin/security/settings/?$"), "PUT",
          "Security settings updated", "Settings", "critical"),
         (re.compile(r"^/users/admin/roles"), "*",
@@ -40,6 +42,12 @@ _RULES: list[tuple[re.Pattern[str], str, str, str, str]] = [
          "Booking cancelled", "Booking", "warning"),
         (re.compile(r"^/rides/admin/bookings/[^/]+/assign-driver/?$"), "*",
          "Driver assigned to booking", "Dispatch", "info"),
+        (re.compile(r"^/rides/admin/bookings/[^/]+/approve/?$"), "*",
+         "Booking approved", "Booking", "info"),
+        (re.compile(r"^/rides/admin/bookings/[^/]+/(decline|reject)/?$"), "*",
+         "Booking declined", "Booking", "warning"),
+        (re.compile(r"^/rides/admin/bookings/[^/]+/?$"), "DELETE",
+         "Booking deleted", "Booking", "warning"),
         (re.compile(r"^/rides/admin/bookings"), "*",
          "Booking updated", "Booking", "info"),
         (re.compile(r"^/rides/admin/dispatch"), "*",
@@ -79,6 +87,15 @@ _ID_LIKE = re.compile(
 )
 
 
+def _singular(word: str) -> str:
+    """'drivers' -> 'driver', 'categories' -> 'category', 'status' stays."""
+    if word.endswith("ies") and len(word) > 4:
+        return word[:-3] + "y"
+    if word.endswith("s") and not word.endswith(("ss", "us", "is")) and len(word) > 3:
+        return word[:-1]
+    return word
+
+
 def extract_entity_id(path: str) -> str | None:
     """Last id-looking segment of the path, if any."""
     for segment in reversed(path.strip("/").split("/")):
@@ -111,7 +128,9 @@ def classify(method: str, path: str) -> tuple[str, str, str]:
     resource = None
     for segment in reversed(path.strip("/").split("/")):
         if segment and not _ID_LIKE.match(segment):
-            resource = segment.replace("-", " ").replace("_", " ")
+            words = segment.replace("-", " ").replace("_", " ").split(" ")
+            words[-1] = _singular(words[-1])
+            resource = " ".join(words)
             break
 
     verb = _METHOD_VERB.get(method, method.lower())
