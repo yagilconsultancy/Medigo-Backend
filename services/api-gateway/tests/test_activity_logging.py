@@ -102,3 +102,13 @@ def test_fallback_titles_are_singular():
     assert classify("POST", "/rides/")[0] == "Ride created"
     assert classify("DELETE", "/users/admin/vehicle-categories/12")[0] == "Vehicle category deleted"
     assert classify("PUT", "/rides/admin/status")[0] == "Status updated"
+
+
+def test_fleet_application_actions_have_their_own_titles():
+    app = "/users/admin/fleet/applications/396c486e-9cb2-4100-bbad-5cced2048655"
+    assert classify("PUT", app + "/approve") == ("Fleet application approved", "Fleet", "info")
+    assert classify("PUT", app + "/reject") == ("Fleet application rejected", "Fleet", "warning")
+    assert classify("PUT", app + "/request-info")[0] == "More information requested"
+    assert classify("DELETE", app)[0] == "Fleet application deleted"
+    company = "/users/admin/fleet/companies/abc"
+    assert classify("PUT", company + "/status") == ("Fleet company status changed", "Fleet", "warning")
